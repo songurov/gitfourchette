@@ -609,3 +609,113 @@ def testBareRepoWorktreeTabHasNoPrefix(tempDir, mainWindow):
     rw = mainWindow.openRepo(worktreePath)
     # A bare repo has no main worktree to name, so there's nothing to prefix with
     assert "MyCoolWorktree" == rw.getTitle()
+
+
+def testCantRemoveAWorktreeOpenInAnotherTab(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    worktreePath = addWorktree(wd, "sidejob", "-b", "sidejob")
+
+    rw = mainWindow.openRepo(wd)
+    mainWindow.openRepo(worktreePath)   # now open in a second tab
+    mainWindow.tabs.setCurrentIndex(0)  # ...while we look at the main one
+
+    node = rw.sidebar.findNode(lambda n: n.kind == SidebarItem.Worktree and n.data == "sidejob")
+    menu = rw.sidebar.makeNodeMenu(node)
+    assert not findMenuAction(menu, r"remove worktree").isEnabled(), \
+        "removing it would delete the other tab's working directory"
+
+    # And the task refuses even if reached another way
+    RemoveWorktree.invoke(rw, "sidejob")
+    acceptQMessageBox(rw, r"open in another tab")
+    assert os.path.isdir(worktreePath)
+
+
+def testPruneRefusesWhileAStaleWorktreeIsOpen(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    openPath = addWorktree(wd, "stillopen", "-b", "stillopen")
+    closedPath = addWorktree(wd, "gone", "-b", "gone")
+
+    rw = mainWindow.openRepo(wd)
+    mainWindow.openRepo(openPath)
+    mainWindow.tabs.setCurrentIndex(0)
+
+    # Both folders vanish, but one of them is still open in a tab
+    shutil.rmtree(openPath)
+    shutil.rmtree(closedPath)
+    rw.refreshRepo()
+
+    node = rw.sidebar.findNodeByKind(SidebarItem.WorktreesHeader)
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), r"prune stale worktrees")
+    # git worktree prune is all or nothing, so it refuses rather than take away
+    # the files the open tab is still using
+    acceptQMessageBox(rw, r"still open in a tab")
+
+    assert rw.repoModel.worktreeByName("gone") is not None
+    assert rw.repoModel.worktreeByName("stillopen") is not None
+
+    # Close that tab and it goes through
+    mainWindow.closeTab(1)
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), r"prune stale worktrees")
+    acceptQMessageBox(rw, r"really forget 2 stale worktrees")
+    assert rw.repoModel.worktreeByName("gone") is None
+
+
+def testSeparateGitDirDoesntInventAMainWorktree(tempDir, mainWindow):
+    base = os.path.join(tempDir.name, "sgd")
+    main = os.path.join(base, "main")
+    gitDir = os.path.join(base, "elsewhere.git")
+    os.makedirs(base)
+    shell(f"git init -q --separate-git-dir={shlex.quote(gitDir)} {shlex.quote(main)}", tempDir.name)
+    writeFile(f"{main}/f.txt", "hello")
+    shell("git add . && git commit -qm init", main)
+    shell(f"git worktree add -q {shlex.quote(os.path.join(base, 'wt'))}", main)
+
+    rw = mainWindow.openRepo(os.path.join(base, "wt"))
+
+    # The git dir isn't inside the main worktree, and nothing records where that
+    # is - not even git itself. Better to list nothing than to point at a folder
+    # that isn't a worktree.
+    names = [w.name for w in rw.repoModel.worktrees]
+    assert "" not in names, "must not claim a main worktree it can't locate"
+    assert "wt" in names
+    assert "wt" == rw.getTitle(), "no prefix when there's no main worktree to name"
+
+
+def testSeparateGitDirInsideTheWorktreeStillFindsMain(tempDir, mainWindow):
+    # .git is a file pointing at a git dir that lives inside the worktree itself.
+    # Unusual, but valid - and here the main worktree *can* be located, so it
+    # must be, unlike the case where the git dir sits outside it.
+    base = os.path.join(tempDir.name, "inside")
+    work = os.path.join(base, "work")
+    gitDir = os.path.join(work, "realgit")
+    os.makedirs(base)
+    shell(f"git init -q --separate-git-dir={shlex.quote(gitDir)} {shlex.quote(work)}", tempDir.name)
+    writeFile(f"{work}/f.txt", "hello")
+    shell("git add . && git commit -qm init", work)
+    shell(f"git worktree add -q {shlex.quote(os.path.join(base, 'wt'))}", work)
+
+    rw = mainWindow.openRepo(os.path.join(base, "wt"))
+    main = next((w for w in rw.repoModel.worktrees if w.is_main), None)
+    assert main is not None, "the main worktree is locatable here, so it must be listed"
+    assert os.path.normpath(work) == main.path
+    assert "work: wt" == rw.getTitle()
+
+
+def testGarbledDotGitFileIsNotMistakenForAWorktree(tempDir, mainWindow):
+    from gitfourchette.porcelain import _points_at_gitdir
+
+    wd = unpackRepo(tempDir)
+    gitDir = os.path.join(os.path.normpath(wd), ".git")
+    assert _points_at_gitdir(os.path.normpath(wd), gitDir)
+
+    # A .git file that says nothing useful must not be taken at its word
+    garbled = os.path.join(tempDir.name, "garbled")
+    os.makedirs(garbled)
+    writeFile(f"{garbled}/.git", "this is not a gitlink")
+    assert not _points_at_gitdir(garbled, gitDir)
+
+    # Neither must one pointing somewhere else
+    elsewhere = os.path.join(tempDir.name, "elsewhere")
+    os.makedirs(elsewhere)
+    writeFile(f"{elsewhere}/.git", "gitdir: /nowhere/at/all")
+    assert not _points_at_gitdir(elsewhere, gitDir)

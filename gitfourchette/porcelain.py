@@ -679,6 +679,21 @@ class GitConfigHelper:
             yield name, section
 
 
+def _points_at_gitdir(workdir: str, gitdir: str) -> bool:
+    """Whether `workdir` is a worktree served by `gitdir`."""
+    dotgit = _Path(workdir, ".git")
+    try:
+        if dotgit.is_dir():
+            return dotgit.resolve() == _Path(gitdir).resolve()
+        text = dotgit.read_text().strip()
+        if not text.startswith("gitdir:"):
+            return False
+        target = _Path(workdir, text.removeprefix("gitdir:").strip())
+        return target.resolve() == _Path(gitdir).resolve()
+    except OSError:
+        return False
+
+
 @_dataclasses.dataclass(frozen=True)
 class WorktreeInfo:
     """
@@ -842,6 +857,12 @@ class Repo(_VanillaRepository):
                 main_path = _normpath(self.workdir) if self.workdir else ""
             else:  # this Repo is a linked worktree; the main one is next to $GIT_COMMON_DIR
                 main_path = _dirname(commondir)
+                if not _points_at_gitdir(main_path, commondir):
+                    # $GIT_COMMON_DIR isn't inside the main worktree, which
+                    # happens with `git init --separate-git-dir`. Nothing
+                    # records where the main worktree went - git itself can't
+                    # find it either - so don't point at a folder that isn't one.
+                    main_path = ""
             if main_path:
                 worktrees.append(self._read_worktree("", main_path, commondir, commondir == my_gitdir))
 
