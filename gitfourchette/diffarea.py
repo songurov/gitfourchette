@@ -18,6 +18,7 @@ from gitfourchette.filelists.filelist import FileList
 from gitfourchette.filelists.stagedfiles import StagedFiles
 from gitfourchette.forms.banner import Banner
 from gitfourchette.forms.conflictview import ConflictView
+from gitfourchette.forms.commitdetailview import CommitDetailView
 from gitfourchette.forms.contextheader import ContextHeader
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
@@ -39,6 +40,9 @@ def gridPadding():
 
 
 class DiffArea(QWidget):
+    CommitTab = 0
+    ChangesTab = 1
+
     def __init__(self, repoModel, parent):
         super().__init__(parent)
         self.setObjectName("CommitExplorer")
@@ -49,6 +53,24 @@ class DiffArea(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("Split_DiffArea")
 
+        # The commit's own story (who, when, message, what it touched) sits in
+        # a tab of its own, next to its changes - like Fork does it
+        commitDetailView = CommitDetailView(self)
+
+        pageStack = QStackedWidget(self)
+        pageStack.addWidget(commitDetailView)
+        pageStack.addWidget(splitter)
+
+        commitTabs = QTabBar(self)
+        commitTabs.setObjectName("CommitTabs")
+        commitTabs.setDrawBase(False)
+        commitTabs.setExpanding(False)
+        commitTabs.addTab(_p("noun", "Commit"))
+        commitTabs.addTab(_p("noun", "Changes"))
+        commitTabs.setCurrentIndex(self.ChangesTab)
+        commitTabs.currentChanged.connect(pageStack.setCurrentIndex)
+        commitTabs.setVisible(False)
+
         contextHeader = ContextHeader(self)
 
         diffBanner = Banner(self, orientation=Qt.Orientation.Horizontal)
@@ -58,10 +80,11 @@ class DiffArea(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(QMargins())
         layout.setSpacing(0)
+        layout.addWidget(commitTabs)
         layout.addWidget(contextHeader)
         layout.addWidget(diffBanner)
         layout.addWidget(QFaintSeparator(self))
-        layout.addWidget(splitter, 1)
+        layout.addWidget(pageStack, 1)
 
         splitter.addWidget(fileStack)
         splitter.addWidget(diffContainer)
@@ -73,6 +96,9 @@ class DiffArea(QWidget):
         self.fileStack = fileStack
         self.diffBanner = diffBanner
         self.contextHeader = contextHeader
+        self.commitTabs = commitTabs
+        self.pageStack = pageStack
+        self.commitDetailView = commitDetailView
 
         for passiveWidget in (
                 self.diffHeader,
@@ -462,6 +488,24 @@ class DiffArea(QWidget):
             self.setFileStackPageByContext(locator.context)
 
         return locator
+
+    # -------------------------------------------------------------------------
+    # Commit tab
+
+    def setCommitDetail(self, repoModel, commit, deltas, isStash=False):
+        """Show the tabs and fill the Commit tab for the commit being viewed."""
+        self.commitDetailView.setCommit(repoModel, commit, deltas, isStash)
+        self.commitTabs.setVisible(True)
+
+    def hideCommitDetail(self):
+        """No commit in sight (the working directory, say): no tabs either."""
+        self.commitDetailView.clear()
+        self.commitTabs.setVisible(False)
+        self.showChangesTab()
+
+    def showChangesTab(self):
+        self.commitTabs.setCurrentIndex(DiffArea.ChangesTab)
+        self.pageStack.setCurrentIndex(DiffArea.ChangesTab)
 
     # -------------------------------------------------------------------------
     # Clear

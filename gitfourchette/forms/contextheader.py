@@ -113,10 +113,6 @@ class ContextHeader(QFrame):
             mainText = "<span style='{introStyle}'>{intro} {hash}{colon}</span> {summary}".format(
                 introStyle=introStyle, intro=kind, hash=shortHash(locator.commit), colon=_(":"), summary=escape(summary))
 
-            infoButton = self.addButton(_("Info"), lambda: GetCommitInfo.invoke(self, self.locator.commit))
-            infoButton.setToolTip(_("Show details about this commit") if not isStash
-                                  else _("Show details about this stash"))
-
             if isStash:
                 dropButton = self.addButton(_("Delete"), lambda: DropStash.invoke(self, locator.commit))
                 dropButton.setToolTip(_("Delete this stash"))

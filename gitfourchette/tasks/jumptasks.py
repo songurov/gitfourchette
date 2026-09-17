@@ -284,6 +284,7 @@ class Jump(RepoTask):
         # Reset diff banner
         rw.diffArea.diffBanner.setVisible(False)
         rw.diffArea.contextHeader.setContext(locator)
+        rw.diffArea.hideCommitDetail()
 
         # Stale workdir model - force load workdir
         forceDiff = locator.hasFlags(NavFlags.ForceDiff)
@@ -365,6 +366,7 @@ class Jump(RepoTask):
             rw.diffArea.committedHeader.setText(" ")
             rw.diffArea.diffBanner.hide()
             rw.diffArea.contextHeader.setContext(locator)
+            rw.diffArea.hideCommitDetail()
 
         self.showLocatorInGraphView(locator)
 
@@ -495,6 +497,9 @@ class Jump(RepoTask):
             headerText = toLengthVariants(_n("{n} change:|{n} ch.:", "{n} changes:|{n} ch.:", numChanges))
             area.committedHeader.setText(headerText)
             area.committedHeader.setToolTip("<p>" + escape(summary).replace("\n", "<br>"))
+
+            # Fill the Commit tab
+            area.setCommitDetail(rw.repoModel, commit, deltas, isStash)
 
         # Early out if the commit is empty
         if flv.isEmpty():

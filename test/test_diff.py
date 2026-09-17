@@ -1320,3 +1320,63 @@ def testWholeFileHasItsOwnButton(tempDir, mainWindow):
     buttons.wholeFileButton.click()
     assert not settings.prefs.wholeFileDiff
     assert buttons.contextButton.isEnabled()
+
+
+def testCommitTabShowsWhoAndWhat(tempDir, mainWindow):
+    """A commit's own story - who wrote it, where it sits, what it touched -
+    lives in a tab of its own, next to its changes."""
+
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    detailView = diffArea.commitDetailView
+
+    # No commit in sight in the working directory, so no tabs either
+    assert rw.navLocator.context.isWorkdir()
+    assert not diffArea.commitTabs.isVisible()
+
+    oid = Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664")  # Merge branch 'a' into c
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    assert diffArea.commitTabs.isVisible()
+    assert diffArea.commitTabs.currentIndex() == diffArea.ChangesTab, "changes first, as before"
+
+    diffArea.commitTabs.setCurrentIndex(diffArea.CommitTab)
+    text = detailView.toPlainText()
+    assert "A U Thor" in text
+    assert "a.u.thor@example.com" in text
+    assert str(oid) in text, "the whole hash, not just the short one"
+    assert "Merge branch 'a' into c" in text
+    assert "a/a1.txt" in text, "the files it touched"
+
+    # A file in that list takes you to it, in the Changes tab
+    qteClickLink(detailView, "a/a1.txt")
+    assert rw.navLocator.path == "a/a1.txt"
+    assert diffArea.commitTabs.currentIndex() == diffArea.ChangesTab
+
+    # A parent takes you to that commit
+    diffArea.commitTabs.setCurrentIndex(diffArea.CommitTab)
+    parentId = rw.repo.peel_commit(oid).parent_ids[0]
+    qteClickLink(detailView, str(parentId)[:7])
+    assert rw.navLocator.commit == parentId
+
+    # With downloaded pictures on, the tab asks the avatar cache for one
+    GFApplication.applyPrefs(downloadAvatars=True)
+    GFApplication.instance().avatarCache.urlFor = lambda signature: ""  # no network in tests
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    assert "A U Thor" in detailView.toPlainText()
+
+    # Back to the working directory: the tabs step aside again
+    rw.jump(NavLocator.inWorkdir())
+    rw.taskRunner.joinWorkerThread()
+    assert not diffArea.commitTabs.isVisible()
+
+
+def testContextHeaderHasNoInfoButton(tempDir, mainWindow):
+    """The Commit tab replaced the Info dialog button."""
+
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inCommit(Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664"), "a/a1.txt"), check=True)
+
+    labels = [button.text().lower() for button in rw.diffArea.contextHeader.buttons]
+    assert not any("info" in label for label in labels), labels

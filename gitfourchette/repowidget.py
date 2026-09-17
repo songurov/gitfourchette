@@ -186,6 +186,7 @@ class RepoWidget(QWidget):
         self.diffArea.conflictView.openPrefs.connect(self.openPrefs)
         self.diffArea.diffView.contextualHelp.connect(self.statusMessage)
         self.diffArea.specialDiffView.linkActivated.connect(self.processInternalLink)
+        self.diffArea.commitDetailView.jumpRequested.connect(self.jumpFromCommitDetail)
 
         self.sidebar.statusMessage.connect(self.statusMessage)
         self.sidebar.toggleHideRefPattern.connect(self.toggleHideRefPattern)
@@ -353,6 +354,12 @@ class RepoWidget(QWidget):
 
         self.navHistory.push(newLocator)
         self.navLocator = newLocator
+
+    def jumpFromCommitDetail(self, locator: NavLocator):
+        """A file or a parent clicked in the Commit tab: go there, and show it."""
+        if locator.path:
+            self.diffArea.showChangesTab()
+        self.jump(locator)
 
     def jump(self, locator: NavLocator, check=False):
         tasks.Jump.invoke(self, locator)
