@@ -20,14 +20,20 @@ class CommitLogFilter(QSortFilterProxyModel):
         self.repoModel = repoModel
         self.shadowHiddenIds = set()
         self.shadowPathspecFilterActive = False
+        self.shadowQueryFilterActive = False
         self.setDynamicSortFilter(True)
 
         self.updateHiddenCommits()  # prime hiddenIds
         self.updatePathspecFilter()
+        self.updateQueryFilter()
 
     @property
     def pathspecFilter(self):
         return self.repoModel.commitPathspecFilter
+
+    @property
+    def queryFilter(self):
+        return self.repoModel.commitQueryFilter
 
     @benchmark
     def updateHiddenCommits(self):
@@ -52,6 +58,18 @@ class CommitLogFilter(QSortFilterProxyModel):
         with FilterChangeContext(self):
             self.shadowPathspecFilterActive = active
 
+    @benchmark
+    def updateQueryFilter(self):
+        active = self.queryFilter.wantFilter()
+
+        # The query itself may have changed even if it's still active,
+        # so don't skip the refresh like updatePathspecFilter does
+        if not active and active == self.shadowQueryFilterActive:
+            return
+
+        with FilterChangeContext(self):
+            self.shadowQueryFilterActive = active
+
     def filterAcceptsRow(self, sourceRow: int, sourceParent: QModelIndex) -> bool:
         try:
             commit = self.repoModel.commitSequence[sourceRow]
@@ -68,6 +86,9 @@ class CommitLogFilter(QSortFilterProxyModel):
             return True
 
         if commit.id in self.shadowHiddenIds:
+            return False
+
+        if self.shadowQueryFilterActive and not self.queryFilter.query.matchesCommit(commit):
             return False
 
         if self.shadowPathspecFilterActive:

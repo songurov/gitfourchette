@@ -9,7 +9,7 @@ from __future__ import annotations  # TODO: Remove once we can drop support for 
 import re
 from collections.abc import Iterable
 
-from gitfourchette import settings
+from gitfourchette.commitquery import CommitQuery
 from gitfourchette.graphview.commitlogmodel import CommitLogModel
 from gitfourchette.localization import *
 from gitfourchette.qt import *
@@ -26,16 +26,22 @@ class CommitInfoSearch(ItemViewSearchProvider):
 
     _buddy: GraphView
     likelyHash: bool
+    query: CommitQuery
 
     def __init__(self, parent: GraphView):
         super().__init__(parent)
         self.likelyHash = False
+        self.query = CommitQuery()
 
     # -------------------------------------------------------------------------
     # ItemViewSearchProvider implementation
 
     def _walkModelImpl(self, rows: Iterable[int]) -> QModelIndex:
         model = self.buddyModel
+
+        if self.query.invalid:
+            # A qualifier was given something we couldn't read as a date
+            raise KeyError()
 
         for i in rows:
             index = model.index(i, 0)
@@ -44,9 +50,7 @@ class CommitInfoSearch(ItemViewSearchProvider):
                 continue
             if self.likelyHash and str(commit.id).startswith(self._term):
                 return index
-            if self._term in commit.message.lower():
-                return index
-            if self._term in abbreviatePerson(commit.author, settings.prefs.authorDisplayStyle).lower():
+            if self.query.matchesCommit(commit):
                 return index
 
         raise KeyError()
@@ -58,7 +62,26 @@ class CommitInfoSearch(ItemViewSearchProvider):
         return _("Info")
 
     def longTitle(self) -> str:
-        return _("Find commit hash, message or author")
+        return _("Find commit: text, author:name, after:2026-01-01, before:…")
+
+    def canFilter(self) -> bool:
+        return True
+
+    def setFilterState(self, checked: bool):
+        super().setFilterState(checked)
+        self._queryFilter.filterOnly = self._wantFilter
+        self._buddy.clFilter.updateQueryFilter()
+
+    def freeze(self, frozen: bool):
+        super().freeze(frozen)
+        if frozen:
+            # Another kind of search is taking over; stop narrowing the log down
+            self._queryFilter.clear()
+            self._buddy.clFilter.updateQueryFilter()
+
+    @property
+    def _queryFilter(self):
+        return self._buddy.repoModel.commitQueryFilter
 
     def keyboardShortcut(self) -> str:
         return "Alt+I"
@@ -67,7 +90,11 @@ class CommitInfoSearch(ItemViewSearchProvider):
         super()._termChanged()
 
         term = self._term
-        self.likelyHash = (0 < len(term) <= 40) and bool(self.HashPattern.match(term))
+        self.likelyHash = (0 < len(term) <= 40) and bool(self.HashPattern.fullmatch(term))
+        self.query = CommitQuery.parse(term)
+
+        self._queryFilter.query = self.query
+        self._buddy.clFilter.updateQueryFilter()
 
     def notFoundMessage(self) -> str:
         message = super().notFoundMessage()

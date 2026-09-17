@@ -8,7 +8,8 @@ import pytest
 
 from gitfourchette.forms.commitinfodialog import CommitInfoDialog
 from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS
-from gitfourchette.graphview.commitlogmodel import SpecialRow
+from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
+from gitfourchette.repomodel import UC_FAKEID
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import avatarColor, avatarInitials
@@ -1017,3 +1018,90 @@ def testDownloadedAvatarsReachTheHistory(tempDir, mainWindow, monkeypatch):
 
     rw.graphView.viewport().repaint()
     assert any(p is picture for p in pictures), "the author's picture should have been drawn"
+
+
+def testCommitSearchByAuthorAndDate(tempDir, mainWindow):
+    alice = Signature("Alice Liddell", "alice@example.com", 1600000000, 0)  # 2020-09-13
+    bob = Signature("Bob Marley", "bob@example.com", 1700000000, 0)  # 2023-11-14
+
+    wd = unpackRepo(tempDir)
+    shell("echo hole > hole.txt && git add . && git commit -m 'Fix the rabbit hole'", wd, authorSig=alice)
+    shell("echo birds > birds.txt && git add . && git commit -m 'Add three little birds'", wd, authorSig=bob)
+
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    searchBar = graphView.searchBar
+
+    aliceCommit = rw.repo.revparse_single("HEAD~1").id
+    bobCommit = rw.repo.head_commit_id
+
+    def search(term):
+        searchBar.lineEdit.clear()
+        QTest.keyClicks(searchBar.lineEdit, term)
+        QTest.keySequence(searchBar.lineEdit, "Return")
+
+    QTest.keySequence(mainWindow, "Ctrl+F")
+    assert searchBar.isVisible()
+
+    search("author:alice")
+    assert graphView.currentCommitId == aliceCommit
+
+    search("by:bob")
+    assert graphView.currentCommitId == bobCommit
+
+    # A date on its own
+    search("after:2023")
+    assert graphView.currentCommitId == bobCommit
+
+    search("before:2021")
+    assert graphView.currentCommitId == aliceCommit
+
+    # Author and date together
+    search("author:bob after:2023")
+    assert graphView.currentCommitId == bobCommit
+
+    search("author:bob before:2021")
+    assert searchBar.isRed(), "Bob committed nothing back then"
+
+    # A date we can't read says so instead of quietly finding nothing
+    search("after:whenever")
+    assert searchBar.isRed()
+
+
+def testFilterCommitLogByAuthor(tempDir, mainWindow):
+    alice = Signature("Alice Liddell", "alice@example.com", 1600000000, 0)
+    bob = Signature("Bob Marley", "bob@example.com", 1700000000, 0)
+
+    wd = unpackRepo(tempDir)
+    shell("echo hole > hole.txt && git add . && git commit -m 'Fix the rabbit hole'", wd, authorSig=alice)
+    shell("echo birds > birds.txt && git add . && git commit -m 'Add three little birds'", wd, authorSig=bob)
+
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    searchBar = graphView.searchBar
+    fullRows = graphView.clFilter.rowCount()
+
+    def visibleCommits():
+        model = graphView.clFilter
+        oids = (model.data(model.index(row, 0), CommitLogModel.Role.Oid) for row in range(model.rowCount()))
+        return {oid for oid in oids if oid is not None and oid != UC_FAKEID}
+
+    QTest.keySequence(mainWindow, "Ctrl+F")
+    assert searchBar.ui.filterCheckBox.isVisible(), "the commit search can narrow the log down too"
+
+    QTest.keyClicks(searchBar.lineEdit, "author:alice")
+    searchBar.ui.filterCheckBox.setChecked(True)
+    assert visibleCommits() == {rw.repo.revparse_single("HEAD~1").id}
+
+    # Narrowing further leaves nothing but the working directory row
+    QTest.keyClicks(searchBar.lineEdit, " after:2023")
+    assert not visibleCommits()
+
+    searchBar.ui.filterCheckBox.setChecked(False)
+    assert graphView.clFilter.rowCount() == fullRows
+
+    # Closing the search bar puts the log back
+    searchBar.ui.filterCheckBox.setChecked(True)
+    QTest.keySequence(graphView, "Escape")
+    assert not searchBar.isVisible()
+    assert graphView.clFilter.rowCount() == fullRows

@@ -14,6 +14,7 @@ from gitfourchette.appconsts import *
 from gitfourchette.gitdriver import GitDelta
 from gitfourchette.graph import Graph, GraphSpliceLoop, MockCommit
 from gitfourchette.graph.graphbuilder import CommitTraits
+from gitfourchette.commitquery import CommitQueryFilter
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.repoprefs import RepoPrefs
@@ -157,6 +158,7 @@ class RepoModel:
     "All cached commit oids that are hidden."
 
     commitPathspecFilter: CommitPathspecFilter
+    commitQueryFilter: CommitQueryFilter
 
     gpgStatusCache: dict[Oid, tuple[GpgStatus, str]]
     gpgVerifyQueue: set[Oid]
@@ -211,6 +213,7 @@ class RepoModel:
         self.localSeeds = set()
 
         self.commitPathspecFilter = CommitPathspecFilter()
+        self.commitQueryFilter = CommitQueryFilter()
 
         self.gpgStatusCache = {}
         self.gpgVerifyQueue = set()
