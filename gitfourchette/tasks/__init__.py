@@ -59,6 +59,7 @@ from gitfourchette.tasks.jumptasks import (
 )
 from gitfourchette.tasks.loadtasks import (
     DownloadLfsObjects,
+    LoadPatchInCommitTab,
     LoadPatchInNewWindow,
 )
 from gitfourchette.tasks.nettasks import (

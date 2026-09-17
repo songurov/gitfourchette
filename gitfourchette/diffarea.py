@@ -10,7 +10,9 @@ from typing import Literal
 
 from gitfourchette.application import GFApplication
 from gitfourchette.diffbuttons import DiffButtons
+from gitfourchette.diffview.diffdocument import DiffDocument
 from gitfourchette.diffview.diffview import DiffView
+from gitfourchette.diffview.specialdiff import ImageDelta, SpecialDiffError
 from gitfourchette.diffview.specialdiffview import SpecialDiffView
 from gitfourchette.filelists.committedfiles import CommittedFiles
 from gitfourchette.filelists.dirtyfiles import DirtyFiles
@@ -54,11 +56,20 @@ class DiffArea(QWidget):
         splitter.setObjectName("Split_DiffArea")
 
         # The commit's own story (who, when, message, what it touched) sits in
-        # a tab of its own, next to its changes - like Fork does it
+        # a tab of its own, next to its changes - like Fork does it. Clicking a
+        # file there opens its diff right below, without leaving the tab.
         commitDetailView = CommitDetailView(self)
+        commitPatchStack, commitPatchView, commitSpecialPatchView = self._makeCommitPatchStack()
+
+        commitPage = QSplitter(Qt.Orientation.Vertical, self)
+        commitPage.setObjectName("Split_CommitTab")
+        commitPage.addWidget(commitDetailView)
+        commitPage.addWidget(commitPatchStack)
+        commitPage.setSizes([300, 400])
+        commitPage.setChildrenCollapsible(False)
 
         pageStack = QStackedWidget(self)
-        pageStack.addWidget(commitDetailView)
+        pageStack.addWidget(commitPage)
         pageStack.addWidget(splitter)
 
         commitTabs = QTabBar(self)
@@ -99,6 +110,9 @@ class DiffArea(QWidget):
         self.commitTabs = commitTabs
         self.pageStack = pageStack
         self.commitDetailView = commitDetailView
+        self.commitPatchStack = commitPatchStack
+        self.commitPatchView = commitPatchView
+        self.commitSpecialPatchView = commitSpecialPatchView
 
         for passiveWidget in (
                 self.diffHeader,
@@ -281,6 +295,26 @@ class DiffArea(QWidget):
         self.committedFiles = committedFiles
         self.committedHeader = header
         return container
+
+    def _makeCommitPatchStack(self):
+        """The Commit tab's own patch pane: a text diff, or a special one."""
+
+        patchView = DiffView(self)
+        patchContainer = QWidget(self)
+        patchLayout = QVBoxLayout(patchContainer)
+        patchLayout.setContentsMargins(0, 0, 0, 0)
+        patchLayout.setSpacing(0)
+        patchLayout.addWidget(patchView.searchBar)
+        patchLayout.addWidget(patchView)
+
+        specialPatchView = SpecialDiffView(self)
+
+        stack = QStackedWidget(self)
+        stack.addWidget(patchContainer)
+        stack.addWidget(specialPatchView)
+        stack.setVisible(False)  # nothing picked yet
+
+        return stack, patchView, specialPatchView
 
     def _makeDiffContainer(self, repoModel):
         header = QLabel(" ")
@@ -496,11 +530,39 @@ class DiffArea(QWidget):
         """Show the tabs and fill the Commit tab for the commit being viewed."""
         self.commitDetailView.setCommit(repoModel, commit, deltas, isStash)
         self.commitTabs.setVisible(True)
+        self.hideCommitPatch()
+
+    def hideCommitPatch(self):
+        """Back to just the commit's story, until a file is picked again."""
+        self.commitPatchStack.setVisible(False)
+        self.commitPatchView.clear()
+
+    def showCommitPatch(self, repo, delta, locator, document):
+        """A file picked in the Commit tab: show its diff without leaving it."""
+
+        if isinstance(document, DiffDocument):
+            self.commitPatchView.replaceDocument(repo, delta, locator, document)
+            self.commitPatchStack.setCurrentIndex(0)
+        elif isinstance(document, ImageDelta):
+            self.commitSpecialPatchView.displayImageDelta(document)
+            self.commitPatchStack.setCurrentIndex(1)
+        else:
+            # Conflicts belong to the working directory, which has no Commit tab
+            assert isinstance(document, SpecialDiffError), f"can't show {type(document)} here"
+            self.commitSpecialPatchView.displaySpecialDiffError(document)
+            self.commitPatchStack.setCurrentIndex(1)
+
+        self.commitPatchStack.setVisible(True)
+
+        # The patch pane just took half the room; once the layout settles,
+        # bring the file list up so the next file is still one click away
+        QTimer.singleShot(0, self.commitDetailView.scrollToFiles)
 
     def hideCommitDetail(self):
         """No commit in sight (the working directory, say): no tabs either."""
         self.commitDetailView.clear()
         self.commitTabs.setVisible(False)
+        self.hideCommitPatch()
         self.showChangesTab()
 
     def showChangesTab(self):

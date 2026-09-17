@@ -1348,10 +1348,13 @@ def testCommitTabShowsWhoAndWhat(tempDir, mainWindow):
     assert "Merge branch 'a' into c" in text
     assert "a/a1.txt" in text, "the files it touched"
 
-    # A file in that list takes you to it, in the Changes tab
+    # A file in that list opens its diff right there, without leaving the tab
+    assert not diffArea.commitPatchStack.isVisible()
     qteClickLink(detailView, "a/a1.txt")
-    assert rw.navLocator.path == "a/a1.txt"
-    assert diffArea.commitTabs.currentIndex() == diffArea.ChangesTab
+    rw.taskRunner.joinWorkerThread()
+    assert diffArea.commitTabs.currentIndex() == diffArea.CommitTab, "no detour through Changes"
+    assert diffArea.commitPatchStack.isVisible()
+    assert diffArea.commitPatchView.toPlainText().strip(), "the file's changes, right here"
 
     # A parent takes you to that commit
     diffArea.commitTabs.setCurrentIndex(diffArea.CommitTab)
@@ -1380,3 +1383,65 @@ def testContextHeaderHasNoInfoButton(tempDir, mainWindow):
 
     labels = [button.text().lower() for button in rw.diffArea.contextHeader.buttons]
     assert not any("info" in label for label in labels), labels
+
+
+def testCommitTabOpensImagesAndSpecialDiffs(tempDir, mainWindow):
+    """Not every file is a text diff; the Commit tab shows those too."""
+
+    wd = unpackRepo(tempDir)
+    shutil.copyfile(getTestDataPath("image1.png"), f"{wd}/image.png")
+    writeFile(f"{wd}/empty.txt", "")
+    shell("git add image.png empty.txt && git commit -m 'an image and an empty file'", wd)
+
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    detailView = diffArea.commitDetailView
+
+    rw.jump(NavLocator.inCommit(rw.repo.head_commit_id, "image.png"), check=True)
+    diffArea.commitTabs.setCurrentIndex(diffArea.CommitTab)
+
+    paths = [delta.new.path for delta in detailView.deltas]
+    assert set(paths) == {"image.png", "empty.txt"}
+
+    detailView.fileClicked.emit(paths.index("image.png"))
+    rw.taskRunner.joinWorkerThread()
+    assert diffArea.commitPatchStack.currentIndex() == 1, "an image isn't a text diff"
+    assert "pixels" in diffArea.commitSpecialPatchView.toPlainText().lower()
+
+    detailView.fileClicked.emit(paths.index("empty.txt"))
+    rw.taskRunner.joinWorkerThread()
+    assert diffArea.commitPatchStack.currentIndex() == 1
+    assert "empty file" in diffArea.commitSpecialPatchView.toPlainText().lower()
+
+    # Clicking around quickly drops the patch we no longer care about
+    from gitfourchette.tasks import LoadPatchInCommitTab, RefreshRepo
+    task = LoadPatchInCommitTab(rw)
+    assert task.canKill(LoadPatchInCommitTab(rw))
+    assert not task.canKill(RefreshRepo(rw))
+
+
+def testCommitTabLoadsHeftyDiffWithoutLeavingTheTab(tempDir, mainWindow):
+    """A diff we refused to load offers to load it anyway - right here."""
+
+    wd = unpackRepo(tempDir)
+    writeLongFile(f"{wd}/hefty.txt", 500, 20)
+    shell("git add hefty.txt && git commit -m 'a hefty file'", wd)
+    GFApplication.applyPrefs(largeFileThresholdKB=1)
+
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    detailView = diffArea.commitDetailView
+
+    rw.jump(NavLocator.inCommit(rw.repo.head_commit_id, "hefty.txt"), check=True)
+    diffArea.commitTabs.setCurrentIndex(diffArea.CommitTab)
+
+    qteClickLink(detailView, "hefty.txt")
+    rw.taskRunner.joinWorkerThread()
+    assert diffArea.commitPatchStack.currentIndex() == 1
+    assert "very large" in diffArea.commitSpecialPatchView.toPlainText().lower()
+
+    qteClickLink(diffArea.commitSpecialPatchView, "load diff anyway")
+    rw.taskRunner.joinWorkerThread()
+    assert diffArea.commitTabs.currentIndex() == diffArea.CommitTab, "no detour through Changes"
+    assert diffArea.commitPatchStack.currentIndex() == 0, "the diff we asked for, right here"
+    assert "y499x19" in diffArea.commitPatchView.toPlainText()

@@ -7,6 +7,7 @@
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
 from gitfourchette.avatars import paintAvatar
+from gitfourchette.gitdriver import GitDelta
 from gitfourchette.localization import *
 from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
@@ -24,12 +25,15 @@ class CommitDetailView(QTextBrowser):
     """
 
     jumpRequested = Signal(NavLocator)
+    fileClicked = Signal(int)
+    "Index into the deltas of the commit being shown."
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("CommitDetailView")
         self.setOpenLinks(False)
         self.links = DocumentLinks()
+        self.deltas = []
         self.anchorClicked.connect(self._onAnchorClicked)
 
     def _onAnchorClicked(self, url: QUrl):
@@ -40,10 +44,12 @@ class CommitDetailView(QTextBrowser):
 
     def clear(self):
         self.links = DocumentLinks()
+        self.deltas = []
         self.setHtml("")
 
     def setCommit(self, repoModel, commit: Commit, deltas: list, isStash=False):
         self.links = DocumentLinks()
+        self.deltas = list(deltas)
         muted = mutedTextColorHex(self)
 
         document = QTextDocument(self)
@@ -79,7 +85,7 @@ class CommitDetailView(QTextBrowser):
             <table><tr>
             <td style='padding-right: 12px'><img src='avatar'/></td>
             <td>{self._person(commit.author)}<br>
-            <span style='color: {muted}'>{escape(signatureDateFormat(commit.author, QLocale.FormatType.ShortFormat, localTime=True))}</span></td>
+            <span style='color: {muted}'>{escape(signatureDateFormat(commit.author, QLocale.FormatType.LongFormat, localTime=True))}</span></td>
             </tr></table>
             <table>{table}</table>
             {kindLine}
@@ -91,6 +97,17 @@ class CommitDetailView(QTextBrowser):
         self.setDocument(document)
 
     # -------------------------------------------------------------------------
+
+    def scrollToFiles(self):
+        """Bring the file list up, so the next file is one click away."""
+        self.scrollToAnchor("files")
+
+    def deltaForPath(self, path: str) -> GitDelta | None:
+        """The delta for one of the files listed, if the commit touches it."""
+        for delta in self.deltas:
+            if path in (delta.new.path, delta.old.path):
+                return delta
+        return None
 
     def _person(self, signature: Signature) -> str:
         return f"<b>{escape(signature.name)}</b> <small>&lt;{escape(signature.email)}&gt;</small>"
@@ -105,15 +122,15 @@ class CommitDetailView(QTextBrowser):
             return f"<p style='color: {muted}'>{_('This commit is empty.')}</p>"
 
         rows = []
-        for delta in deltas:
+        for index, delta in enumerate(deltas):
             path = delta.new.path or delta.old.path
-            locator = NavLocator.inCommit(delta.new.sourceCommit, path)
-            link = self.links.new(lambda loc=locator: self.jumpRequested.emit(loc))
+            link = self.links.new(lambda i=index: self.fileClicked.emit(i))
             icon = stockIconImgTag(f"status_{delta.status.lower()}")
             rows.append(f"<tr><td>{icon}&nbsp;</td><td>{linkify(escape(path), link)}</td></tr>")
 
         heading = _n("{n} file changed:", "{n} files changed:", len(deltas))
-        return f"<p style='color: {muted}'>{heading}</p><table>{''.join(rows)}</table>"
+        return (f"<p style='color: {muted}'><a name='files'>{heading}</a></p>"
+                f"<table>{''.join(rows)}</table>")
 
     def _avatarImage(self, signature: Signature) -> QImage:
         size = AVATAR_PIXELS

@@ -434,6 +434,17 @@ class LoadPatch(RepoTask):
         return job
 
 
+class LoadPatchInCommitTab(RepoTask):
+    """Show a file's diff inside the Commit tab, where it was clicked."""
+
+    def canKill(self, task: RepoTask):
+        return isinstance(task, LoadPatchInCommitTab)
+
+    def flow(self, delta: GitDelta, locator: NavLocator):
+        document = yield from self.flowSubtask(LoadPatch, delta, locator)
+        self.rw.diffArea.showCommitPatch(self.repo, delta, locator, document)
+
+
 class LoadPatchInNewWindow(RepoTask):
     def flow(self, delta: GitDelta, locator: NavLocator):
         if CodeWindow.activateExistingWindow(locator):

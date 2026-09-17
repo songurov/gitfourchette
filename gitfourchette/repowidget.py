@@ -184,9 +184,14 @@ class RepoWidget(QWidget):
         self.graphView.clDelegate.requestSignatureVerification.connect(self.scheduleFlushGpgVerificationQueue)
 
         self.diffArea.conflictView.openPrefs.connect(self.openPrefs)
-        self.diffArea.diffView.contextualHelp.connect(self.statusMessage)
-        self.diffArea.specialDiffView.linkActivated.connect(self.processInternalLink)
         self.diffArea.commitDetailView.jumpRequested.connect(self.jumpFromCommitDetail)
+        self.diffArea.commitDetailView.fileClicked.connect(self.openFileFromCommitDetail)
+
+        # The Commit tab has a patch pane of its own; it answers the same way
+        for diffView in self.diffArea.diffView, self.diffArea.commitPatchView:
+            diffView.contextualHelp.connect(self.statusMessage)
+        self.diffArea.specialDiffView.linkActivated.connect(self.processInternalLink)
+        self.diffArea.commitSpecialPatchView.linkActivated.connect(self.processLinkFromCommitTab)
 
         self.sidebar.statusMessage.connect(self.statusMessage)
         self.sidebar.toggleHideRefPattern.connect(self.toggleHideRefPattern)
@@ -356,10 +361,33 @@ class RepoWidget(QWidget):
         self.navLocator = newLocator
 
     def jumpFromCommitDetail(self, locator: NavLocator):
-        """A file or a parent clicked in the Commit tab: go there, and show it."""
-        if locator.path:
-            self.diffArea.showChangesTab()
+        """A parent clicked in the Commit tab: go to that commit."""
         self.jump(locator)
+
+    def openFileFromCommitDetail(self, deltaIndex: int):
+        """A file clicked in the Commit tab: show its diff right there."""
+        detailView = self.diffArea.commitDetailView
+        delta = detailView.deltas[deltaIndex]
+        path = delta.new.path or delta.old.path
+        locator = NavLocator.inCommit(self.navLocator.commit, path)
+        tasks.LoadPatchInCommitTab.invoke(self, delta, locator)
+
+    def processLinkFromCommitTab(self, url: QUrl | str):
+        """
+        A link in the Commit tab's patch pane, e.g. "load this diff anyway".
+        When it just asks for the same file under different terms, reload it
+        where the user is looking instead of sending them to the Changes tab.
+        """
+        qurl = url if isinstance(url, QUrl) else QUrl(url)
+
+        if qurl.scheme() == APP_URL_SCHEME and qurl.authority() == NavLocator.URL_AUTHORITY:
+            locator = NavLocator.parseUrl(qurl)
+            delta = self.diffArea.commitDetailView.deltaForPath(locator.path)
+            if delta is not None and locator.commit == self.navLocator.commit:
+                tasks.LoadPatchInCommitTab.invoke(self, delta, locator)
+                return
+
+        self.processInternalLink(url)
 
     def jump(self, locator: NavLocator, check=False):
         tasks.Jump.invoke(self, locator)
