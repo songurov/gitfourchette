@@ -98,6 +98,7 @@ class GraphView(QListView):
         self.setItemDelegate(self.clDelegate)
 
         GFApplication.instance().prefsChanged.connect(self.refreshPrefs)
+        GFApplication.instance().avatarCache.avatarReady.connect(self.viewport().update)
         self.refreshPrefs(invalidateMetrics=False)
 
         # Shortcut keys

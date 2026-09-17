@@ -191,6 +191,21 @@ def isObjectAlive(obj: QObject | None) -> bool:
         from PyQt6 import sip  # type: ignore[import-not-found]
     return not sip.isdeleted(obj)
 
+
+# QtNetwork is optional: it's only needed to download author pictures,
+# which is off by default.
+HAS_QTNETWORK = False
+with _suppress(ImportError):
+    if PYQT6:
+        from PyQt6.QtNetwork import *
+    elif PYSIDE6 and not TYPE_CHECKING:
+        from PySide6.QtNetwork import *
+    elif PYQT5 and not TYPE_CHECKING:
+        from PyQt5.QtNetwork import *
+    else:
+        raise ImportError("QtNetwork")
+    HAS_QTNETWORK = True
+
 try:
     if PYQT6:
         from PyQt6.QtSvg import QSvgRenderer

@@ -7,9 +7,12 @@
 import pytest
 
 from gitfourchette.forms.commitinfodialog import CommitInfoDialog
+from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS
 from gitfourchette.graphview.commitlogmodel import SpecialRow
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
+from gitfourchette.avatars import avatarColor, avatarInitials
+from gitfourchette.settings import GraphRowLayout
 from gitfourchette.tasks import QueryCommitsTouchingPath
 from .util import *
 
@@ -491,6 +494,9 @@ def testRefSortFavorsHeadBranch(tempDir, mainWindow):
 def testCommitToolTip(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
 
+    # The hash column doubles as dead space for tooltips, so pin the layout that has one
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst)
+
     sig1 = TEST_SIGNATURE
     sig2 = Signature(sig1.name, sig1.email, sig1.time + 3600, sig1.offset)
 
@@ -832,3 +838,182 @@ def testDontScrollToSameCommitOnRefresh(tempDir, mainWindow):
     vsb.setSliderPosition(1000)
     rw.refreshRepo()
     assert vsb.sliderPosition() == 1000
+
+
+def spyOnMessageColumn(graphView) -> list[tuple]:
+    """Record (commit id, left edge) for every commit message painted from now on."""
+
+    painted = []
+    delegate = graphView.clDelegate
+    realPaint = delegate._paintCommitMessage
+
+    def spy(painter, rect, commit):
+        painted.append((commit.id, rect.left()))
+        return realPaint(painter, rect, commit)
+
+    delegate._paintCommitMessage = spy
+    return painted
+
+
+def testGraphFirstLayoutAlignsCommitMessages(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(800, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    refsAt = rw.repoModel.refsAt
+
+    def messageLefts():
+        """Left edge of the messages on rows that carry no ref indicators."""
+        return {left for oid, left in painted if oid not in refsAt}
+
+    # Classic layout: the graph indents each message a little differently
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst)
+    QTest.qWait(0)
+    painted = spyOnMessageColumn(graphView)
+    graphView.viewport().repaint()
+    assert len(messageLefts()) > 1, "classic layout is expected to indent messages"
+
+    # Graph first: the graph gets a column of its own, so messages line up
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst)
+    QTest.qWait(0)
+    painted = spyOnMessageColumn(graphView)
+    graphView.viewport().repaint()  # may widen the reserved graph column
+    painted.clear()
+    graphView.viewport().repaint()
+    lefts = messageLefts()
+    assert len(painted) > 1, "expecting several rows on screen"
+    assert len(lefts) == 1, f"messages should all start at the same x, got {sorted(lefts)}"
+
+
+def testGraphFirstLayoutMovesHashNextToAuthor(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1000, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    hashLefts = []
+    delegate = graphView.clDelegate
+    delegate._paintHash = lambda painter, rect, oid: hashLefts.append(rect.left())
+
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst)
+    QTest.qWait(0)
+    graphView.viewport().repaint()
+    assert hashLefts, "the classic layout opens the row with the hash"
+    assert max(hashLefts) < 100
+
+    hashLefts.clear()
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst)
+    QTest.qWait(0)
+    graphView.viewport().repaint()
+    assert hashLefts, "the hash is still painted, just elsewhere"
+    assert min(hashLefts) > graphView.viewport().width() // 2
+
+
+def testNarrowWindowDropsHashColumn(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    hashesPainted = []
+    graphView.clDelegate._paintHash = lambda *args: hashesPainted.append(args)
+
+    mainWindow.resize(600, 600)
+    QTest.qWait(0)
+    graphView.viewport().repaint()
+    assert not hashesPainted, "a cramped window gives the room to the message"
+
+
+def testGraphColumnStopsGrowingAtMaxWidth(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+
+    delegate.reserveGraphColumns(MAX_GRAPH_COLUMNS + 10)
+    assert delegate.graphColumns == MAX_GRAPH_COLUMNS
+
+    # Never shrinks back, so the messages don't dance around while scrolling
+    delegate.reserveGraphColumns(1)
+    assert delegate.graphColumns == MAX_GRAPH_COLUMNS
+
+    # ...but a repo reload starts over from a sane default
+    delegate.invalidateMetrics()
+    assert delegate.graphColumns == MIN_GRAPH_COLUMNS
+
+
+def testAuthorAvatarInitials():
+    def sig(name, email="someone@example.com"):
+        return Signature(name, email)
+
+    assert avatarInitials(sig("Fiodor Songurov")) == "FS"
+    assert avatarInitials(sig("A U Thor")) == "AT"  # first and last word
+    assert avatarInitials(sig("cher")) == "CH"
+    assert avatarInitials(sig("jean-luc picard")) == "JP"
+    assert avatarInitials(sig(".", "zoe@example.com")) == "ZO"  # nothing usable in the name
+
+
+def testAuthorAvatarColorIsStablePerPerson():
+    alice = Signature("Alice", "alice@example.com")
+    aliceAgain = Signature("Alice Different Name", "ALICE@example.com")
+    bob = Signature("Bob", "bob@example.com")
+
+    assert avatarColor(alice) == avatarColor(aliceAgain), "the email keys the color, and case doesn't count"
+    assert avatarColor(alice) != avatarColor(bob)
+
+
+def testAuthorAvatarsTakeRoomFromTheAuthorColumn(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1000, 600)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+
+    GFApplication.applyPrefs(showAvatars=False)
+    QTest.qWait(0)
+    rw.graphView.viewport().repaint()
+    withoutAvatars = delegate.authorMaxWidth
+
+    GFApplication.applyPrefs(showAvatars=True)
+    QTest.qWait(0)
+    rw.graphView.viewport().repaint()
+    assert delegate.authorMaxWidth > withoutAvatars
+
+
+def testRefboxPaletteHasAHandPickedColorForEachTheme():
+    from gitfourchette.graphview.commitlogdelegate import REFBOXES, RefBox
+
+    localBranch = next(b for b in REFBOXES if b.prefix == RefPrefix.HEADS)
+    fallback = QColor("#123456")
+
+    assert localBranch.penColor(dark=False, fallback=fallback) == localBranch.color
+    assert localBranch.penColor(dark=True, fallback=fallback) == localBranch.darkColor
+
+    # A box without a dark variant is brightened, and one without any color
+    # of its own just writes in the current pen color
+    plain = RefBox("whatever", color=QColor("#204060"))
+    assert plain.penColor(dark=True, fallback=fallback) == QColor("#204060").lighter(300)
+    assert RefBox("whatever").penColor(dark=False, fallback=fallback) == fallback
+
+
+def testDownloadedAvatarsReachTheHistory(tempDir, mainWindow, monkeypatch):
+    """With downloads on, the history draws the picture we have for an author."""
+
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1000, 600)
+    GFApplication.applyPrefs(showAvatars=True, downloadAvatars=True)
+    rw = mainWindow.openRepo(wd)
+
+    cache = GFApplication.instance().avatarCache
+    cache.urlFor = lambda sig: ""  # no network in tests
+
+    picture = QPixmap(64, 64)
+    picture.fill(QColor("#ff8800"))
+    cache.pixmaps["a.u.thor@example.com"] = picture
+
+    pictures = []
+    monkeypatch.setattr(
+        "gitfourchette.graphview.commitlogdelegate.paintAvatar",
+        lambda painter, rect, signature, pic=None: pictures.append(pic))
+
+    rw.graphView.viewport().repaint()
+    assert any(p is picture for p in pictures), "the author's picture should have been drawn"

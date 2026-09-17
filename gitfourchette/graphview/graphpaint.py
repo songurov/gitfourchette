@@ -74,19 +74,33 @@ def getCommitBulletColumn(
     return myLanePosition, columnCount
 
 
+def graphColumnWidth(numColumns: int) -> int:
+    """
+    Horizontal room that paintGraphFrame consumes for the given number of lane
+    columns (including the padding it leaves on the right).
+    """
+    return numColumns * LANE_WIDTH + LANE_WIDTH // 2
+
+
 def paintGraphFrame(
         painter: QPainter,
         rect: QRect,
         oid: Oid,
         graph: Graph,
         hiddenCommits: Set[Oid]
-):
+) -> int:
+    """
+    Draw the graph for a single row and return the number of lane columns that
+    the row needed. Callers that reserve a fixed-width graph column use the
+    return value to find out how wide that column has to be.
+    """
+
     try:
         # Get this commit's sequential index in the graph
         myRow = graph.getCommitRow(oid)
     except LookupError:  # pragma: no cover
         logger.warning(f"Skipping unregistered commit: {oid}")
-        return
+        return 0
 
     painter.save()
     outlineColor = painter.background().color()
@@ -214,4 +228,6 @@ def paintGraphFrame(
 
     # add some padding to the right
     rect.setRight(rect.right() + LANE_WIDTH)
+
+    return numFlattenedColumns
 

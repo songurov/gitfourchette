@@ -11,14 +11,16 @@ from dataclasses import dataclass
 
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
+from gitfourchette.avatars import AVATAR_SIZE, AVATAR_SPACING, paintAvatar
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow, CommitToolTipZone
 from gitfourchette.graphview.commitinfosearch import CommitInfoSearch
-from gitfourchette.graphview.graphpaint import paintGraphFrame
+from gitfourchette.graphview.graphpaint import graphColumnWidth, paintGraphFrame
 from gitfourchette.localization import *
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.repomodel import UC_FAKEID, UC_FAKEREF, RepoModel, GpgStatus
+from gitfourchette.settings import GraphRowLayout
 from gitfourchette.toolbox import *
 
 
@@ -27,23 +29,37 @@ class RefBox:
     prefix: str
     icon: str = ""
     color: QColor = None
+    darkColor: QColor = None
+    """Foreground on a dark background. Brightening the light-theme color
+    algorithmically washes saturated hues out, so each one is picked by hand."""
     keepPrefix: bool = False
     iconWidth: int = 16
 
+    def penColor(self, dark: bool, fallback: QColor) -> QColor:
+        if not self.color:
+            return fallback
+        if dark:
+            return self.darkColor or self.color.lighter(300)
+        return self.color
+
+
+REFBOX_BG_ALPHA = (0.08, 0.20)
+"""How much of the refbox color tints its background, light and dark."""
+
 
 REFBOXES = [
-    RefBox(RefPrefix.REMOTES, "git-remote", QColor(Qt.GlobalColor.darkCyan)),
-    RefBox(RefPrefix.TAGS, "git-tag", QColor(Qt.GlobalColor.darkYellow)),
-    RefBox(RefPrefix.HEADS, "git-branch", QColor(Qt.GlobalColor.darkMagenta)),
+    RefBox(RefPrefix.REMOTES, "git-remote", QColor("#0F7D8C"), QColor("#5FD3E3")),
+    RefBox(RefPrefix.TAGS, "git-tag", QColor("#9A6B00"), QColor("#F2C14E")),
+    RefBox(RefPrefix.HEADS, "git-branch", QColor("#2264B8"), QColor("#7FB4FF")),
 
     # detached HEAD as returned by Repo.map_commits_to_refs
-    RefBox("HEAD", "git-head-detached", QColor(Qt.GlobalColor.darkRed), keepPrefix=True),
+    RefBox("HEAD", "git-head-detached", QColor("#B3382C"), QColor("#FF8C7A"), keepPrefix=True),
 
     # Working Directory
-    RefBox(UC_FAKEREF, "git-workdir", QColor("#808080")),
+    RefBox(UC_FAKEREF, "git-workdir", QColor("#6B7280"), QColor("#A8AEB8")),
 
     # Mounted
-    RefBox("FAKEREF_FUSEMOUNT", "git-mount", QColor(Qt.GlobalColor.gray)),
+    RefBox("FAKEREF_FUSEMOUNT", "git-mount", QColor("#6B7280"), QColor("#A8AEB8")),
 
     # Commit comparison
     RefBox("FAKEREF_COMPAREA", "compare-a", QColor(Qt.GlobalColor.red), iconWidth=48),
@@ -68,6 +84,13 @@ MAX_AUTHOR_CHARS = {
 XMARGIN = 4
 XSPACING = 6
 
+MIN_GRAPH_COLUMNS = 3
+"""Lane columns reserved for the graph before any row is painted."""
+
+MAX_GRAPH_COLUMNS = 16
+"""Upper bound on the reserved graph column. Past this width, a busy graph
+is clipped instead of pushing commit messages off the screen."""
+
 NARROW_WIDTH = (500, 750)
 
 
@@ -89,6 +112,8 @@ class CommitLogDelegate(QStyledItemDelegate):
         self.hashCharWidth = 0
         self.dateMaxWidth = 0
         self.authorMaxWidth = 0
+        self.hashColumnWidth = 0
+        self.graphColumns = MIN_GRAPH_COLUMNS
         self.activeCommitFont = QFont()
         self.uncommittedFont = QFont()
         self.refboxFont = QFont()
@@ -113,6 +138,7 @@ class CommitLogDelegate(QStyledItemDelegate):
 
     def invalidateMetrics(self):
         self.mustRefreshMetrics = True
+        self.graphColumns = MIN_GRAPH_COLUMNS
 
     def refreshMetrics(self, option: QStyleOptionViewItem):
         if not self.mustRefreshMetrics:
@@ -141,6 +167,10 @@ class CommitLogDelegate(QStyledItemDelegate):
         self.dateMaxWidth = int(self.dateMaxWidth)  # make sure it's an int for pyqt5 compat
 
         self.authorMaxWidth = self.hashCharWidth * MAX_AUTHOR_CHARS.get(settings.prefs.authorDisplayStyle, 16)
+        if settings.prefs.showAvatars:
+            self.authorMaxWidth += AVATAR_SIZE + AVATAR_SPACING
+
+        self.hashColumnWidth = self.hashCharWidth * settings.prefs.shortHashChars + XSPACING
 
     # --------------------------------------------------------------------------
     # Qt callbacks
@@ -205,15 +235,19 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Compute column bounds
         authorWidth = self.authorMaxWidth
         dateWidth = self.dateMaxWidth
+        hashWidth = self.hashColumnWidth if self.hashOnTheRight() else 0
         if fullWidth < NARROW_WIDTH[0] or not oid:
             authorWidth = 0
             dateWidth = 0
+            hashWidth = 0
         elif fullWidth <= NARROW_WIDTH[1]:
             authorWidth = int(lerp(authorWidth/2, authorWidth, rect.width(), NARROW_WIDTH[0], NARROW_WIDTH[1]))
+            hashWidth = 0  # the hash is the first thing to go in a cramped window
         leftBoundDate = rect.right() - dateWidth
-        leftBoundName = leftBoundDate - authorWidth
+        leftBoundHash = leftBoundDate - hashWidth
+        leftBoundName = leftBoundHash - authorWidth
         rightBound = rect.right()
-        tabBound = rect.right() - authorWidth - dateWidth
+        tabBound = leftBoundName
 
         # Reserve rightmost column
         rect.setRight(leftBoundName - XMARGIN)
@@ -227,11 +261,12 @@ class CommitLogDelegate(QStyledItemDelegate):
         # ...Left-to-right zones...
 
         # Hash
-        painter.save()
-        if not isSelected:  # use muted color for hash if not selected
-            painter.setPen(palette.color(colorGroup, QPalette.ColorRole.PlaceholderText))
-        self._paintHash(painter, rect, oid)
-        painter.restore()
+        if not self.hashOnTheRight():
+            painter.save()
+            if not isSelected:  # use muted color for hash if not selected
+                painter.setPen(palette.color(colorGroup, QPalette.ColorRole.PlaceholderText))
+            self._paintHash(painter, rect, oid)
+            painter.restore()
 
         # Private
         self.paintPrivate(painter, option, index, rect, oid)
@@ -258,8 +293,18 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Author
         if authorWidth != 0 and commit:
             rect.setLeft(tabBound)
-            rect.setRight(leftBoundDate - XMARGIN)
+            rect.setRight(leftBoundHash - XMARGIN)
             self._paintAuthor(painter, rect, commit)
+
+        # Hash
+        if hashWidth != 0 and commit:
+            rect.setLeft(leftBoundHash)
+            rect.setRight(leftBoundDate - XMARGIN)
+            painter.save()
+            if not isSelected:
+                painter.setPen(palette.color(colorGroup, QPalette.ColorRole.PlaceholderText))
+            self._paintHash(painter, rect, oid)
+            painter.restore()
 
         # Date
         if dateWidth != 0 and commit:
@@ -373,6 +418,16 @@ class CommitLogDelegate(QStyledItemDelegate):
 
         if settings.prefs.authorDiffAsterisk and author.email != commit.committer.email:
             authorText += "*"
+
+        # Draw the author's chip, so a face-less history still reads at a glance
+        if settings.prefs.showAvatars:
+            size = min(AVATAR_SIZE, rect.height())
+            chipRect = QRect(rect.left(), rect.top() + (rect.height() - size) // 2, size, size)
+            picture = None
+            if settings.prefs.downloadAvatars:
+                picture = GFApplication.instance().avatarCache.pixmapFor(author)
+            paintAvatar(painter, chipRect, author, picture)
+            rect.setLeft(chipRect.right() + AVATAR_SPACING)
 
         gpgStatus, _gpgKeyInfo = self.repoModel.getCachedGpgStatus(commit)
 
@@ -507,6 +562,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         refboxDef = next(d for d in REFBOXES if refName.startswith(d.prefix))
 
         penColor = painter.pen().color()
+        dark = penColor.lightnessF() > .5
 
         if forceOmitName:
             text = ""
@@ -514,20 +570,14 @@ class CommitLogDelegate(QStyledItemDelegate):
             text = refName.removeprefix(refboxDef.prefix)
         else:
             text = refName
-        color = refboxDef.color or penColor
+        color = refboxDef.penColor(dark, penColor)
         bgColor = QColor(color)  # modify copy
+        bgColor.setAlphaF(REFBOX_BG_ALPHA[dark])
         iconName = refboxDef.icon
 
         # Omit remote name if there's a single remote
         if refboxDef.prefix == RefPrefix.REMOTES and self.repoModel.singleRemote:
             text = text.split('/', 1)[-1]
-
-        dark = penColor.lightnessF() > .5
-        if dark:
-            color = color.lighter(300)
-            bgColor.setAlphaF(.5)
-        else:
-            bgColor.setAlphaF(.066)
 
         if isHome:
             font = self.homeRefboxFont
@@ -560,10 +610,12 @@ class CommitLogDelegate(QStyledItemDelegate):
         if not iconName and text:
             maxWidth = max(maxWidth, remainingWidth)
 
-        # Draw text
+        # Draw text.
+        # No condensing here: squeezed letterforms next to normal text read as a
+        # rendering glitch. A ref name that doesn't fit gets elided instead.
         if text and maxWidth != 0:
             text, fittedFont, textWidth = FittedText.fit(
-                font, maxWidth, text, Qt.TextElideMode.ElideMiddle, limit=QFont.Stretch.Condensed)
+                font, maxWidth, text, Qt.TextElideMode.ElideMiddle, limit=QFont.Stretch.Unstretched)
         else:
             textWidth = -rPadding  # Negate rPadding
 
@@ -716,20 +768,34 @@ class CommitLogDelegate(QStyledItemDelegate):
             oid: Oid | None,
     ):
         """
-        Draw widget-specific information inbetween the commit hash and message.
+        Draw widget-specific information before the commit message.
         By default, draws the graph and refboxes. Can be overridden.
         """
 
         # ------ Graph
-        if oid is not None and not self.repoModel.commitPathspecFilter.wantFilter():
+        if self.hashOnTheRight():
+            # Fixed-width column, so the messages don't drift with the graph
+            self._paintGraphColumn(painter, rect, oid)
+        elif self.wantGraph(oid):
             graphRect = QRect(rect)
             paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits)
             rect.setLeft(graphRect.right())
 
-        # ------ Begin refboxes
+        # ------ Refboxes
         painter.save()
         painter.setClipRect(rect)
+        self._paintRefIndicators(painter, rect, index, oid)
+        painter.restore()
 
+    def wantGraph(self, oid: Oid | None) -> bool:
+        return oid is not None and not self.repoModel.commitPathspecFilter.wantFilter()
+
+    def hashOnTheRight(self) -> bool:
+        """True if the row opens with the graph and the hash sits next to the
+        author, instead of the classic layout that opens with the hash."""
+        return settings.prefs.graphRowLayout == GraphRowLayout.GraphFirst
+
+    def _paintRefIndicators(self, painter: QPainter, rect: QRect, index: QModelIndex, oid: Oid | None):
         # ------ A/B icon
         abSide = index.data(CommitLogModel.Role.ComparisonSide)
         if abSide:
@@ -746,6 +812,37 @@ class CommitLogDelegate(QStyledItemDelegate):
         if refsHere:
             self._paintRefboxes(painter, rect, refsHere)
 
-        # ------ End refboxes
-        painter.restore()
+    def _paintGraphColumn(self, painter: QPainter, rect: QRect, oid: Oid | None):
+        """
+        Draw the graph in a column whose width doesn't depend on the row, so
+        that every commit message starts at the same x.
+        """
+
+        width = min(graphColumnWidth(self.graphColumns) + XSPACING, rect.width() // 2)
+
+        if self.wantGraph(oid):
+            graphRect = QRect(rect)
+            graphRect.setWidth(width)
+            columns = paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits)
+            self.reserveGraphColumns(columns)
+
+        rect.setLeft(rect.left() + width)
+
+    def reserveGraphColumns(self, columns: int):
+        """
+        Widen the reserved graph column if this row needs more lanes than we've
+        seen so far, and repaint so that the rows already drawn line up with it.
+        The column only ever grows (up to MAX_GRAPH_COLUMNS), so this settles
+        after a couple of passes instead of ping-ponging.
+        """
+
+        columns = min(columns, MAX_GRAPH_COLUMNS)
+        if columns <= self.graphColumns:
+            return
+
+        self.graphColumns = columns
+
+        view = self.parent()
+        if isinstance(view, QWidget):
+            view.update()
 

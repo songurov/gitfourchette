@@ -114,6 +114,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         FileListClick,
         GraphRefBoxWidth,
         GraphRowHeight,
+        GraphRowLayout,
         QtApiNames,
         RefSort,
         TabBarClick,
@@ -194,6 +195,11 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         GraphRefBoxWidth.IconsOnly: _("Icons Only"),
         GraphRefBoxWidth.Standard: _("Truncate long ref names"),
         GraphRefBoxWidth.Wide: _("Show full ref names"),
+    }
+
+    table[GraphRowLayout] = {
+        GraphRowLayout.HashFirst: _("Hash, graph, refs, message"),
+        GraphRowLayout.GraphFirst: _("Graph, refs, message (aligned)"),
     }
 
     table[GraphRowHeight] = {
@@ -417,6 +423,23 @@ def _prefKeyTable() -> dict[str, str]:
               "commits within a branch in a linear fashion. Since this is not a strictly chronological "
               "mode, you may have to do more scrolling to see the latest changes in various branches."),
         ),
+        "graphRowLayout": _("Row layout"),
+        "graphRowLayout_help": paragraphs(
+            _("<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the "
+              "commit hash, and the ref indicators sit between the graph and the commit message."),
+            _("<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages "
+              "line up no matter how busy the graph is on any given row. Ref indicators lead the "
+              "message column, and the hash moves to the right, next to the author."),
+        ),
+        "showAvatars": _("Show author avatars"),
+        "downloadAvatars": _("Download author pictures"),
+        "downloadAvatars_help": _(
+            "Look up each author’s picture on GitHub or Gravatar. This sends their email "
+            "address to a third party, so it is off until you ask for it. Without it, "
+            "authors get a chip with their initials, computed on your machine."),
+        "showAvatars_help": _(
+            "A chip with the author’s initials, colored from their email address, "
+            "so that the same person always looks the same in the history."),
         "graphRowHeight": _("Row spacing"),
         "flattenLanes": _("Avoid gaps between branches in the graph"),
         "authorDiffAsterisk": _("Mark author/committer signature differences"),

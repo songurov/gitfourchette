@@ -48,6 +48,7 @@ class GFApplication(QApplication):
     commandLinePaths: list
     sshAgent: SshAgent | None
     mountManager: MountManager | None
+    avatarCache: AvatarCache | None
 
     @classmethod
     def instance(cls) -> GFApplication:
@@ -274,6 +275,9 @@ class GFApplication(QApplication):
         self.mountManager.deleteLater()
         self.mountManager = None
 
+        self.avatarCache.deleteLater()
+        self.avatarCache = None
+
         LexJobCache.clear()  # don't cache lexed files across sessions (for unit testing)
         # RemoteLink.clearSessionPassphrases()  # don't cache passphrases across sessions (for unit testing)
         gc.collect()  # clean up Repository file handles (for Windows unit tests)
@@ -287,12 +291,16 @@ class GFApplication(QApplication):
         from gitfourchette.settings import QtApiNames
         from gitfourchette.forms.donateprompt import DonatePrompt
         from gitfourchette.mount.mountmanager import MountManager
+        from gitfourchette.avatars import AvatarCache
 
         assert self.mainWindow is None, "already have a MainWindow"
         assert self.initialSession is not None, "initial session should have been prepared before bootUi"
 
         # Initialize mountpoint manager
         self.mountManager = MountManager(self)
+
+        # Author pictures (only ever downloaded if the user turns that on)
+        self.avatarCache = AvatarCache(self)
 
         self.applyQtStylePref()
         self.mainWindow = MainWindow()

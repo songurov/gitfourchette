@@ -9,7 +9,7 @@ import pytest
 from gitfourchette.gitdriver import GitConflict, GitConflictSides, GitDelta, GitDeltaSource, GitStatus
 from gitfourchette.porcelain import FileMode, Signature
 from gitfourchette.toolbox import abbreviatePerson, AuthorDisplayStyle
-from gitfourchette.webhost import WebHost
+from gitfourchette.webhost import WebHost, identifyHost
 
 from .util import pygit2OlderThan
 
@@ -279,3 +279,20 @@ def testBadGitStatusPatterns(tempDir):
     for s in badStatus:
         with pytest.raises(ValueError):
             _dummy = list(parseGitStatus(s, tempDir.name))
+
+
+@pytest.mark.parametrize("exampleUrl", EXAMPLE_REMOTE_URLS)
+def testIdentifyHostingService(exampleUrl):
+    known = identifyHost(exampleUrl.replace("example.com", "github.com"))
+    assert known is not None
+    assert known.name == "GitHub"
+    assert known.icon == "host-github"
+
+    # A self-hosted instance usually says so in its hostname
+    selfHosted = identifyHost(exampleUrl.replace("example.com", "gitlab.acme.test"))
+    assert selfHosted is not None
+    assert selfHosted.name == "GitLab"
+
+    # Anything else stays unidentified rather than being guessed at
+    assert identifyHost(exampleUrl) is None
+    assert identifyHost("") is None

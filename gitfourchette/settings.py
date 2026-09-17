@@ -61,6 +61,16 @@ class GraphRefBoxWidth(enum.IntEnum):
     Wide = 1000
 
 
+class GraphRowLayout(enum.IntEnum):
+    HashFirst = 0
+    """Classic layout: hash, graph, ref indicators, then the commit message."""
+
+    GraphFirst = 1
+    """The graph opens the row in a column of its own, so commit messages start
+    at the same x however busy the graph gets. Ref indicators lead the message
+    column, and the hash moves next to the author on the right."""
+
+
 class QtApiNames(enum.StrEnum):
     Automatic = ""
     PyQt6 = "pyqt6"
@@ -142,9 +152,14 @@ class Prefs(PrefsFile):
 
     _category_graph             : int                   = 0
     chronologicalOrder          : bool                  = True
+    graphRowLayout              : GraphRowLayout        = GraphRowLayout.GraphFirst
+    """Messages that all start at the same x stay readable however busy the
+    graph gets, and nothing is reserved for refs that most rows don't have."""
     graphRowHeight              : GraphRowHeight        = GraphRowHeight.Relaxed
     refBoxMaxWidth              : GraphRefBoxWidth      = GraphRefBoxWidth.Standard
     authorDisplayStyle          : AuthorDisplayStyle    = AuthorDisplayStyle.FullName
+    showAvatars                 : bool                  = True
+    downloadAvatars             : bool                  = False
     shortTimeFormat             : str                   = SHORT_DATE_DEFAULT_PRESET
     maxCommits                  : int                   = 10000
     authorDiffAsterisk          : bool                  = True

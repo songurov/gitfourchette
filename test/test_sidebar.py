@@ -716,3 +716,25 @@ def testSidebarFilterCollapseState(tempDir, mainWindow):
     # folder2 was originally collapsed, but it should now be expanded because
     # we selected it before closing the search bar.
     assert isExpanded("refs/heads/folder2/leaf")
+
+
+def testRemoteShowsHostingServiceIcon(tempDir, mainWindow):
+    """The remote's URL says which service it is; the icon says it at a glance."""
+
+    wd = unpackRepo(tempDir)  # origin points to github.com
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+
+    def remoteIndex():
+        return sb.nodeToFilterIndex(sb.findNodeByKind(SidebarItem.Remote))
+
+    def remoteIconKey():
+        return remoteIndex().data(SidebarModel.Role.IconKey)
+
+    assert remoteIconKey() == "host-github"
+    assert "GitHub" in remoteIndex().data(Qt.ItemDataRole.ToolTipRole)
+
+    # A host we don't recognize keeps the generic icon
+    shell("git remote set-url origin https://git.example.com/someone/something.git", wd)
+    rw.refreshRepo()
+    assert remoteIconKey() == "git-remote"

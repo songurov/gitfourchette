@@ -19,6 +19,7 @@ from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEREF
 from gitfourchette.repoprefs import RefSort
 from gitfourchette.toolbox import *
+from gitfourchette.webhost import identifyHost
 
 logger = logging.getLogger(__name__)
 
@@ -691,12 +692,18 @@ class SidebarModel(QAbstractItemModel):
                 url = self.repo.remotes[remoteName].url
                 skipFetchAll = self.repo.get_remote_skipfetchall(remoteName)
                 text = "<p style='white-space: pre'>" + escape(url)
+                webHost = identifyHost(url)
+                if webHost is not None:
+                    text += "<br>" + escape(webHost.name)
                 text += self.visibilityToolTip(node)
                 if skipFetchAll:
                     text += "<br>" + _("(Skipped when fetching all remotes.)")
                 self.cacheToolTip(index, text)
                 return text
             elif iconKeyRole:
+                webHost = identifyHost(self.repo.remotes[remoteName].url)
+                if webHost is not None and webHost.icon:
+                    return webHost.icon
                 return "git-remote"
 
         elif item == SidebarItem.RemoteBranch:
