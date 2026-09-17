@@ -67,7 +67,7 @@ class CloneDialog(QDialog):
 
         self.cloneButton: QPushButton = self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
         self.cloneButton.setText(_("C&lone"))
-        self.cloneButton.setIcon(QIcon.fromTheme("download"))
+        self.cloneButton.setIcon(stockIcon("folder-download"))
         self.cloneButton.clicked.connect(self.onCloneClicked)
 
         self.cancelButton: QPushButton = self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel)

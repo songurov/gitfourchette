@@ -49,3 +49,36 @@ def testStockIconImgTagDpr(mainWindow):
     pixmap.load(src)
     assert pixmap.size() == QSize(24, 24)
 
+
+def _rendered(icon: QIcon) -> QImage:
+    return icon.pixmap(16, 16).toImage()
+
+
+def testTaskIconsAreAllOurOwn(mainWindow):
+    """Every task that shows an icon must have one of ours to show."""
+
+    from gitfourchette.tasks.taskbook import TaskBook
+    from gitfourchette.toolbox import stockIcon
+
+    assert TaskBook.icons, "expecting the task book to name some icons"
+    for taskClass, iconId in TaskBook.icons.items():
+        assert not stockIcon(iconId).isNull(), f"{taskClass.__name__} wants a missing icon {iconId!r}"
+
+
+def testForeignIconNamesNeverReachTheDesktopTheme(mainWindow):
+    """
+    The app still calls some icons by their freedesktop names. Left to the
+    desktop's icon theme, those come out in somebody else's style - usually
+    full color, next to our flat line art.
+    """
+
+    from gitfourchette.toolbox import stockIcon
+
+    assert _rendered(stockIcon("vcs-branch")) == _rendered(stockIcon("git-branch"))
+    assert _rendered(stockIcon("user-identity")) == _rendered(stockIcon("git-identity"))
+    assert _rendered(stockIcon("application-exit")) == _rendered(stockIcon("exit"))
+    assert _rendered(stockIcon("SP_TrashIcon")) == _rendered(stockIcon("trash"))
+
+    # A name we have no answer for fails here, rather than in a screenshot
+    with pytest.raises(AssertionError):
+        stockIcon("document-new")

@@ -4,9 +4,13 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import logging
+
 from gitfourchette.qt import *
 from gitfourchette.toolbox.recolorsvgiconengine import RecolorSvgIconEngine
 
+
+logger = logging.getLogger(__name__)
 
 _stockIconCache: dict[int, QIcon] = {}
 _stockIconHtmlCache: dict[int, str] = {}
@@ -36,18 +40,47 @@ _autoDarkVariants = {
 def _iconOverrideTable() -> dict[str, str]:
     overrides = {
         "status_?": "status_a",  # Use Added icon for Untracked
+
+        # Qt standard pixmaps can also come from the desktop theme. Keep the
+        # trash action consistent with the rest of our line-art icon set.
+        "SP_TrashIcon": "trash",
+
+        # Freedesktop icon names, answered with our own icons. Left to the
+        # desktop's icon theme, these come out in somebody else's style -
+        # usually full color, next to our flat line art.
+        "application-exit": "exit",
+        "configure": "git-settings",
+        "dialog-close": "close",
+        "document-close": "close",
+        "document-edit": "edit",
+        "document-save-as": "save",
+        "edit-clear-history": "trash",
+        "edit-find": "magnifying-glass",
+        "folder-open": "git-folder",
+        "folder-open-recent": "folder-recent",
+        "go-down-search": "chevron-down",
+        "go-up-search": "chevron-up",
+        "help-contents": "hint",
+        "image-missing": "achtung",
+        "information": "info",
+        "internet-web-browser": "web",
+        "ssh": "gpg-key",
+        "user-identity": "git-identity",
+        "vcs-branch": "git-branch",
+        "vcs-branch-delete": "git-branch-delete",
+        "vcs-diff": "git-change",
+        "warning": "achtung",
     }
 
-    assert QApplication.instance(), "need app instance for QIcon.themeName()"
-    iconTheme = QIcon.themeName().casefold()
+    assert QApplication.instance(), "need app instance to resolve 'assets:' icon paths"
 
     # Use native warning icon in all contexts on Mac & Windows
     if MACOS or WINDOWS:  # pragma: no cover
         overrides["achtung"] = "SP_MessageBoxWarning"
 
-    # Override Ubuntu default theme's scary red icon for warnings
-    if FREEDESKTOP and iconTheme.startswith("yaru"):  # pragma: no cover
-        overrides["SP_MessageBoxWarning"] = "warning-small-symbolic"
+    # Elsewhere it's the other way round: AppStyle answers SP_MessageBoxWarning
+    # with our own achtung, so no desktop gets to supply its own warning icon
+    # (Ubuntu's, in particular, is a scary red one).
 
     return overrides
 
@@ -93,8 +126,12 @@ def stockIcon(iconId: str, colorTable="") -> QIcon:
         entry = getattr(QStyle.StandardPixmap, iconId)
         icon = QApplication.style().standardIcon(entry)
     else:
-        # Fall back to theme icon
-        icon = QIcon.fromTheme(iconId)
+        # No icon of our own. Rather than let the desktop's icon theme answer
+        # in its own style, show nothing - and fail loudly in the test suite,
+        # so a missing icon is caught here instead of in a screenshot.
+        assert not APP_TESTMODE, f"no icon of our own for {iconId!r}"
+        logger.warning(f"No icon for {iconId}")
+        icon = QIcon()
 
     assert iconPath.endswith(".svg") or not colorTable, f"can't remap colors in non-SVG icon! {iconId}"
 
