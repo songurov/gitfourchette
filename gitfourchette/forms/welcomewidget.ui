@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ui version="4.0">
+<?xml version="1.0" ?><ui version="4.0">
  <class>WelcomeWidget</class>
  <widget class="QWidget" name="WelcomeWidget">
   <property name="geometry">
@@ -13,7 +12,8 @@
   <property name="windowTitle">
    <string>Welcome</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
+  
+ <layout class="QHBoxLayout" name="outerLayout"><item><widget class="QSplitter" name="splitter"><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property><property name="childrenCollapsible"><bool>false</bool></property><widget class="QWidget" name="welcomePane"><layout class="QVBoxLayout" name="welcomePaneLayout"><item><widget class="QStackedWidget" name="leftStack"><widget class="QWidget" name="splashPage"><layout class="QGridLayout" name="gridLayout">
    <item row="9" column="1">
     <widget class="QPushButton" name="cloneRepoButton">
      <property name="text">
@@ -176,8 +176,7 @@
      </item>
     </layout>
    </item>
-  </layout>
- </widget>
+  </layout></widget><widget class="QWidget" name="readmePage"><layout class="QVBoxLayout" name="readmePageLayout"/></widget></widget></item></layout></widget><widget class="QWidget" name="repoPane"><layout class="QVBoxLayout" name="repoPaneLayout"/></widget></widget></item></layout></widget>
  <tabstops>
   <tabstop>recentReposButton</tabstop>
   <tabstop>newRepoButton</tabstop>

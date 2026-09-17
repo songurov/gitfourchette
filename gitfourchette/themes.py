@@ -44,6 +44,42 @@ class ThemeAccent(enum.StrEnum):
     Purple = "#b875dc"
 
 
+def isDarkStyle(styleName: str) -> bool:
+    """
+    Whether this style string asks for a dark palette.
+
+    A built-in theme carries its mode as a token ("gitfourchette-builtin,dark").
+    Without one, or with any other Qt style, the system decides.
+    """
+    tokens = styleName.split(",")
+    if "dark" in tokens[1:]:
+        return True
+    if "light" in tokens[1:]:
+        return False
+    try:
+        return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    except AttributeError:  # pragma: no cover - Qt < 6.5
+        return False
+
+
+def withThemeMode(styleName: str, dark: bool) -> str:
+    """
+    Return `styleName` pinned to light or dark.
+
+    Only the built-in theme has a mode to set, so asking a native Qt style to
+    go dark switches to the built-in theme - which is the honest reading of
+    "make it dark" when the current style has no say in the matter.
+    """
+    mode = "dark" if dark else "light"
+    tokens = [t for t in styleName.split(",") if t]
+
+    if not tokens or tokens[0] != ThemeName.BuiltIn:
+        return f"{ThemeName.BuiltIn},{mode}"
+
+    kept = [t for t in tokens[1:] if t not in ("light", "dark")]
+    return ",".join([ThemeName.BuiltIn, mode, *kept])
+
+
 @dataclasses.dataclass
 class ThemeColors:
     bg: str

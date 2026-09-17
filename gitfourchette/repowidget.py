@@ -53,6 +53,8 @@ class RepoWidget(QWidget):
     busyMessage = Signal(str)
     statusMessage = Signal(str)
     clearStatus = Signal()
+    statusChanged = Signal()
+    """What this repo has outstanding may have changed (refreshed, committed, pushed…)."""
 
     repoModel: RepoModel
     taskRunner: RepoTaskRunner
@@ -369,6 +371,45 @@ class RepoWidget(QWidget):
     def getTitle(self) -> str:
         return self.repoModel.shortName
 
+    def statusIconKey(self) -> str:
+        """
+        Which marker this repo's tab should wear.
+
+        Uncommitted work and unpushed commits are separate problems, and a tab
+        that only counts working-directory files lets you believe you're done
+        when your commits are still sitting on your machine. So they are shown
+        apart: a dot for uncommitted, an arrow for unpushed, both for both.
+        """
+        dirty = self.repoModel.numUncommittedChanges > 0
+        unpushed = self.unpushedCommitCount() > 0
+        if dirty and unpushed:
+            return "git-status-dirty-unpushed"
+        elif dirty:
+            return "git-status-dirty"
+        elif unpushed:
+            return "git-status-unpushed"
+        return ""
+
+    def statusTooltip(self) -> str:
+        lines = [compactPath(self.workdir)]
+        numChanges = self.repoModel.numUncommittedChanges
+        if numChanges > 0:
+            lines.append(_n("{n} uncommitted change", "{n} uncommitted changes", numChanges))
+        ahead = self.unpushedCommitCount()
+        if ahead > 0:
+            lines.append(_n("{n} commit not pushed to {0}", "{n} commits not pushed to {0}",
+                            ahead, self.repoModel.upstreams.get(self.repoModel.homeBranch, "")))
+        if numChanges <= 0 and ahead <= 0:
+            lines.append(_("Nothing outstanding"))
+        return "\n".join(lines)
+
+    def unpushedCommitCount(self) -> int:
+        branch = self.repoModel.homeBranch
+        if not branch:
+            return 0
+        ahead, _behind = self.repoModel.aheadBehind.get(branch, (0, 0))
+        return ahead
+
     def closeEvent(self, event: QCloseEvent):
         """ Called when closing a repo tab """
         try:
@@ -596,6 +637,8 @@ class RepoWidget(QWidget):
             title = f"{title} [{inBrackets}]"
 
         self.setWindowTitle(title)
+        # The tab shows what's outstanding, and that changes with every refresh
+        self.statusChanged.emit()
 
     def refreshBanner(self):
         """ Refresh state banner (merging, cherrypicking, reverting, etc.) """

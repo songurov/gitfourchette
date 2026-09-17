@@ -334,7 +334,7 @@ class GitDriver(QProcess):
     ) -> list[str]:
         tokens = [
             "-c", "core.abbrev=no",
-            "-c", f"diff.context={settings.prefs.contextLines}",
+            "-c", f"diff.context={settings.prefs.effectiveContextLines()}",
             "diff",
             *argsIf(forDisplay, *cls.diffFormattingArgs()),
             *argsIf(binary, "--binary"),
@@ -386,7 +386,7 @@ class GitDriver(QProcess):
         tokens = [
             "--git-dir=",
             "-c", "core.abbrev=no",
-            "-c", f"diff.context={settings.prefs.contextLines}",
+            "-c", f"diff.context={settings.prefs.effectiveContextLines()}",
             "diff",
             *cls.diffFormattingArgs(),
             "--no-index", "--",

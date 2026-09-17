@@ -11,6 +11,7 @@ from gitfourchette.forms.ignorepatterndialog import IgnorePatternDialog
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.nav import NavLocator, NavContext
+from gitfourchette import settings
 from gitfourchette.settings import FileListClick
 
 from .util import *
@@ -898,3 +899,28 @@ def testCantStageMixedSelection(tempDir, mainWindow):
     menu = summonContextMenu(rw.stagedFiles.viewport())
     assert findMenuAction(menu, "can.t unstage this selection in bulk")
     menu.close()
+
+
+def testDoubleClickStagesByDefault(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/newfile.txt", "hello")
+    rw = mainWindow.openRepo(wd)
+
+    # A double-click on a file in the working directory should do the obvious thing
+    assert FileListClick.Stage == settings.prefs.doubleClickFileList
+
+    assert ["newfile.txt"] == qlvGetRowData(rw.dirtyFiles)
+    assert [] == qlvGetRowData(rw.stagedFiles)
+
+    qlvClickNthRow(rw.dirtyFiles, 0)
+    mouseSpecialClick(rw.dirtyFiles.viewport(), "double")
+
+    assert ["newfile.txt"] == qlvGetRowData(rw.stagedFiles)
+    assert [] == qlvGetRowData(rw.dirtyFiles)
+
+    # ...and the same gesture takes it back out
+    qlvClickNthRow(rw.stagedFiles, 0)
+    mouseSpecialClick(rw.stagedFiles.viewport(), "double")
+
+    assert [] == qlvGetRowData(rw.stagedFiles)
+    assert ["newfile.txt"] == qlvGetRowData(rw.dirtyFiles)

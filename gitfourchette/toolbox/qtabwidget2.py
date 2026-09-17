@@ -318,7 +318,8 @@ class QTabWidget2(QWidget):
         # Remove urgent flag if any
         if currentWidget is not None and currentWidget.property(QTabWidget2.UrgentPropertyName):
             currentWidget.setProperty(QTabWidget2.UrgentPropertyName, None)
-            self.tabs.setTabIcon(i, QIcon())  # clear icon
+            # Put back whatever the tab was saying about itself before it shouted
+            self.tabs.setTabIcon(i, self._statusIcon(currentWidget))
 
         # See if we should emit the currentWidgetChanged signal
         currentWidgetRef = weakref.ref(currentWidget or self)  # self stands in for None
@@ -465,6 +466,32 @@ class QTabWidget2(QWidget):
     def onResize(self):
         self.overflowGradient.resize(self.tabScrollArea.size())
         self.ensureCurrentTabVisible()
+
+    StatusIconPropertyName = "gfTabStatusIcon"
+
+    def _statusIcon(self, widget: QWidget) -> QIcon:
+        iconKey = widget.property(QTabWidget2.StatusIconPropertyName)
+        return stockIcon(iconKey) if iconKey else QIcon()
+
+    def setTabStatusIcon(self, i: int, iconKey: str):
+        """
+        Mark a tab with what its contents have outstanding.
+
+        Shares the one icon slot with requestAttention, which takes precedence
+        while it lasts and hands the slot back when the tab is selected.
+        """
+        widget = self.widget(i)
+        if widget is None:  # pragma: no cover - callers iterate over live tabs
+            return
+        if widget.property(QTabWidget2.StatusIconPropertyName) == iconKey:
+            return
+        widget.setProperty(QTabWidget2.StatusIconPropertyName, iconKey or None)
+        if not widget.property(QTabWidget2.UrgentPropertyName):
+            self.tabs.setTabIcon(i, self._statusIcon(widget))
+
+    def tabStatusIcon(self, i: int) -> str:
+        widget = self.widget(i)
+        return (widget.property(QTabWidget2.StatusIconPropertyName) or "") if widget else ""
 
     def requestAttention(self, i: int):
         if i == self.currentIndex():

@@ -100,6 +100,14 @@ class WhitespaceMode(enum.StrEnum):
     IgnoreCrAtEol = "ignore-cr-at-eol"
 
 
+WHOLE_FILE_CONTEXT = 1_000_000
+"""Context lines meaning 'as much as there is'. git clamps to the file's length."""
+
+COMPACT_POINT_DROP = 1.0
+"""How much smaller compact mode runs. One point is the difference between
+'roomy' and 'a screenful', without becoming unreadable."""
+
+
 @dataclasses.dataclass
 class Prefs(PrefsFile):
     _filename = "prefs.json"
@@ -112,6 +120,7 @@ class Prefs(PrefsFile):
     showToolBar                 : bool                  = True
     showStatusBar               : bool                  = True
     showMenuBar                 : bool                  = True
+    compactUi                   : bool                  = False
 
     _category_diff              : int                   = 0
     font                        : str                   = ""
@@ -119,6 +128,7 @@ class Prefs(PrefsFile):
     syntaxHighlighting          : str                   = PygmentsPresets.Automatic
     colorblind                  : bool                  = False
     contextLines                : int                   = 3
+    wholeFileDiff               : bool                  = False
     tabSpaces                   : int                   = 4
     largeFileThresholdKB        : int                   = 500
     wordWrap                    : bool                  = False
@@ -168,7 +178,9 @@ class Prefs(PrefsFile):
     doubleClickTabBar           : TabBarClick           = TabBarClick.Folder
     middleClickTabBar           : TabBarClick           = TabBarClick.Close
     _label_fileListClicks       : int                   = 0
-    doubleClickFileList         : FileListClick         = FileListClick.Nothing
+    doubleClickFileList         : FileListClick         = FileListClick.Stage
+    """Staging is what you do with a file in the working directory nine times out
+    of ten, and a double-click that does nothing is a dead gesture."""
     middleClickFileList         : FileListClick         = FileListClick.Stage
     _label_diffViewClicks       : int                   = 0
     middleClickStageLines       : bool                  = True
@@ -218,12 +230,25 @@ class Prefs(PrefsFile):
             return os.path.normpath(path)
         return os.path.expanduser("~")
 
+    def effectiveContextLines(self) -> int:
+        """
+        How much unchanged code to show around a change.
+
+        Whole-file mode is just an enormous amount of context: git stops at the
+        ends of the file, so there's no separate code path for it.
+        """
+        return WHOLE_FILE_CONTEXT if self.wholeFileDiff else self.contextLines
+
     def monoFont(self):
         monoFont = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         if self.font:
             monoFont.fromString(self.font)
         if self.fontSize > 0:
             monoFont.setPointSize(self.fontSize)
+        elif self.compactUi:
+            # Compact means compact everywhere, code included - but never at the
+            # cost of an explicit size the user asked for.
+            monoFont.setPointSizeF(max(6.0, monoFont.pointSizeF() - COMPACT_POINT_DROP))
         return monoFont
 
     def isSyntaxHighlightingEnabled(self):
@@ -264,6 +289,7 @@ class PrefEffects:
         "largeFileThresholdKB",
         "imageFileThresholdKB",
         "contextLines",
+        "wholeFileDiff",
         "whitespaceMode",
         "maxCommits",
         "renderSvg",
@@ -297,10 +323,21 @@ class History(PrefsFile):
         nickname: str
         superproject: str
 
+    class JsonWorkspace(TypedDict, total=False):
+        name: str
+        repos: list[str]
+        activeIndex: int
+
     repos: dict[str, JsonRepo] = dataclasses.field(default_factory=dict)
     cloneHistory: list[str] = dataclasses.field(default_factory=list)
     fileDialogPaths: dict[str, str] = dataclasses.field(default_factory=dict)
     startups: int = 0
+    workspaces: list[JsonWorkspace] = dataclasses.field(default_factory=list)
+    currentWorkspace: str = ""
+    scanRoots: list[str] = dataclasses.field(default_factory=list)
+    "Folders searched for repos on the Home page. Empty means 'pick sensible defaults'."
+    scannedRepos: list[str] = dataclasses.field(default_factory=list)
+    "Cache of the last scan, so Home has something to show before the next one finishes."
 
     _maxSeq = -1
 
@@ -318,6 +355,17 @@ class History(PrefsFile):
             repo = History.JsonRepo()
             self.repos[path] = repo
         return repo
+
+    def peekRepoNickname(self, path: str) -> str:
+        """
+        Nickname of a repo we may never have opened.
+
+        Unlike getRepoNickname, this doesn't register the path: merely showing
+        a repo in a list must not add it to the recent-repos history.
+        """
+        path = os.path.normpath(path)
+        entry = self.repos.get(path)
+        return (entry or {}).get("nickname", "") or os.path.basename(path)
 
     def getRepoNickname(self, path: str, strict: bool = False) -> str:
         repo = self.getRepo(path)
@@ -353,6 +401,47 @@ class History(PrefsFile):
             repo['superproject'] = superprojectPath
         else:
             repo.pop('superproject', None)
+
+    def workspaceNames(self) -> list[str]:
+        return [w.get("name", "") for w in self.workspaces]
+
+    def getWorkspace(self, name: str) -> JsonWorkspace | None:
+        return next((w for w in self.workspaces if w.get("name", "") == name), None)
+
+    def setWorkspace(self, name: str, repos: list[str], activeIndex: int = 0):
+        """Create or overwrite a workspace. Paths are normalized, order is kept."""
+        assert name
+        repos = [os.path.normpath(p) for p in repos]
+        activeIndex = max(0, min(activeIndex, len(repos) - 1)) if repos else 0
+        workspace = self.getWorkspace(name)
+        if workspace is None:
+            workspace = History.JsonWorkspace(name=name)
+            self.workspaces.append(workspace)
+        workspace["repos"] = repos
+        workspace["activeIndex"] = activeIndex
+        self.setDirty()
+        return workspace
+
+    def deleteWorkspace(self, name: str):
+        self.workspaces = [w for w in self.workspaces if w.get("name", "") != name]
+        if self.currentWorkspace == name:
+            self.currentWorkspace = ""
+        self.setDirty()
+
+    def renameWorkspace(self, oldName: str, newName: str):
+        assert newName
+        workspace = self.getWorkspace(oldName)
+        if workspace is None:
+            return
+        workspace["name"] = newName
+        if self.currentWorkspace == oldName:
+            self.currentWorkspace = newName
+        self.setDirty()
+
+    def setCurrentWorkspace(self, name: str):
+        if self.currentWorkspace != name:
+            self.currentWorkspace = name
+            self.setDirty()
 
     def getRepoTabName(self, path: str) -> str:
         name = self.getRepoNickname(path)

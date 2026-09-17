@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WorkspaceDialog</class>
+ <widget class="QDialog" name="WorkspaceDialog">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>520</width><height>460</height></rect>
+  </property>
+  <property name="windowTitle">
+   <string>Workspace</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="nameLayout">
+     <item>
+      <widget class="QLabel" name="nameLabel">
+       <property name="text"><string>&amp;Name:</string></property>
+       <property name="buddy"><cstring>nameEdit</cstring></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="nameEdit"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="reposHeaderLayout">
+     <item>
+      <widget class="QLabel" name="reposLabel">
+       <property name="text"><string>&amp;Repositories in this workspace:</string></property>
+       <property name="buddy"><cstring>filterEdit</cstring></property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="reposHeaderSpacer">
+       <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+       <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="selectAllButton">
+       <property name="text"><string>Select &amp;all</string></property>
+       <property name="autoDefault"><bool>false</bool></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="deselectAllButton">
+       <property name="text"><string>&amp;Deselect all</string></property>
+       <property name="autoDefault"><bool>false</bool></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="filterEdit">
+     <property name="placeholderText"><string>Type a name to filter…</string></property>
+     <property name="clearButtonEnabled"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="repoList">
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="uniformItemSizes"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="footerLayout">
+     <item>
+      <widget class="QLabel" name="countLabel">
+       <property name="text"><string/></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+       <property name="standardButtons">
+        <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>nameEdit</tabstop>
+  <tabstop>filterEdit</tabstop>
+  <tabstop>repoList</tabstop>
+  <tabstop>selectAllButton</tabstop>
+  <tabstop>deselectAllButton</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender><signal>rejected()</signal>
+   <receiver>WorkspaceDialog</receiver><slot>reject()</slot>
+   <hints><hint type="sourcelabel"><x>299</x><y>440</y></hint><hint type="destinationlabel"><x>286</x><y>400</y></hint></hints>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender><signal>accepted()</signal>
+   <receiver>WorkspaceDialog</receiver><slot>accept()</slot>
+   <hints><hint type="sourcelabel"><x>463</x><y>440</y></hint><hint type="destinationlabel"><x>364</x><y>400</y></hint></hints>
+  </connection>
+ </connections>
+</ui>

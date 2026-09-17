@@ -1241,3 +1241,87 @@ def testDiffReevaluateSearchTermAcrossDocuments(tempDir, mainWindow):
 
     rw.jump(loc3, check=True)
     waitUntilTrue(lambda: not searchBar.isRed())
+
+
+def testWholeFileDiffShowsEverySurroundingLine(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+
+    rev1 = "\n".join(f"line {i}" for i in range(1, 50))
+    rev2 = rev1.replace("line 25", "LINE 25")
+    shell(f"""
+        echo {shlex.quote(rev1)} > context.txt
+        git add context.txt
+        git commit -m 'context'
+        echo {shlex.quote(rev2)} > context.txt
+    """, wd)
+
+    rw = mainWindow.openRepo(wd)
+    assert NavLocator.inUnstaged("context.txt").isSimilarEnoughTo(rw.navLocator)
+
+    # Default: a hunk header, 3 lines of context either side, and the change
+    assert 1 + 3 + 2 + 3 == len(rw.diffView.toPlainText().splitlines())
+
+    # Whole file: every line of it, plus the hunk header and the extra +/- line
+    GFApplication.applyPrefs(wholeFileDiff=True)
+    assert 1 + 49 + 1 == len(rw.diffView.toPlainText().splitlines())
+    text = rw.diffView.toPlainText()
+    assert "line 1" in text
+    assert "LINE 25" in text
+    assert "line 49" in text
+
+    # ...and back
+    GFApplication.applyPrefs(wholeFileDiff=False)
+    assert 1 + 3 + 2 + 3 == len(rw.diffView.toPlainText().splitlines())
+
+
+def testWholeFileModeIgnoresTheContextCount(tempDir, mainWindow):
+    from gitfourchette.settings import WHOLE_FILE_CONTEXT
+
+    settings.prefs.contextLines = 3
+    settings.prefs.wholeFileDiff = False
+    assert 3 == settings.prefs.effectiveContextLines()
+
+    settings.prefs.wholeFileDiff = True
+    assert WHOLE_FILE_CONTEXT == settings.prefs.effectiveContextLines()
+    settings.prefs.wholeFileDiff = False
+
+
+def testWholeFileToggleLivesInTheContextMenu(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+
+    menu = rw.diffArea.diffButtons.contextButton.menu()
+    menu.aboutToShow.emit()
+    action = rw.diffArea.diffButtons.wholeFileAction
+    assert not action.isChecked()
+
+    action.setChecked(True)
+    assert settings.prefs.wholeFileDiff
+
+    # A number of context lines means nothing when you're showing all of it
+    menu.aboutToShow.emit()
+    spinBox: QSpinBox = menu.findChild(QSpinBox)
+    assert not spinBox.isEnabled()
+
+    action.setChecked(False)
+    menu.aboutToShow.emit()
+    assert spinBox.isEnabled()
+
+
+def testWholeFileHasItsOwnButton(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    buttons = rw.diffArea.diffButtons
+
+    assert buttons.wholeFileButton in buttons.buttons, "it belongs on the row, not buried in a menu"
+    assert not buttons.wholeFileButton.isChecked()
+    assert buttons.contextButton.isEnabled()
+
+    buttons.wholeFileButton.click()
+    assert settings.prefs.wholeFileDiff
+    # A count of context lines means nothing while every line is shown
+    assert not buttons.contextButton.isEnabled()
+
+    buttons.wholeFileButton.click()
+    assert not settings.prefs.wholeFileDiff
+    assert buttons.contextButton.isEnabled()

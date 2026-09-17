@@ -74,6 +74,10 @@ class GFApplication(QApplication):
         self.sshAgent = None
         self.restylingGuard = 0
 
+        # Remember the size the desktop asked for, so compact mode scales from
+        # it rather than from whatever we set last time
+        self.baseFont = QFont(self.font())
+
         # Show an error dialog in case of unhandled exceptions.
         # Note that debuggers may override the exception hook.
         self.injectExceptHook()
@@ -463,6 +467,9 @@ class GFApplication(QApplication):
         if "qtStyle" in prefDiff:
             self.applyQtStylePref()
 
+        if "compactUi" in prefDiff:
+            self.applyCompactPref()
+
         if "language" in prefDiff:
             self.applyLanguagePref()
 
@@ -488,6 +495,21 @@ class GFApplication(QApplication):
         logging.root.setLevel(settings.prefs.verbosity.value)
         GitDriver.setGitPath(settings.prefs.gitPath)
         FittedText.enable = settings.prefs.condensedFonts
+
+    def applyCompactPref(self):
+        """
+        Scale the whole interface, not just the toolbar.
+
+        Fork's Mac client gets a lot on screen by running everything a notch
+        smaller; a compact mode that only shrank the toolbar would leave the
+        commit log and the diff as roomy as before.
+        """
+        from gitfourchette import settings
+
+        font = QFont(self.baseFont)
+        if settings.prefs.compactUi:
+            font.setPointSizeF(max(6.0, self.baseFont.pointSizeF() - settings.COMPACT_POINT_DROP))
+        self.setFont(font)
 
     def applyLanguagePref(self):
         from gitfourchette import settings

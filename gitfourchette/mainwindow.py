@@ -26,6 +26,7 @@ from gitfourchette.forms.clonedialog import CloneDialog
 from gitfourchette.forms.maintoolbar import MainToolBar
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.forms.searchbar import SearchBar
+from gitfourchette.forms.workspacedialog import WorkspaceDialog
 from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.forms.welcomewidget import WelcomeWidget
 from gitfourchette.globalshortcuts import GlobalShortcuts
@@ -56,6 +57,7 @@ class MainWindow(QMainWindow):
     tabs: QTabWidget2
 
     recentMenu: QMenu
+    workspaceMenu: QMenu
     showStatusBarAction: QAction
     showMenuBarAction: QAction
 
@@ -83,6 +85,7 @@ class MainWindow(QMainWindow):
         self.welcomeWidget.newRepo.connect(self.newRepo)
         self.welcomeWidget.openRepo.connect(self.openDialog)
         self.welcomeWidget.cloneRepo.connect(self.cloneDialog)
+        self.welcomeWidget.openRepoPath.connect(lambda path: self.openRepo(path, exactMatch=True))
 
         self.welcomeStack.addWidget(self.welcomeWidget)
         self.welcomeStack.addWidget(self.tabs)
@@ -98,19 +101,38 @@ class MainWindow(QMainWindow):
 
         self.mainToolBar = MainToolBar(self)
         self.addToolBar(self.mainToolBar)
-        self.mainToolBar.openDialog.connect(self.openDialog)
         self.mainToolBar.openPrefs.connect(GFApplication.instance().openPrefsDialog)
-        self.mainToolBar.reveal.connect(lambda: self.currentRepoWidget().openRepoFolder())
-        self.mainToolBar.openTerminal.connect(lambda: self.currentRepoWidget().openTerminal())
+        self.mainToolBar.setDarkThemeRequested.connect(self.onSetDarkTheme)
+        self.mainToolBar.setCompactRequested.connect(
+            lambda compact: GFApplication.applyPrefs(compactUi=compact))
+        self.refreshThemeButton()
+
+        self.repoMenu2 = QMenu(self)
+        self.repoMenu2.setObjectName("ToolBarRepoMenu")
+        self.repoMenu2.aboutToShow.connect(self.fillRepoButtonMenu)
+        self.mainToolBar.repoAction.setMenu(self.repoMenu2)
+
+        self.openInMenu = QMenu(self)
+        self.openInMenu.setObjectName("OpenInMenu")
+        self.openInMenu.setToolTipsVisible(True)
+        self.openInMenu.aboutToShow.connect(self.fillOpenInMenu)
+        self.mainToolBar.openInAction.setMenu(self.openInMenu)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
 
         self.recentMenu = QMenu(self)
         self.recentMenu.setObjectName("RecentMenu")
         self.recentMenu.setToolTipsVisible(True)
+
+        self.workspaceMenu = QMenu(self)
+        self.workspaceMenu.setObjectName("WorkspaceMenu")
+        self.workspaceMenu.setToolTipsVisible(True)
+        self.workspaceMenu.aboutToShow.connect(self.fillWorkspaceMenu)
+        self._switchingWorkspace = False
         self.fillRecentMenu()
+        self.fillWorkspaceMenu()
 
         self.welcomeWidget.ui.recentReposButton.setMenu(self.recentMenu)
-        self.mainToolBar.recentAction.setMenu(self.recentMenu)
+        self.mainToolBar.workspaceAction.setMenu(self.workspaceMenu)
 
         self.fillGlobalMenuBar()
 
@@ -243,6 +265,11 @@ class MainWindow(QMainWindow):
                       tip=_("List of recently opened Git repos"),
                       submenu=self.recentMenu),
 
+            ActionDef(_("&Workspace"),
+                      icon="folder-open-recent",
+                      tip=_("Named sets of repos you switch between"),
+                      submenu=self.workspaceMenu),
+
             ActionDef.SEPARATOR,
 
             TaskBook.action(self, tasks.ApplyPatchFile),
@@ -365,14 +392,14 @@ class MainWindow(QMainWindow):
                           callback=lambda: GFApplication.instance().openPrefsDialog("commands")),
             )
 
-            # Don't share commandsMenu with the terminal button: commandsMenu.aboutToShow
-            # would fire via the terminal button's popup routine, causing AutoHideMenuBar to
+            # Don't share commandsMenu with the toolbar button: commandsMenu.aboutToShow
+            # would fire via that button's popup routine, causing AutoHideMenuBar to
             # show the entire menu bar.
             # Do share the actions themselves so that the keyboard shortcuts work.
-            self.mainToolBar.setTerminalActions(commandsMenu.actions())
+            self.mainToolBar.setUserCommandActions(commandsMenu.actions())
         else:
             commandsMenu.deleteLater()
-            self.mainToolBar.setTerminalActions([])
+            self.mainToolBar.setUserCommandActions([])
 
         # -------------------------------------------------------------
 
@@ -438,6 +465,275 @@ class MainWindow(QMainWindow):
                 tip=_("Clear the list of recently opened repositories"),
             ))
 
+    def onSetDarkTheme(self, dark: bool) -> None:
+        from gitfourchette.themes import withThemeMode
+        GFApplication.applyPrefs(qtStyle=withThemeMode(settings.prefs.qtStyle, dark))
+        self.refreshThemeButton()
+
+
+    def refreshThemeButton(self) -> None:
+        from gitfourchette.themes import isDarkStyle
+        self.mainToolBar.setDarkTheme(isDarkStyle(settings.prefs.qtStyle))
+
+    def fillRepoButtonMenu(self) -> None:
+        """Switching branch is what you'd want next after reading where you are."""
+        try:
+            rw = self.currentRepoWidget()
+        except NoRepoWidgetError:  # pragma: no cover - the button hides without a repo
+            return
+
+        current = rw.repoModel.homeBranch
+        actions = []
+        for name in rw.repo.branches.local:
+            actions.append(ActionDef(
+                escamp(elide(name, ems=40)),
+                lambda n=name: tasks.SwitchBranch.invoke(rw, n),
+                checkState=1 if name == current else -1,
+                radioGroup="branch"))
+        if actions:
+            actions.append(ActionDef.SEPARATOR)
+        actions.append(TaskBook.action(self, tasks.NewBranchFromHead))
+
+        self.repoMenu2.clear()
+        ActionDef.addToQMenu(self.repoMenu2, *actions)
+
+    def refreshRepoButton(self) -> None:
+        try:
+            # Raises for an unloaded stub too, which has read nothing to report
+            rw = self.currentRepoWidget()
+        except NoRepoWidgetError:
+            self.mainToolBar.setRepoSummary("", "", False)
+            return
+        self.mainToolBar.setRepoSummary(
+            settings.history.peekRepoNickname(rw.workdir),
+            rw.repoModel.homeBranch,
+            rw.repoModel.numUncommittedChanges > 0)
+
+    def fillOpenInMenu(self) -> None:
+        """Where to take the repo that's in front of you."""
+        try:
+            rw = self.currentRepoWidget()
+        except NoRepoWidgetError:  # pragma: no cover - the button hides without a repo
+            return
+
+        # The Repo menu already knows how to do this; don't invent a second copy
+        actions = self.repolessActions(rw.workdir)[:4]
+        if self.mainToolBar.userCommandActions:
+            actions += [ActionDef.SEPARATOR, *self.mainToolBar.userCommandActions]
+
+        self.openInMenu.clear()
+        ActionDef.addToQMenu(self.openInMenu, *actions)
+
+    def fillWorkspaceMenu(self) -> None:
+        if self._switchingWorkspace:
+            # Rebuilding now would delete the QAction whose handler is running
+            return
+        history = settings.history
+        current = history.currentWorkspace
+        names = history.workspaceNames()
+
+        actions = [ActionDef(
+            _("&Home"), lambda: self.switchToWorkspace(""),
+            checkState=1 if not current else -1,
+            radioGroup="workspace",
+            icon="git-home",
+            tip=_("Every repo on this machine, and nothing open"))]
+        if names:
+            actions.append(ActionDef.SEPARATOR)
+
+        for name in names:
+            workspace = history.getWorkspace(name)
+            numRepos = len(workspace.get("repos", []))
+            actions.append(ActionDef(
+                escamp(elide(name, ems=40)),
+                lambda n=name: self.switchToWorkspace(n),
+                checkState=1 if name == current else -1,
+                radioGroup="workspace",
+                tip=_n("{n} repo", "{n} repos", numRepos)))
+
+        if actions:
+            actions.append(ActionDef.SEPARATOR)
+
+        actions.append(ActionDef(
+            _("&New Workspace…"), self.newWorkspace,
+            icon="document-save-as",
+            tip=_("Pick the repos that belong together and name the set")))
+
+        if current:
+            actions += [
+                ActionDef(_("&Edit {0}…", tquo(current)), self.editCurrentWorkspace,
+                          icon="document-edit",
+                          tip=_("Rename it, or change which repos are in it")),
+                ActionDef(_("&Delete {0}…", tquo(current)), self.deleteCurrentWorkspace,
+                          icon="SP_TrashIcon"),
+            ]
+
+        self.workspaceMenu.clear()
+        ActionDef.addToQMenu(self.workspaceMenu, *actions)
+        self.mainToolBar.setWorkspaceName(current if history.getWorkspace(current) else "")
+
+
+    def rememberCurrentWorkspace(self) -> None:
+        """Keep the active workspace in sync with the tabs that are open."""
+        name = settings.history.currentWorkspace
+        if not name or settings.history.getWorkspace(name) is None:
+            return
+        paths = [widget.workdir for widget in self.tabs.widgets()]
+        if not paths:
+            # Closing every tab isn't "this workspace is empty now" - it's a
+            # transient state on the way to opening another one.
+            return
+        settings.history.setWorkspace(name, paths, self.tabs.currentIndex())
+
+    def switchToWorkspace(self, name: str) -> None:
+        """Open the repos of `name`, and only those. An empty name means Home."""
+        history = settings.history
+        workspace = history.getWorkspace(name) if name else None
+        if name and workspace is None:  # pragma: no cover - menu is rebuilt from the same list
+            return
+
+        if name and name == history.currentWorkspace:
+            return
+        if not name and self.tabs.count() == 0:
+            # Already on Home with nothing open: there's nothing to do.
+            # Note that an empty currentWorkspace is also the ad-hoc state -
+            # repos open, no workspace saved - and Home must still clear that.
+            return
+
+        # Don't lose the curation of the workspace we're leaving
+        self.rememberCurrentWorkspace()
+
+        self._switchingWorkspace = True
+        try:
+            self.closeAllTabs()
+            history.setCurrentWorkspace(name)
+
+            if workspace is not None:
+                session = settings.Session()
+                session.splitterSizes = copy.deepcopy(RepoWidget.sharedSplitterSizes)
+                session.tabs = list(workspace.get("repos", []))
+                session.activeTabIndex = workspace.get("activeIndex", 0)
+                self.restoreSession(session)
+        finally:
+            self._switchingWorkspace = False
+
+        history.write()
+        self.fillWorkspaceMenu()
+
+    def workspaceCandidates(self, preferredOrder: list[str]) -> list[tuple[str, str]]:
+        """
+        Every repo we could put in a workspace, with `preferredOrder` first.
+
+        That's more than the recent list: a repo found on disk but never opened
+        still belongs to a workspace you're assembling.
+        """
+        history = settings.history
+        seen = []
+
+        def remember(path: str):
+            path = os.path.normpath(path)
+            if path not in seen:
+                seen.append(path)
+
+        for path in preferredOrder:
+            remember(path)
+        for path in history.getRecentRepoPaths(settings.prefs.maxRecentRepos):
+            remember(path)
+        for entry in sorted(history.scannedRepos, key=lambda e: e.get("path", "").casefold()):
+            remember(entry.get("path", ""))
+
+        candidates = []
+        for path in seen:
+            if not path:  # pragma: no cover - a cache entry without a path
+                continue
+            name = history.peekRepoNickname(path)
+            compact = compactPath(path)
+            if compact != name:
+                name = f"{name}  —  {elide(compact, ems=50)}"
+            candidates.append((path, name))
+        return candidates
+
+    def openTabPaths(self) -> list[str]:
+        return [os.path.normpath(widget.workdir) for widget in self.tabs.widgets()]
+
+    def newWorkspace(self) -> None:
+        # Nothing is ticked to begin with: a new workspace is a deliberate
+        # choice, not "whatever happens to be open right now".
+        dlg = WorkspaceDialog(
+            _("New workspace"), "",
+            self.workspaceCandidates(self.openTabPaths()), [],
+            settings.history.workspaceNames(), parent=self)
+        dlg.acceptButton.setText(_("Create"))
+        dlg.accepted.connect(lambda: self.onWorkspaceEdited("", dlg.workspaceName, dlg.checkedPaths()))
+        dlg.show()
+
+    def editCurrentWorkspace(self) -> None:
+        history = settings.history
+        oldName = history.currentWorkspace
+        workspace = history.getWorkspace(oldName)
+        if workspace is None:  # pragma: no cover - action only exists when one is current
+            return
+        repos = list(workspace.get("repos", []))
+
+        dlg = WorkspaceDialog(
+            _("Edit workspace"), oldName,
+            self.workspaceCandidates(repos + self.openTabPaths()), repos,
+            [n for n in history.workspaceNames() if n != oldName], parent=self)
+        dlg.acceptButton.setText(_("Save"))
+        dlg.accepted.connect(lambda: self.onWorkspaceEdited(oldName, dlg.workspaceName, dlg.checkedPaths()))
+        dlg.show()
+
+    def onWorkspaceEdited(self, oldName: str, newName: str, paths: list[str]) -> None:
+        history = settings.history
+        if oldName and oldName != newName:
+            history.renameWorkspace(oldName, newName)
+
+        previous = history.getWorkspace(newName)
+        activeIndex = previous.get("activeIndex", 0) if previous else self.tabs.currentIndex()
+        history.setWorkspace(newName, paths, activeIndex)
+        history.setCurrentWorkspace(newName)
+        history.write()
+        self.fillWorkspaceMenu()
+
+        # A workspace is what you see, so make the tabs match what was picked
+        self.openWorkspaceTabs(newName)
+
+    def openWorkspaceTabs(self, name: str) -> None:
+        workspace = settings.history.getWorkspace(name)
+        if workspace is None:  # pragma: no cover - called right after writing it
+            return
+        self._switchingWorkspace = True
+        try:
+            self.closeAllTabs()
+            session = settings.Session()
+            session.splitterSizes = copy.deepcopy(RepoWidget.sharedSplitterSizes)
+            session.tabs = list(workspace.get("repos", []))
+            session.activeTabIndex = workspace.get("activeIndex", 0)
+            self.restoreSession(session)
+        finally:
+            self._switchingWorkspace = False
+        self.fillWorkspaceMenu()
+
+    def deleteCurrentWorkspace(self) -> None:
+        history = settings.history
+        name = history.currentWorkspace
+        if not name:  # pragma: no cover - action only exists when one is current
+            return
+
+        qmb = asyncMessageBox(
+            self, "question", _("Delete workspace"),
+            paragraphs(_("Really delete workspace {0}?", bquo(name)),
+                       _("The repos stay where they are; only the grouping is forgotten.")),
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        qmb.button(QMessageBox.StandardButton.Ok).setText(_("Delete"))
+        qmb.accepted.connect(lambda: self.onWorkspaceDeleteConfirmed(name))
+        qmb.show()
+
+    def onWorkspaceDeleteConfirmed(self, name: str) -> None:
+        settings.history.deleteWorkspace(name)
+        settings.history.write()
+        self.fillWorkspaceMenu()
+
     def onClearRecentMenu(self) -> None:
         settings.history.clearRepoHistory()
         settings.history.write()
@@ -480,15 +776,18 @@ class MainWindow(QMainWindow):
     def onTabCurrentWidgetChanged(self):
         self.mainToolBar.updateNavButtons()  # Kill back/forward arrows
         self.statusBar2.clearMessage()
+        self.fillWorkspaceMenu()
 
         widget = self.tabs.currentWidget()
 
         # Switch to welcome widget if zero tabs
         if not widget:
+            self.mainToolBar.setRepoScopedActionsVisible(False)
             self.welcomeStack.setCurrentWidget(self.welcomeWidget)
             self.setWindowTitle(APP_DISPLAY_NAME)
             return
 
+        self.mainToolBar.setRepoScopedActionsVisible(True)
         self.welcomeStack.setCurrentWidget(self.tabs)  # Exit welcome widget
         self.setWindowTitle(widget.windowTitle())
 
@@ -658,6 +957,7 @@ class MainWindow(QMainWindow):
         assert isinstance(repoStub, RepoStub), "yanked widget isn't RepoStub"
 
         rw.nameChange.connect(self.onRepoNameChanged)
+        rw.statusChanged.connect(self.refreshAllTabTexts)
         rw.requestAttention.connect(lambda: self.onRepoRequestsAttention(rw))
         rw.openRepo.connect(lambda path, locator: self.openRepoNextTo(rw, path, locator))
         rw.openPrefs.connect(GFApplication.instance().openPrefsDialog)
@@ -703,6 +1003,7 @@ class MainWindow(QMainWindow):
     def onRepoWindowTitleChanged(self, rw: RepoWidget) -> None:
         if rw.isVisible():
             self.setWindowTitle(rw.windowTitle())
+
 
     def onRepoHistoryChanged(self, rw: RepoWidget) -> None:
         if rw.isVisible():
@@ -923,8 +1224,16 @@ class MainWindow(QMainWindow):
             for idx, title in zip(defaultIndices, disambiguatedTitles, strict=True):
                 newTitles[idx] = title
 
-        for i, title in enumerate(newTitles):
+        self.refreshRepoButton()
+
+        for i, (title, widget) in enumerate(zip(newTitles, widgets, strict=True)):
             self.tabs.setTabText(i, escamp(title))
+            # The tab name stays the name; what's outstanding rides on the icon,
+            # so it can't widen tabs or confuse name disambiguation.
+            # An unloaded stub has read nothing, so it claims nothing.
+            if isinstance(widget, RepoWidget):
+                self.tabs.setTabStatusIcon(i, widget.statusIconKey())
+                self.tabs.setTabTooltip(i, widget.statusTooltip())
 
         # Toggle toolbar's borderless property (for custom theme)
         borderlessToolBar = self.tabs.count() >= 2 or not self.tabs.tabs.autoHide()
@@ -1028,6 +1337,10 @@ class MainWindow(QMainWindow):
         qmb.show()
 
     def saveSession(self, writeNow=False) -> None:
+        if writeNow:
+            # Only on the way out. saveSession also runs every time a tab opens
+            # or closes, and a workspace shouldn't absorb every repo you glance at.
+            self.rememberCurrentWorkspace()
         session = settings.Session()
         session.windowGeometry = self.saveGeometry().data()
         session.splitterSizes = RepoWidget.sharedSplitterSizes.copy()
@@ -1041,6 +1354,9 @@ class MainWindow(QMainWindow):
         if not GFApplication.instance().mountManager.checkOnClose(self, self.close):
             event.setAccepted(False)
             return
+
+        # A scan running in the background must not outlive the window
+        self.welcomeWidget.stopScan()
 
         # Save session before closing all tabs.
         self.saveSession(writeNow=True)
@@ -1121,6 +1437,9 @@ class MainWindow(QMainWindow):
     # Prefs
 
     def refreshPrefs(self) -> None:
+        # The Settings dialog can change the theme too; keep the switch honest
+        self.refreshThemeButton()
+        self.mainToolBar.applyCompact(settings.prefs.compactUi)
         self.statusBar2.setVisible(settings.prefs.showStatusBar)
         self.statusBar2.enableMemoryIndicator(APP_DEBUG)
         self.mainToolBar.setVisible(settings.prefs.showToolBar)
@@ -1274,7 +1593,7 @@ class MainWindow(QMainWindow):
             ),
 
             ActionDef(
-                _("Re&name\u2026"),
+                _("Re&name…"),
                 lambda: self.repolessSetNickname(workdirProxy()),
                 icon="rename",
             ),

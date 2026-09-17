@@ -20,6 +20,8 @@ class DiffButtons(QWidget):
         self.diffMethodActions: dict[WhitespaceMode, QAction] = {}
 
         self.contextButton = self._makeContextLinesButton()
+        self.wholeFileButton = self._makeToggle("diff-whole-file", "wholeFileDiff")
+        self.wholeFileButton.setToolTip(_("Show the whole file, with the changes marked in place"))
         self.wordWrapButton = self._makeToggle("diff-wrap", "wordWrap")
         self.showWhitespaceButton = self._makeToggle("diff-show-whitespace", "showWhitespace")
         self.whitespaceModeButton = self._makeWhitespaceDiffButton()
@@ -29,6 +31,7 @@ class DiffButtons(QWidget):
         self.buttons = [
             self.svgButton,
             self.contextButton,
+            self.wholeFileButton,
             self.wordWrapButton,
             self.showWhitespaceButton,
             self.whitespaceModeButton,
@@ -91,14 +94,28 @@ class DiffButtons(QWidget):
         layout.addWidget(spinbox)
         layout.addWidget(QLabel(t2))
 
+        wholeFileAction = QAction(_("Show &Whole File"), menu)
+        wholeFileAction.setCheckable(True)
+        wholeFileAction.setToolTip(_("Show the entire file, with the changes marked in place"))
+        wholeFileAction.toggled.connect(self.setWholeFileDiff)
+        self.wholeFileAction = wholeFileAction
+
         def aboutToShowContextLinesMenu():
+            whole = settings.prefs.wholeFileDiff
+            with QSignalBlockerContext(wholeFileAction):
+                wholeFileAction.setChecked(whole)
+            # A number of context lines means nothing when you're showing all of it
+            container.setEnabled(not whole)
             spinbox.setValue(settings.prefs.contextLines)
-            spinbox.setFocus()
-            spinbox.selectAll()
+            if not whole:
+                spinbox.setFocus()
+                spinbox.selectAll()
 
         widgetAction = QWidgetAction(menu)
         widgetAction.setDefaultWidget(container)
         menu.addAction(widgetAction)
+        menu.addSeparator()
+        menu.addAction(wholeFileAction)
         menu.aboutToShow.connect(aboutToShowContextLinesMenu)
 
         button.setToolTip(_("Context lines"))
@@ -127,7 +144,11 @@ class DiffButtons(QWidget):
         ):
             self.wordWrapButton.setChecked(settings.prefs.wordWrap)
             self.showWhitespaceButton.setChecked(settings.prefs.showWhitespace)
-            self.contextButton.setIcon(stockIcon("diff-context-lines", f"$TEXT$={settings.prefs.contextLines}"))
+            self.wholeFileButton.setChecked(settings.prefs.wholeFileDiff)
+            # A count of context lines means nothing while every line is shown
+            self.contextButton.setEnabled(not settings.prefs.wholeFileDiff)
+            label = "\u221e" if settings.prefs.wholeFileDiff else str(settings.prefs.contextLines)
+            self.contextButton.setIcon(stockIcon("diff-context-lines", f"$TEXT$={label}"))
 
             mode = settings.prefs.whitespaceMode
             for m, action in self.diffMethodActions.items():
@@ -153,3 +174,6 @@ class DiffButtons(QWidget):
     @staticmethod
     def setContextLines(n: int):
         GFApplication.applyPrefs(contextLines=n)
+
+    def setWholeFileDiff(self, whole: bool):
+        GFApplication.applyPrefs(wholeFileDiff=whole)

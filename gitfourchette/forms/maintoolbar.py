@@ -8,7 +8,6 @@ from collections.abc import Iterable
 
 from gitfourchette import settings
 from gitfourchette import tasks
-from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.qt import *
 from gitfourchette.tasks import TaskBook
@@ -16,23 +15,27 @@ from gitfourchette.toolbox import *
 
 
 class MainToolBar(QToolBar):
-    openDialog = Signal()
     openPrefs = Signal()
-    reveal = Signal()
-    openTerminal = Signal()
+    setDarkThemeRequested = Signal(bool)
+    setCompactRequested = Signal(bool)
     pull = Signal()
     push = Signal()
 
     backAction: QAction
     forwardAction: QAction
-    terminalAction: QAction
-    recentAction: QAction
+    openInAction: QAction
+    repoAction: QAction
+    workspaceAction: QAction
+    themeAction: QAction
 
     def __init__(self, parent: QWidget):
         super().__init__(englishTitleCase(_("Show toolbar")), parent)
 
         self.setObjectName("GFToolbar")
         self.setMovable(False)
+
+        self.userCommandActions: list[QAction] = []
+        self.darkTheme = False
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onCustomContextMenuRequested)
@@ -47,17 +50,35 @@ class MainToolBar(QToolBar):
         self.workdirAction = TaskBook.toolbarAction(self, tasks.JumpToUncommittedChanges).toQAction(self)
         self.headAction = TaskBook.toolbarAction(self, tasks.JumpToHEAD).toQAction(self)
 
-        self.terminalAction = ActionDef(
-            _("Terminal"), self.openTerminal, icon="terminal",
-            shortcuts=GlobalShortcuts.openTerminal,
-            tip=_("Open a terminal in the repo")
+        # One button for every "take this repo somewhere else": the file
+        # manager, a terminal, an editor. Its menu is filled by MainWindow,
+        # which is the one that knows which repo is in front of you.
+        self.openInAction = ActionDef(
+            _("Open In"), icon="terminal",
+            tip=_("Open this repo in a terminal, a file manager or an editor")
         ).toQAction(self)
 
-        self.recentAction = ActionDef(
-            _("Open…"), self.openDialog, icon="git-folder",
-            shortcuts=QKeySequence.StandardKey.Open,
-            tip=_("Open a Git repo on your machine")
+        self.workspaceAction = ActionDef(
+            _("Workspace"), icon="git-workspace",
+            tip=_("Switch between named sets of repos")
         ).toQAction(self)
+
+        # Look and feel in one place: light vs dark, and how much room the
+        # toolbar takes. Both are a click away instead of buried in Settings.
+        # The middle of the bar says where you are: which repo, on which branch.
+        # Clicking it switches branches, since that's what you'd want next.
+        self.repoAction = ActionDef(
+            "", icon="git-branch",
+            tip=_("Current repo and branch")
+        ).toQAction(self)
+
+        self.themeAction = ActionDef(
+            _("Theme"), icon="theme-dark",
+        ).toQAction(self)
+        self.themeMenu = QMenu(self)
+        self.themeMenu.setObjectName("MainToolBarThemeMenu")
+        self.themeMenu.aboutToShow.connect(self.fillThemeMenu)
+        self.themeAction.setMenu(self.themeMenu)
 
         self.settingsAction = ActionDef(
             _("Settings"), self.openPrefs, icon="git-settings",
@@ -80,27 +101,130 @@ class MainToolBar(QToolBar):
             TaskBook.toolbarAction(self, tasks.PushBranch),
             ActionDef.SPACER,
 
-            self.terminalAction,
-            ActionDef(_("Reveal"), self.reveal, icon="reveal",
-                      shortcuts=GlobalShortcuts.openRepoFolder,
-                      tip=_("Open repo folder in file manager")),
+            self.repoAction,
+            ActionDef.SPACER,
 
-            self.recentAction,
+            self.openInAction,
+            self.themeAction,
+            self.workspaceAction,
 
             ActionDef.SEPARATOR,
             self.settingsAction,
         ]
         ActionDef.addToQToolBar(self, *defs)
 
-        self.recentAction.setIconVisibleInMenu(True)
-        recentButton = self.widgetForAction(self.recentAction)
-        assert isinstance(recentButton, QToolButton)
-        recentButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        # Everything up to the spacer needs a repo - the nav arrows, the jump
+        # buttons, stash/branch/fetch/pull/push - and so does "Open In". Taken
+        # as a slice of the bar so separators travel with them and none is left
+        # stranded. The spacer itself stays, so the right-hand group keeps its
+        # place instead of sliding left on Home.
+        allActions = self.actions()
+        spacerIndex = next(i for i, a in enumerate(allActions) if isinstance(a, QWidgetAction))
+        self.repoScopedActions = [*allActions[:spacerIndex], self.openInAction, self.repoAction]
 
-        self.setToolButtonStyle(settings.prefs.toolBarButtonStyle)
-        self.setIconSize(QSize(settings.prefs.toolBarIconSize, settings.prefs.toolBarIconSize))
+        repoButton = self.widgetForAction(self.repoAction)
+        assert isinstance(repoButton, QToolButton)
+        repoButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.repoButton = repoButton
+
+        themeButton = self.widgetForAction(self.themeAction)
+        assert isinstance(themeButton, QToolButton)
+        themeButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+
+        openInButton = self.widgetForAction(self.openInAction)
+        assert isinstance(openInButton, QToolButton)
+        openInButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+
+        # The workspace button has no action of its own: clicking it opens the list.
+        workspaceButton = self.widgetForAction(self.workspaceAction)
+        assert isinstance(workspaceButton, QToolButton)
+        workspaceButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setWorkspaceName("")
+
+        # No repo is open until one is: start with the repo-only buttons hidden,
+        # since onTabCurrentWidgetChanged doesn't fire on a tab-less launch.
+        self.setRepoScopedActionsVisible(False)
+
+        self.applyCompact(settings.prefs.compactUi)
 
         self.updateNavButtons()
+
+    def setRepoScopedActionsVisible(self, visible: bool):
+        """
+        Hide what needs a repo when there isn't one.
+
+        On Home there is nothing to stash, no branch to push and no folder to
+        reveal; offering them is an invitation to click something that can't work.
+        """
+        for action in self.repoScopedActions:
+            action.setVisible(visible)
+
+    def fillThemeMenu(self):
+        dark = self.darkTheme
+        compact = settings.prefs.compactUi
+
+        actions = [
+            ActionDef(_("&Light"), lambda: self.setDarkThemeRequested.emit(False),
+                      icon="theme-light", checkState=1 if not dark else -1,
+                      radioGroup="mode"),
+            ActionDef(_("&Dark"), lambda: self.setDarkThemeRequested.emit(True),
+                      icon="theme-dark", checkState=1 if dark else -1,
+                      radioGroup="mode"),
+            ActionDef.SEPARATOR,
+            ActionDef(_("&Normal"), lambda: self.setCompactRequested.emit(False),
+                      checkState=1 if not compact else -1, radioGroup="density",
+                      tip=_("Show button labels in the toolbar")),
+            ActionDef(_("&Compact"), lambda: self.setCompactRequested.emit(True),
+                      checkState=1 if compact else -1, radioGroup="density",
+                      tip=_("Icons only, for a narrower toolbar")),
+        ]
+
+        self.themeMenu.clear()
+        ActionDef.addToQMenu(self.themeMenu, *actions)
+
+    def setRepoSummary(self, repoName: str, branchName: str, dirty: bool):
+        """Say which repo is in front of you, and what it's checked out on."""
+        star = "*" if dirty else ""
+        if not repoName:
+            self.repoAction.setText("")
+            self.repoAction.setToolTip("")
+            return
+        # Two lines when there's room for them, one when the bar is tight
+        separator = " — " if settings.prefs.compactUi else "\n"
+        self.repoAction.setText(f"{repoName}{star}{separator}{branchName}")
+        self.repoAction.setToolTip(
+            _("{0} on {1}", repoName, branchName) if branchName else repoName)
+
+    def applyCompact(self, compact: bool):
+        """
+        Two shapes for the same bar.
+
+        Normal stacks a larger icon over its label, which is what a toolbar you
+        look at all day wants. Compact drops the labels and shrinks the icons,
+        to match the smaller type everywhere else.
+        """
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly if compact
+                                else Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        size = 14 if compact else 22
+        self.setIconSize(QSize(size, size))
+        # The middle block keeps its text in both shapes: it's the label, not a button
+        self.repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+
+    def setDarkTheme(self, dark: bool):
+        """Show which way the theme is set, right on the button."""
+        self.darkTheme = dark
+        self.themeAction.setIcon(stockIcon("theme-dark" if dark else "theme-light"))
+        self.themeAction.setToolTip(_("Dark theme") if dark else _("Light theme"))
+
+    def setWorkspaceName(self, name: str):
+        """Show which workspace is active - or that none is - right on the button."""
+        if name:
+            self.workspaceAction.setText(elide(name, ems=14))
+            self.workspaceAction.setToolTip(_("Workspace: {0}", name))
+        else:
+            self.workspaceAction.setText(_("Home"))
+            self.workspaceAction.setToolTip(_("Home: every repo on this machine"))
 
     def setToolButtonStyle(self, style: Qt.ToolButtonStyle):
         # Resolve style
@@ -190,23 +314,7 @@ class MainToolBar(QToolBar):
         self.backAction.setEnabled(back)
         self.forwardAction.setEnabled(forward)
 
-    def setTerminalActions(self, newActions: Iterable[QAction]):
-        terminalAction = self.terminalAction
-        terminalButton = self.widgetForAction(terminalAction)
-        terminalMenu = terminalAction.menu()
-
-        assert isinstance(terminalButton, QToolButton)
-
-        if newActions:
-            if not terminalMenu:
-                terminalMenu = QMenu(terminalButton)
-                terminalMenu.setObjectName("MainToolBarTerminalMenu")
-                terminalAction.setMenu(terminalMenu)
-                terminalButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-            terminalMenu.clear()
-            terminalMenu.addActions(newActions)
-        elif terminalMenu:
-            # The QToolButton will show an arrow as long as there's a menu, even if it's empty
-            terminalMenu.deleteLater()
-            terminalAction.setMenu(None)
-            terminalButton.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
+    def setUserCommandActions(self, newActions: Iterable[QAction]):
+        """User commands are another way of taking a repo somewhere, so they
+        live under the same button, below a separator."""
+        self.userCommandActions = list(newActions)

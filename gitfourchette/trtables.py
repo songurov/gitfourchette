@@ -382,6 +382,8 @@ def _prefKeyTable() -> dict[str, str]:
         "font": _("Font"),
         "tabSpaces": _("One tab is # spaces"),
         "contextLines": _("Show up to # context lines"),
+        "wholeFileDiff": _("Show whole file"),
+        "wholeFileDiff_help": _("Show the entire file instead of just the lines around each change."),
         "contextLines_help": _("Amount of unmodified lines to show around red or green lines in a diff."),
         "largeFileThresholdKB": _("Load diffs up to # KB"),
         "imageFileThresholdKB": _("Load images up to # KB"),

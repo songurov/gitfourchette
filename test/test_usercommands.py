@@ -97,22 +97,27 @@ def testUserCommandsMenuHiddenByDefault(tempDir, mainWindow):
     # No commands with fresh config
     with pytest.raises(KeyError):
         findMenuAction(mainWindow.menuBar(), "commands/edit commands")
-    assert mainWindow.mainToolBar.terminalAction.menu() is None
+    assert [] == mainWindow.mainToolBar.userCommandActions
 
     # Add some commands
     GFApplication.applyPrefs(commands="helloworld")
     QTest.qWait(0)
     assert findMenuAction(mainWindow.menuBar(), "commands/helloworld")
     assert findMenuAction(mainWindow.menuBar(), "commands/edit commands")
-    assert findMenuAction(mainWindow.mainToolBar.terminalAction.menu(), "helloworld")
-    assert findMenuAction(mainWindow.mainToolBar.terminalAction.menu(), "edit commands")
+    # They ride along in the toolbar's "Open In" menu
+    mainWindow.fillOpenInMenu()
+    assert findMenuAction(mainWindow.openInMenu, "helloworld")
+    assert findMenuAction(mainWindow.openInMenu, "edit commands")
 
     # Clear the commands
     GFApplication.applyPrefs(commands="")
     QTest.qWait(0)
     with pytest.raises(KeyError):
         findMenuAction(mainWindow.menuBar(), "commands/edit commands")
-    assert mainWindow.mainToolBar.terminalAction.menu() is None
+    assert [] == mainWindow.mainToolBar.userCommandActions
+    mainWindow.fillOpenInMenu()
+    with pytest.raises(KeyError):
+        findMenuAction(mainWindow.openInMenu, "helloworld")
 
 
 locOriginMaster = NavLocator.inCommit(Oid(hex="49322bb17d3acc9146f98c97d078513228bbf3c0"), "a/a1")
@@ -183,7 +188,8 @@ def testUserCommandTokens(tempDir, mainWindow, commandsScratchFile, params):
         menu = mainWindow.menuBar()
         action = findMenuAction(menu, "commands/" + params.menuName)
     elif params.actionSource == "toolbar":
-        menu = mainWindow.mainToolBar.terminalAction.menu()
+        mainWindow.fillOpenInMenu()
+        menu = mainWindow.openInMenu
         action = findMenuAction(menu, params.menuName)
     elif params.actionSource == "graphview":
         menu = summonContextMenu(rw.graphView.viewport())
