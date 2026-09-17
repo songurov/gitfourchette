@@ -32,6 +32,18 @@ class _WorktreeTask(RepoTask):
     def worktreeLabel(worktree: WorktreeInfo) -> str:
         return os.path.basename(worktree.path) or worktree.name
 
+    def openWorkdirs(self) -> set[str]:
+        """
+        Workdirs of every open tab.
+
+        A worktree's `is_current` flag only speaks for the repo this task runs
+        in; the same worktree may be open in another tab, and deleting it from
+        under that tab leaves it looking at a repo that isn't there any more.
+        """
+        window = self.parentWidget().window()
+        getter = getattr(window, "openWorkdirs", None)
+        return getter() if getter else set()
+
 
 class NewWorktree(_WorktreeTask):
     def flow(self):
@@ -86,6 +98,11 @@ class RemoveWorktree(_WorktreeTask):
             raise AbortTask(paragraphs(
                 _("You can’t remove the worktree you’re currently looking at."),
                 _("Open another worktree of this repo first.")))
+        if os.path.normpath(worktree.path) in self.openWorkdirs():
+            raise AbortTask(paragraphs(
+                _("Worktree {0} is open in another tab.", bquo(label)),
+                _("Close that tab first, otherwise it would be left looking at "
+                  "a working directory that no longer exists.")))
 
         yield from self.flowConfirm(
             text=paragraphs(
@@ -159,6 +176,19 @@ class PruneWorktrees(_WorktreeTask):
 
         if not stale:
             raise AbortTask(_("There are no stale worktrees to prune."), icon="information")
+
+        # 'git worktree prune' is all or nothing - there's no way to spare one -
+        # so if any stale worktree is still open, refuse rather than pull its
+        # administrative files out from under an open tab.
+        openWorkdirs = self.openWorkdirs()
+        blocked = [w for w in stale
+                   if w.is_current or os.path.normpath(w.path) in openWorkdirs]
+        if blocked:
+            raise AbortTask(paragraphs(
+                _n("A stale worktree is still open in a tab.",
+                   "{n} stale worktrees are still open in tabs.", len(blocked)),
+                _("Close it first: pruning would take away the files that tab is still using."),
+            ), details="\n".join(self.worktreeLabel(w) for w in blocked))
 
         yield from self.flowConfirm(
             text=paragraphs(

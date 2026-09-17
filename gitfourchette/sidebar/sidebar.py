@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import os
 import warnings
 from collections.abc import Callable, Iterable
 from contextlib import suppress
@@ -16,7 +17,7 @@ from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.localization import *
 from gitfourchette.nav import NavLocator
-from gitfourchette.porcelain import Oid, RefPrefix, Repo
+from gitfourchette.porcelain import Oid, RefPrefix, Repo, WorktreeInfo
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEREF
 from gitfourchette.repoprefs import RefSort
@@ -158,6 +159,13 @@ class Sidebar(QTreeView):
             submenu.append(action)
 
         return submenu
+
+    def isWorktreeOpenElsewhere(self, worktree: WorktreeInfo) -> bool:
+        """Removing a worktree open in another tab would pull the floor out from under it."""
+        getter = getattr(self.window(), "openWorkdirs", None)
+        if getter is None:  # pragma: no cover - the sidebar always lives in a MainWindow
+            return False
+        return os.path.normpath(worktree.path) in getter()
 
     def makeNodeMenu(self, node: SidebarNode):
         actions = []
@@ -535,7 +543,8 @@ class Sidebar(QTreeView):
                     else TaskBook.action(self, LockWorktree, taskArgs=data),
                     ActionDef.SEPARATOR,
                     TaskBook.action(self, RemoveWorktree, taskArgs=data,
-                                    enabled=not worktree.is_current),
+                                    enabled=not worktree.is_current
+                                    and not self.isWorktreeOpenElsewhere(worktree)),
                 ]
 
         elif item == SidebarItem.Submodule:
