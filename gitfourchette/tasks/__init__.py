@@ -107,4 +107,12 @@ from gitfourchette.tasks.submoduletasks import (
     RemoveSubmodule,
 )
 
+from gitfourchette.tasks.worktreetasks import (
+    LockWorktree,
+    NewWorktree,
+    PruneWorktrees,
+    RemoveWorktree,
+    UnlockWorktree,
+)
+
 from gitfourchette.tasks.taskbook import TaskBook

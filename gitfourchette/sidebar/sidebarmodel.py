@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterable
 from contextlib import suppress
 from typing import Any, overload, ClassVar
@@ -28,6 +29,12 @@ SYMBOL_BEHIND = "\u2193"
 SYMBOL_UPDOWN = "\u21c5"
 
 
+def worktreeDisplayName(worktree: WorktreeInfo) -> str:
+    """Folder name of a worktree, which is what the user recognizes it by."""
+    name = os.path.basename(worktree.path)
+    return name or worktree.name
+
+
 class SidebarItem(enum.IntEnum):
     Root = -1
     Spacer = 0
@@ -38,6 +45,7 @@ class SidebarItem(enum.IntEnum):
     RemotesHeader = enum.auto()
     TagsHeader = enum.auto()
     SubmodulesHeader = enum.auto()
+    WorktreesHeader = enum.auto()
     LocalBranch = enum.auto()
     DetachedHead = enum.auto()
     UnbornHead = enum.auto()
@@ -46,6 +54,7 @@ class SidebarItem(enum.IntEnum):
     RemoteBranch = enum.auto()
     Tag = enum.auto()
     Submodule = enum.auto()
+    Worktree = enum.auto()
     RefFolder = enum.auto()
 
 
@@ -53,6 +62,8 @@ class SidebarLayout:
     RootItems: ClassVar = [
         SidebarItem.WorkdirHeader,
         SidebarItem.UncommittedChanges,
+        SidebarItem.Spacer,
+        SidebarItem.WorktreesHeader,
         SidebarItem.Spacer,
         SidebarItem.LocalBranchesHeader,
         SidebarItem.Spacer,
@@ -79,6 +90,7 @@ class SidebarLayout:
         SidebarItem.StashesHeader,
         SidebarItem.SubmodulesHeader,
         SidebarItem.TagsHeader,
+        SidebarItem.WorktreesHeader,
     ])
 
     UnindentItems: ClassVar = {
@@ -88,6 +100,7 @@ class SidebarLayout:
         SidebarItem.Stash: -1,
         SidebarItem.Tag: -1,
         SidebarItem.Submodule: -1,
+        SidebarItem.Worktree: -1,
         SidebarItem.Remote: -1,
         SidebarItem.RemoteBranch: -1,
         SidebarItem.RefFolder: -1,
@@ -341,13 +354,22 @@ class SidebarModel(QAbstractItemModel):
         # Set up root nodes
         # -----------------------------
         rootNode = SidebarNode(SidebarItem.Root)
-        for eitem in SidebarLayout.RootItems:
+        rootItems = list(SidebarLayout.RootItems)
+        if not any(w.name for w in repoModel.worktrees):
+            # A repo that doesn't use worktrees shouldn't be told about them.
+            # Drop the header along with the spacer that precedes it.
+            i = rootItems.index(SidebarItem.WorktreesHeader)
+            del rootItems[i - 1: i + 1]
+        for eitem in rootItems:
             rootNode.appendChild(SidebarNode(eitem))
         uncommittedNode = rootNode.findChild(SidebarItem.UncommittedChanges)
         branchRoot = rootNode.findChild(SidebarItem.LocalBranchesHeader)
         remoteRoot = rootNode.findChild(SidebarItem.RemotesHeader)
         tagRoot = rootNode.findChild(SidebarItem.TagsHeader)
         submoduleRoot = rootNode.findChild(SidebarItem.SubmodulesHeader)
+        worktreeRoot = None
+        with suppress(KeyError):
+            worktreeRoot = rootNode.findChild(SidebarItem.WorktreesHeader)
         stashRoot = rootNode.findChild(SidebarItem.StashesHeader)
 
         self.rootNode = rootNode
@@ -465,6 +487,17 @@ class SidebarModel(QAbstractItemModel):
 
             if submoduleKey not in repoModel.initializedSubmodules:
                 node.warning = _("Submodule not initialized.")
+
+        # -----------------------------
+        # Worktrees
+        # -----------------------------
+        if worktreeRoot is not None:
+            for worktree in repoModel.worktrees:
+                node = SidebarNode(SidebarItem.Worktree, worktree.name)
+                node.displayName = worktreeDisplayName(worktree)
+                if worktree.prunable:
+                    node.warning = _("Worktree folder is missing.")
+                worktreeRoot.appendChild(node)
 
         # -----------------------------
         # Commit new model
@@ -794,6 +827,46 @@ class SidebarModel(QAbstractItemModel):
                 return text
             elif iconKeyRole:
                 return "achtung" if node.warning else "git-submodule"
+
+        elif item == SidebarItem.Worktree:
+            worktree = self.repoModel.worktreeByName(node.data)
+            if worktree is None:  # pragma: no cover - nodes and worktrees are rebuilt together
+                return None
+            if displayRole:
+                return node.displayName
+            elif toolTipRole:
+                text = "<p style='white-space: pre'>"
+                if worktree.is_main:
+                    text += _("{0} (main worktree)", f"<b>{escape(node.displayName)}</b>")
+                else:
+                    text += _("{0} (linked worktree)", f"<b>{escape(node.displayName)}</b>")
+                if worktree.head:
+                    branch = worktree.head.removeprefix(RefPrefix.HEADS)
+                    text += "\n" + _("Branch: {0}", escape(branch))
+                else:
+                    text += "\n" + _("Detached HEAD")
+                text += "\n" + _("Path: {0}", escape(worktree.path))
+                if worktree.is_current:
+                    text += "<br><i>" + _("This is the worktree you’re looking at.") + "</i>"
+                if worktree.locked:
+                    reason = worktree.lock_reason or _("no reason given")
+                    text += "<br>\U0001f512 " + _("Locked: {0}", escape(reason))
+                if node.warning:
+                    text += "<br>\u26a0 " + node.warning
+                self.cacheToolTip(index, text)
+                return text
+            elif fontRole:
+                if worktree.is_current:
+                    font = QFont(self._parentWidget.font())
+                    font.setBold(True)
+                    return font
+                return None
+            elif iconKeyRole:
+                if node.warning:
+                    return "achtung"
+                # The main worktree is the repo itself, so it gets the workdir
+                # icon rather than the worktree one.
+                return "git-workdir" if worktree.is_main else "git-worktree"
 
         elif item == SidebarItem.UncommittedChanges:
             if displayRole:

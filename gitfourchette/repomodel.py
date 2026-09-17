@@ -130,6 +130,9 @@ class RepoModel:
     initializedSubmodules: set[str]
     "Set of submodule names that are registered in .gitmodules."
 
+    worktrees: list[WorktreeInfo]
+    "Main worktree and linked worktrees, main first (empty if unsupported)."
+
     remotes: list[str]
     "List of remote names."
 
@@ -201,6 +204,7 @@ class RepoModel:
         self.stashes = []
         self.submodules = {}
         self.initializedSubmodules = set()
+        self.worktrees = []
         self.remotes = []
         self.upstreams = {}
         self.aheadBehind = {}  # filled in outside RepoModel (needs git call)
@@ -227,6 +231,7 @@ class RepoModel:
         self.syncMergeheads()
         self.syncStashes()
         self.syncSubmodules()
+        self.syncWorktrees()
         self.syncRemotes()
         self.syncUpstreams()
 
@@ -344,6 +349,18 @@ class RepoModel:
         return False
 
     @benchmark
+    def syncWorktrees(self):
+        worktrees = self.repo.listall_worktrees()
+        if worktrees != self.worktrees:
+            self.worktrees = worktrees
+            return True
+        return False
+
+    def worktreeByName(self, name: str) -> WorktreeInfo | None:
+        """Look up a worktree by its registered name ('' for the main worktree)."""
+        return next((w for w in self.worktrees if w.name == name), None)
+
+    @benchmark
     def syncRemotes(self):
         # We could infer remote names from refCache, but we don't want
         # to miss any "blank" remotes that don't have any branches yet.
@@ -368,8 +385,21 @@ class RepoModel:
         if self.superproject:
             superprojectNickname = settings.history.getRepoNickname(self.superproject)
             prefix = superprojectNickname + ": "
+        elif self.mainWorktreePath:
+            # Same idea as a submodule: say which repo this working copy belongs
+            # to, so a worktree tab can't be mistaken for the repo itself.
+            prefix = settings.history.getRepoNickname(self.mainWorktreePath) + ": "
 
         return prefix + settings.history.getRepoNickname(self.repo.workdir)
+
+    @property
+    def mainWorktreePath(self) -> str:
+        """Path of the main worktree, if this repo is a linked worktree of it."""
+        current = next((w for w in self.worktrees if w.is_current), None)
+        if current is None or current.is_main:
+            return ""
+        main = next((w for w in self.worktrees if w.is_main), None)
+        return main.path if main is not None else ""
 
     @benchmark
     def primeWalker(self) -> Walker:

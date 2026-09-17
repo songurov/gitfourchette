@@ -189,6 +189,8 @@ class RepoWidget(QWidget):
         self.sidebar.toggleHideRefPattern.connect(self.toggleHideRefPattern)
         self.sidebar.openSubmoduleRepo.connect(self.openSubmoduleRepo)
         self.sidebar.openSubmoduleFolder.connect(self.openSubmoduleFolder)
+        self.sidebar.openWorktreeRepo.connect(lambda path: self.openRepo.emit(path, NavLocator()))
+        self.sidebar.openWorktreeFolder.connect(openFolder)
 
         self.nameChange.connect(self.refreshWindowTitle)
         self.nameChange.connect(self.sidebar.sidebarModel.refreshRepoName)
@@ -770,6 +772,7 @@ class RepoWidget(QWidget):
             ActionDef.SEPARATOR,
 
             TaskBook.action(invoker, tasks.NewBranchFromHead, accel="B"),
+            TaskBook.action(invoker, tasks.NewWorktree, accel="W"),
             TaskBook.action(invoker, tasks.FetchRemotes, accel="F"),
             TaskBook.action(invoker, tasks.PullBranch, accel="L"),
             TaskBook.action(invoker, tasks.PushBranch, accel="P"),
