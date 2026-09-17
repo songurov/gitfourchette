@@ -56,6 +56,31 @@ class ImageDelta:
             image=QImage.fromData(newData) if newData else None,
             deltaFile=delta.new)
 
+    def differenceImage(self) -> QImage | None:
+        """
+        Where the two revisions disagree: white where the pixels are identical,
+        dark where they aren't. None unless both sides are images.
+        """
+
+        old, new = self.old.image, self.new.image
+        if old is None or new is None:
+            return None
+
+        canvas = QImage(max(old.width(), new.width()), max(old.height(), new.height()),
+                        QImage.Format.Format_RGB32)
+        canvas.fill(Qt.GlobalColor.black)
+
+        painter = QPainter(canvas)
+        painter.drawImage(0, 0, old)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Difference)
+        painter.drawImage(0, 0, new)
+        painter.end()
+
+        # A difference of zero is black; flip it so that "nothing changed here"
+        # reads as blank paper rather than a black rectangle
+        canvas.invertPixels(QImage.InvertMode.InvertRgb)
+        return canvas
+
 
 class SpecialDiffError:
     def __init__(

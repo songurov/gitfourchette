@@ -148,7 +148,9 @@ class Prefs(PrefsFile):
 
     _category_imageDiff         : int                   = 0
     imageFileThresholdKB        : int                   = 5000
-    renderSvg                   : bool                  = False
+    renderSvg                   : bool                  = True
+    """An SVG is a picture; show it as one. The toolbar toggle is right there
+    for the times you want to read the markup."""
 
     _category_graph             : int                   = 0
     chronologicalOrder          : bool                  = True

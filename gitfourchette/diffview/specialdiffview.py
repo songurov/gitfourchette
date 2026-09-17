@@ -81,28 +81,28 @@ class SpecialDiffView(QTextBrowser):
         # Let DocumentLinks callbacks invoke RepoTasks using this QObject chain
         err.taskInvoker = document
 
-    def displayImageDelta(self, delta: ImageDelta, swap=False):
-        if not swap:
-            image = delta.new.image or delta.old.image
-        else:
-            image = delta.old.image or delta.new.image
-        hasBothSides = delta.old.image and delta.new.image
+    def displayImageDelta(self, delta: ImageDelta):
+        """
+        Both revisions of an image, side by side, plus what changed between
+        them. Looking at one at a time tells you nothing about a small edit.
+        """
+
+        sides = [file for file in (delta.old, delta.new) if file.image is not None]
+        difference = delta.differenceImage()
         showLfsStatus = delta.old.deltaFile.lfs or delta.new.deltaFile.lfs
 
         green, red = settings.prefs.addDelColors()
-        borderColor = red if image is delta.old.image else green
+        neutral = self.palette().color(QPalette.ColorRole.Mid)
 
-        links = DocumentLinks()
-        swapLink = links.new(lambda: self.displayImageDelta(delta, swap=not swap))
+        columns = len(sides) + (1 if difference is not None else 0)
+        budget = max(120, (self.viewport().width() - 40 * columns) // columns)
 
-        markup = self.htmlHeader + "<center><table>"
+        headers = []
+        cells = []
+        resources = []
 
-        for file in delta.old, delta.new:
-            if file.image is None:
-                continue
-
+        for file in sides:
             tag = "add" if file is delta.new else "del"
-
             name = (_("New image") if file is delta.new else
                     _("Old image") if delta.new.image else
                     _("Deleted image"))
@@ -111,43 +111,40 @@ class SpecialDiffView(QTextBrowser):
             if showLfsStatus and not file.deltaFile.lfs.isTentative():
                 lfsInfo = "LFS" if file.deltaFile.lfs else _("not LFS")
                 name = f"{name}, {lfsInfo}"
-            name += _(":")
 
-            if hasBothSides and file.image is not image:
-                c1 = f"<a href='{swapLink}'>{name}</a>"
-            else:
-                c1 = f"<b><{tag}>{name}</{tag}></b>"
+            size = self.locale().formattedDataSize(file.size)
+            headers.append(f"<b><{tag}>{name}</{tag}></b><br>"
+                           f"{file.image.width()} &times; {file.image.height()} {_('pixels')}, {size}")
 
-            c2 = f"{file.image.width()} &times; {file.image.height()} {_('pixels')},"
-            c3 = self.locale().formattedDataSize(file.size)
+            key = "new" if file is delta.new else "old"
+            color = green if file is delta.new else red
+            cells.append(self._imageCell(key, file.image, color, budget))
+            resources.append((key, file.image))
 
-            if hasBothSides and file.image is image:
-                c4 = f"<b><{tag}>&darr; {_('shown below')} &darr;</{tag}></b>"
-            else:
-                c4 = ""
+        if difference is not None:
+            headers.append(f"<b>{_('Difference')}</b><br>{_('blank = identical')}")
+            cells.append(self._imageCell("difference", difference, neutral, budget))
+            resources.append(("difference", difference))
 
-            markup += (f"<tr><td>{c1} </td>"
-                       f"<td style='text-align: right'>{c2} </td>"
-                       f"<td style='text-align: right'>{c3} </td>"
-                       f"<td style='text-align: center'> {c4}</td>"
-                       f"</tr>")
-
-        markup += (
-            "</table>"
-            f"<table style='border: 4px solid {borderColor.name()}; border-collapse: collapse;'>"
-            "<tr><td><img src='image'/></tr></td>"
-            "</table>"
-            "</center>")
+        markup = (self.htmlHeader + "<center><table cellpadding='8'>"
+                  + "<tr>" + "".join(f"<td style='text-align: center'>{h}</td>" for h in headers) + "</tr>"
+                  + "<tr>" + "".join(f"<td style='text-align: center'>{c}</td>" for c in cells) + "</tr>"
+                  + "</table></center>")
 
         document = QTextDocument(self)
         document.setObjectName("ImageDiffDocument")
         document.setHtml(markup)
 
-        if image is not None:
+        for key, image in resources:
             image.setDevicePixelRatio(self.devicePixelRatio())
-            document.addResource(QTextDocument.ResourceType.ImageResource, QUrl("image"), image)
+            document.addResource(QTextDocument.ResourceType.ImageResource, QUrl(key), image)
 
         self.replaceDocument(document)
 
-        assert self.documentLinks is None
-        self.documentLinks = links
+    def _imageCell(self, key: str, image: QImage, borderColor: QColor, budget: int) -> str:
+        """An image in a colored frame, shrunk to fit its column if it has to."""
+
+        width = image.width() / self.devicePixelRatio()
+        sizeAttr = f" width='{int(budget)}'" if width > budget else ""
+        return (f"<table style='border: 4px solid {borderColor.name()}; border-collapse: collapse;'>"
+                f"<tr><td><img src='{key}'{sizeAttr}/></td></tr></table>")

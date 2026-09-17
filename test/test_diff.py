@@ -574,21 +574,15 @@ def testDiffImage(tempDir, mainWindow):
     findQDialog(rw, "commit").ui.summaryEditor.setText("commit an image")
     findQDialog(rw, "commit").accept()
 
-    # Test old/new delta
+    # Test old/new delta: both revisions are shown at once, side by side,
+    # along with what changed between them
     shutil.copyfile(getTestDataPath("image2.png"), f"{wd}/image.png")
     rw.refreshRepo()
     rw.jump(NavLocator.inUnstaged("image.png"), check=True)
     assert imageView.isVisible()
     assert findText("old image.+6 . 6 pixels")
-    assert findText("new image.+4 . 4 pixels.+shown below")
-
-    # Test that we can swap between old and new images
-    qteClickLink(imageView, "old image")
-    assert findText("old image.+6 . 6 pixels.+shown below")
     assert findText("new image.+4 . 4 pixels")
-    qteClickLink(imageView, "new image")
-    assert findText("old image.+6 . 6 pixels")
-    assert findText("new image.+4 . 4 pixels.+shown below")
+    assert findText("difference.+blank")
 
     # Test 'del' delta
     os.unlink(f"{wd}/image.png")
@@ -598,6 +592,8 @@ def testDiffImage(tempDir, mainWindow):
     assert findText("6 . 6 pixels")
     with pytest.raises(KeyError):
         findText("4 . 4 pixels")
+    with pytest.raises(KeyError):
+        findText("difference")  # nothing to compare a deleted image to
 
 
 def testDiffLargeImage(tempDir, mainWindow):
@@ -626,19 +622,18 @@ def testDiffSvgImage(tempDir, mainWindow):
     # SVG button not shown unless looking at SVG file
     assert not rw.diffArea.diffButtons.svgButton.isVisible()
 
-    # Jump to SVG file. By default, text contents are shown
+    # Jump to SVG file. An SVG is a picture, so that's what we show by default
     rw.jump(NavLocator.inUnstaged("image.svg"), check=True)
     assert rw.diffArea.diffButtons.svgButton.isVisible()
+    assert rw.diffArea.diffButtons.svgButton.isChecked()
+    assert rw.specialDiffView.isVisible()
+    assert re.search("16 . 16 pixels", rw.specialDiffView.toPlainText())
+
+    # The markup is one click away
+    rw.diffArea.diffButtons.svgButton.click()
     assert not rw.diffArea.diffButtons.svgButton.isChecked()
     assert rw.diffView.isVisible()
     assert "<svg xmlns=" in rw.diffView.toPlainText()
-
-    # Click SVG image preview button
-    rw.diffArea.diffButtons.svgButton.click()
-    assert rw.diffArea.diffButtons.svgButton.isChecked()
-    assert not rw.diffView.isVisible()
-    assert rw.specialDiffView.isVisible()
-    assert re.search("16 . 16 pixels", rw.specialDiffView.toPlainText())
 
 
 @pytest.mark.skipif(WINDOWS, reason="symlinks are flaky on Windows")
