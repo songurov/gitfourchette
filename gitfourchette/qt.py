@@ -171,6 +171,26 @@ if FREEDESKTOP:
             raise ImportError("QtDBus")
         HAS_QTDBUS = True
 
+
+def isObjectAlive(obj: QObject | None) -> bool:
+    """
+    Whether a QObject's C++ side is still there.
+
+    Objects that are kept alive by refcounting alone (no Qt parent) can be
+    deleted out from under us while something else still holds the Python
+    wrapper - typically while the app is tearing down.
+    """
+    if obj is None:
+        return False
+    if PYSIDE6:
+        from shiboken6 import isValid  # type: ignore[import-not-found]
+        return isValid(obj)
+    if PYQT5:
+        from PyQt5 import sip  # type: ignore[import-not-found]
+    else:
+        from PyQt6 import sip  # type: ignore[import-not-found]
+    return not sip.isdeleted(obj)
+
 try:
     if PYQT6:
         from PyQt6.QtSvg import QSvgRenderer

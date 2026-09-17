@@ -859,3 +859,20 @@ def shell(script: str, directory: str, authorSig=TEST_SIGNATURE, committerSig=TE
         scriptPath = ToolCommands.FlatpakSandboxedCommandPrefix + scriptPath
 
     ToolCommands.runSync(scriptPath, directory=directory, strict=True)
+
+
+def destroyCppObject(obj):
+    """
+    Delete a QObject's C++ side while Python still holds the wrapper.
+    This is what happens to objects kept alive by refcounting alone
+    (LexJobs, for instance) when the app tears down.
+    """
+    if PYSIDE6:
+        import shiboken6  # type: ignore[import-not-found]
+        shiboken6.delete(obj)
+    elif PYQT5:
+        from PyQt5 import sip  # type: ignore[import-not-found]
+        sip.delete(obj)
+    else:
+        from PyQt6 import sip  # type: ignore[import-not-found]
+        sip.delete(obj)

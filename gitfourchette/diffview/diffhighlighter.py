@@ -9,6 +9,7 @@ import logging
 from gitfourchette.appconsts import *
 from gitfourchette.codeview.codehighlighter import CodeHighlighter
 from gitfourchette.diffview.diffdocument import DiffDocument, LineData
+from gitfourchette.qt import *
 from gitfourchette.syntax import LexJob, ColorScheme
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,13 @@ class DiffHighlighter(CodeHighlighter):
         for job in self.oldLexJob, self.newLexJob:
             if job is not None:
                 self.installLexJob(job)
+
+    def forgetDeadLexJobs(self):
+        super().forgetDeadLexJobs()
+        if not isObjectAlive(self.oldLexJob):
+            self.oldLexJob = None
+        if not isObjectAlive(self.newLexJob):
+            self.newLexJob = None
 
     def highlightSyntax(self, text: str):
         # Pygments syntax highlighting

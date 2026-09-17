@@ -222,3 +222,29 @@ def testWhitespaceHighlighting(tempDir, mainWindow):
         for span in formatRanges:
             token = block.text()[span.start: span.start + span.length]
             assert token == space
+
+
+def testHidingDiffAfterLexJobIsGone(tempDir, mainWindow):
+    """
+    Nothing owns a LexJob - they're kept alive by refcounting - so one can be
+    collected while a highlighter still lists it. Hiding the diff must not
+    reach into the dead job. (Used to crash on the way out of the app:
+    "wrapped C/C++ object of type QTimer has been deleted".)
+    """
+
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/hello.py", SAMPLE_CODE * 500)
+
+    rw = mainWindow.openRepo(wd)
+    highlighter = rw.diffView.highlighter
+    assert highlighter.lexJobs, "expecting the diff to be lexed"
+
+    doomedJob = highlighter.lexJobs[0]
+    destroyCppObject(doomedJob)
+    assert doomedJob not in highlighter.lexJobs, "a dead job should be dropped at once"
+
+    # Every path that walks the jobs must survive it
+    highlighter.onParentVisibilityChanged(False)
+    highlighter.onParentVisibilityChanged(True)
+    highlighter.rehighlight()
+    highlighter.stopLexJobs()

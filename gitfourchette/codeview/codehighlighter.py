@@ -46,13 +46,24 @@ class CodeHighlighter(QSyntaxHighlighter):
 
     def installLexJob(self, job):
         job.pulse.connect(self.onLexPulse)
+        job.destroyed.connect(self.forgetDeadLexJobs)
         self.lexJobs.append(job)
 
     def stopLexJobs(self):
         for job in self.lexJobs:
             job.stop()
             job.pulse.disconnect(self.onLexPulse)
+            job.destroyed.disconnect(self.forgetDeadLexJobs)
         self.lexJobs.clear()
+
+    def forgetDeadLexJobs(self):
+        """
+        Nothing owns a LexJob - it lives as long as something references it -
+        so one can be collected while we still list it. Let go of it as soon
+        as it's gone, or we'll reach into a dead object the next time the
+        widget is painted or hidden.
+        """
+        self.lexJobs = [job for job in self.lexJobs if isObjectAlive(job)]
 
     def highlightBlock(self, text: str):
         if self.scheme:
