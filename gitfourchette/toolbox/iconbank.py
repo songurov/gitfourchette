@@ -17,6 +17,8 @@ _overrideIconIds: dict[str, str] = {}
 _autoDarkVariants = {
     "achtung",
     "host-github",  # black on light, white on dark - same as GitHub's own mark
+    "gpg-key-what",
+    "urgent-tab",
     "git-lfs",
     "git-lfs-add",
     "git-lfs-remove",

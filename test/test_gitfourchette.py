@@ -1098,3 +1098,30 @@ def testSshAgentSandboxingMatchesGit(tempDir, mainWindow):
     app.applyPrefs(gitPath="/usr/bin/git")
     assert not settings.prefs.isGitSandboxed()
     assert not app.sshAgent.isSandboxed()
+
+
+def testDialogButtonsUseOurOwnIcons(mainWindow):
+    """
+    Dialog buttons and message boxes ask the style for their icons. Without our
+    own answers, whichever icon theme the desktop happens to have shows up on
+    the very buttons the user is looking at.
+
+    (Offscreen tests deliberately keep the boot style, so exercise the style
+    itself rather than the one the app installs.)
+    """
+
+    from gitfourchette.toolbox import stockIcon
+    from gitfourchette.toolbox.appstyle import AppStyle
+
+    style = AppStyle("fusion")
+    standardPixmap = QStyle.StandardPixmap
+
+    def rendered(icon):
+        return icon.pixmap(16, 16).toImage()
+
+    assert rendered(style.standardIcon(standardPixmap.SP_DialogCancelButton)) == rendered(stockIcon("close"))
+    assert rendered(style.standardIcon(standardPixmap.SP_DialogOkButton)) == rendered(stockIcon("check"))
+    assert rendered(style.standardIcon(standardPixmap.SP_DialogDiscardButton)) == rendered(stockIcon("trash"))
+
+    # Anything we have no icon for is still up to the underlying style
+    assert rendered(style.standardIcon(standardPixmap.SP_ComputerIcon)) != rendered(stockIcon("close"))

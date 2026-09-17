@@ -541,6 +541,7 @@ class GFApplication(QApplication):
         from gitfourchette import settings
         from gitfourchette.syntax.colorscheme import ColorScheme
         from gitfourchette.toolbox import mixColors, iconbank
+        from gitfourchette.toolbox.appstyle import AppStyle
         from gitfourchette.themes import ThemeColors
 
         effectiveStyle = settings.prefs.qtStyle
@@ -589,9 +590,10 @@ class GFApplication(QApplication):
 
         # ----------------------------------------------------------------------
 
-        # Set Qt style
+        # Set Qt style, wrapped so that dialog buttons and message boxes get
+        # our icons instead of the desktop's
         if effectiveStyle and not paletteOnly:
-            self.setStyle(effectiveStyle)
+            self.setStyle(AppStyle(effectiveStyle))
 
         if MACOS:
             self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus, settings.qtIsNativeMacosStyle())
