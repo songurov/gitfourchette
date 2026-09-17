@@ -62,9 +62,12 @@ class GitDriver(QProcess):
             cls,
             *args: str,
             directory: str = "",
-            strict: bool = False
+            strict: bool = False,
+            env: dict[str, str] | None = None,
+            timeoutMsec: int = -1,
     ):
-        return ToolCommands.runSync(*cls._commandStem, *args, directory=directory, strict=strict)
+        return ToolCommands.runSync(*cls._commandStem, *args, directory=directory,
+                                    strict=strict, env=env, timeoutMsec=timeoutMsec)
 
     @classmethod
     def setGitPath(cls, gitPath: str):

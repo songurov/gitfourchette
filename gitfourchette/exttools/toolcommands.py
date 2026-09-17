@@ -247,17 +247,24 @@ class ToolCommands:
         process.setArguments(tokens[1:])
 
     @classmethod
-    def runSync(cls, *args: str, directory: str = "", strict=False) -> str:
+    def runSync(cls, *args: str, directory: str = "", strict=False,
+                env: dict[str, str] | None = None, timeoutMsec: int = -1) -> str:
         process = QProcess(None)
         process.setProgram(args[0])
         process.setArguments(args[1:])
         if directory:
             process.setWorkingDirectory(directory)
+        cls.setQProcessEnvironment(process, env)
         cls.wrapFlatpakCommand(process)
         _logger.info(f"runSync: {shlex.join([process.program()] + process.arguments())}")
         process.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedErrorChannel)
         process.start()
-        didFinish = process.waitForFinished()
+        didFinish = process.waitForFinished(timeoutMsec)
+
+        if not didFinish:
+            # Don't leave an orphan behind when we gave up waiting on it
+            process.kill()
+            process.waitForFinished(1000)
 
         if strict:
             if not didFinish:

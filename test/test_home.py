@@ -10,7 +10,8 @@ import pathlib
 
 from gitfourchette import settings
 from gitfourchette.forms.welcomewidget import WelcomeWidget
-from gitfourchette.reposcan import DEFAULT_MAX_DEPTH, RepoInfo, defaultScanRoots, findRepos, inspectRepo
+from gitfourchette.reposcan import (
+    DEFAULT_MAX_DEPTH, RepoInfo, defaultScanRoots, fetchRepo, findRepos, inspectRepo)
 from .util import *
 
 
@@ -1003,3 +1004,92 @@ def testToolbarSaysNothingForAnUnloadedTab(tempDir, mainWindow):
     mainWindow.refreshRepoButton()
     # A stub knows neither the repo's name nor its branch, so the bar says nothing
     assert "" == mainWindow.mainToolBar.repoAction.text()
+
+
+# -----------------------------------------------------------------------------
+# Fetching every repo at once
+
+
+def makeRepoWithARemoteThatMovedOn(tempDir, name: str) -> str:
+    """A repo whose remote has a commit it hasn't heard about yet."""
+
+    wd = makeRepoAt(tempDir.name, name)
+    # The stock test repository points "origin" at a public GitHub fixture.
+    # This scenario must stay offline and exercise only the local remote below.
+    shell("git remote remove origin", wd)
+    barePath = makeBareCopy(wd, addAsRemote="tracked", preFetch=True)
+
+    # Commit onto the bare remote through a throwaway clone, then forget it
+    scratch = os.path.join(tempDir.name, f"scratch-{name}")
+    shell(f"git clone {shlex.quote(barePath)} {shlex.quote(scratch)}", tempDir.name)
+    writeFile(f"{scratch}/newsfromafar.txt", "the remote moved on")
+    shell("git add newsfromafar.txt && git commit -m 'news from afar' && git push", scratch)
+    shutil.rmtree(scratch)
+
+    return wd
+
+
+def testFetchBringsInWhatTheRemoteHas(tempDir, mainWindow):
+    """Without a fetch, a repo can't know the remote moved on."""
+
+    wd = makeRepoWithARemoteThatMovedOn(tempDir, "quiet")
+    assert 0 == inspectRepo(wd).behind, "nothing known before a fetch"
+
+    assert fetchRepo(wd)
+    info = inspectRepo(wd)
+    assert 1 == info.behind
+    assert info.needsAttention
+
+
+def testFetchOfSomethingThatIsNotARepoFailsQuietly(tempDir, mainWindow):
+    notARepo = os.path.join(tempDir.name, "just-a-folder")
+    os.makedirs(notARepo)
+    assert not fetchRepo(notARepo)
+    assert not fetchRepo(os.path.join(tempDir.name, "never-existed"))
+
+
+def testFetchAllButtonUpdatesTheWholeTree(tempDir, mainWindow):
+    wd = makeRepoWithARemoteThatMovedOn(tempDir, "moved")
+    settings.history.scanRoots = [tempDir.name]
+
+    welcome = mainWindow.welcomeWidget
+    welcome.refresh()
+    waitForScan(welcome)
+    assert "↓" not in findItem(welcome, wd).text(0), "no news until we ask for it"
+
+    welcome.fetchAllButton.click()
+    assert not welcome.fetchAllButton.isEnabled(), "no piling fetches on top of each other"
+    waitForScan(welcome)
+
+    item = findItem(welcome, wd)
+    assert "↓1" in item.text(0), "a commit waiting on the remote gets an arrow and a count"
+    assert item.font(0).bold()
+    assert "waiting on the remote" in item.toolTip(0)
+    assert welcome.fetchAllButton.isEnabled()
+
+
+def testFetchAllSaysWhichReposItCouldntReach(tempDir, mainWindow):
+    wd = makeRepoAt(tempDir.name, "unreachable")
+    shell("git remote add nowhere /nonexistent/nothing.git", wd)
+    settings.history.scanRoots = [tempDir.name]
+
+    welcome = mainWindow.welcomeWidget
+    welcome.fetchAllButton.click()
+    waitForScan(welcome)
+
+    assert welcome.scanner.fetchFailures == [wd]
+    assert "couldn’t be fetched" in welcome.paneStatus.text()
+    assert "unreachable" in welcome.paneStatus.toolTip()
+
+
+def testFetchAllCanBeStoppedPartWayThrough(tempDir, mainWindow):
+    makeRepoAt(tempDir.name, "one")
+    makeRepoAt(tempDir.name, "two")
+    settings.history.scanRoots = [tempDir.name]
+
+    welcome = mainWindow.welcomeWidget
+    welcome.fetchAllButton.click()
+    welcome.stopScan()
+
+    assert not welcome.scanner.isRunning()
+    assert welcome.fetchAllButton.isEnabled(), "the button comes back when the fetch stops"

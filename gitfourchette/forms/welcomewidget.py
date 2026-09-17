@@ -178,6 +178,13 @@ class WelcomeWidget(QFrame):
         self.rescanButton.setObjectName("HomeRescanButton")
         self.rescanButton.clicked.connect(lambda: self.rescan(force=True))
 
+        self.fetchAllButton = QPushButton(_("Fetch A&ll"), pane)
+        self.fetchAllButton.setObjectName("HomeFetchAllButton")
+        self.fetchAllButton.setIcon(stockIcon("git-fetch"))
+        self.fetchAllButton.setToolTip(_("Ask every remote what’s new, so you can see "
+                                         "which repos have commits waiting for you"))
+        self.fetchAllButton.clicked.connect(lambda: self.rescan(force=True, fetch=True))
+
         self.foldersButton = QPushButton(_("&Folders"), pane)
         self.foldersButton.setObjectName("HomeFoldersButton")
         self.foldersButton.setToolTip(_("Choose which folders to search for repos"))
@@ -190,6 +197,7 @@ class WelcomeWidget(QFrame):
         buttons.addWidget(self.paneStatus)
         buttons.addStretch(1)
         buttons.addWidget(self.foldersButton)
+        buttons.addWidget(self.fetchAllButton)
         buttons.addWidget(self.rescanButton)
 
         layout.addWidget(self.paneTitle)
@@ -218,6 +226,7 @@ class WelcomeWidget(QFrame):
         if self.scanner is not None and self.scanner.isRunning():
             self.scanner.cancel()
             self.scanner.wait()
+        self.fetchAllButton.setEnabled(True)
 
     def closeEvent(self, event: QCloseEvent):
         self.stopScan()
@@ -234,7 +243,7 @@ class WelcomeWidget(QFrame):
         super().showEvent(event)
         self.refresh()
 
-    def rescan(self, force: bool = False):
+    def rescan(self, force: bool = False, fetch: bool = False):
         if self.scanner is not None and self.scanner.isRunning():
             if not force:
                 return
@@ -242,10 +251,17 @@ class WelcomeWidget(QFrame):
 
         roots = self.scanRoots()
         self.paneStatus.setText(_("Searching {0}…", ", ".join(compactPath(r) for r in roots)))
-        self.scanner = RepoScanner(roots, DEFAULT_MAX_DEPTH, parent=self)
+        self.fetchAllButton.setEnabled(not fetch)
+        self.scanner = RepoScanner(roots, DEFAULT_MAX_DEPTH, fetch=fetch, parent=self)
         self.scanner.progress.connect(self.onScanProgress)
+        self.scanner.activity.connect(self.onScanActivity)
         self.scanner.resultsReady.connect(self.onScanFinished)
         self.scanner.start()
+
+    def onScanActivity(self, message: str):
+        """A fetch takes long enough that silence looks like a hang."""
+        if message:
+            self.paneStatus.setText(message)
 
     def onScanProgress(self, repos: list[RepoInfo]):
         """Show what's turned up so far, so a long scan isn't a blank list."""
@@ -254,7 +270,16 @@ class WelcomeWidget(QFrame):
     def onScanFinished(self, repos: list[RepoInfo]):
         settings.history.scannedRepos = [r.asDict() for r in repos]
         settings.history.setDirty()
+        self.fetchAllButton.setEnabled(True)
         self.populate(repos)
+
+        # Say which repos we couldn't reach: a silent skip reads as "nothing new"
+        failures = self.scanner.fetchFailures if self.scanner is not None else []
+        if failures:
+            self.paneStatus.setText(self.paneStatus.text() + " · " + _n(
+                "{n} couldn’t be fetched", "{n} couldn’t be fetched", len(failures)))
+            self.paneStatus.setToolTip(
+                _("Couldn’t fetch:") + "\n" + "\n".join(compactPath(p) for p in failures))
 
     def fillFoldersMenu(self):
         actions = [ActionDef(_("&Add Folder…"), self.pickScanRoot, icon="folder-open")]
@@ -361,14 +386,18 @@ class WelcomeWidget(QFrame):
         """
         A compact marker for what's outstanding.
 
-        Uncommitted work and unpushed commits are separate problems, so they
-        get separate marks: having committed says nothing about having pushed.
+        Uncommitted work, unpushed commits and unpulled ones are separate
+        problems, so they get separate marks: having committed says nothing
+        about having pushed, and either says nothing about what the remote did
+        in the meantime.
         """
         marks = []
         if info.dirty:
             marks.append("●")  # solid dot: changes not committed
         if info.ahead > 0:
             marks.append(f"↑{info.ahead}")  # up arrow: commits not pushed
+        if info.behind > 0:
+            marks.append(f"↓{info.behind}")  # down arrow: commits not pulled
         return " ".join(marks)
 
     def statusToolTip(self, info: RepoInfo) -> str:
@@ -383,9 +412,12 @@ class WelcomeWidget(QFrame):
             lines.append(_("Uncommitted changes"))
         if info.ahead > 0:
             lines.append(_n("{n} commit not pushed", "{n} commits not pushed", info.ahead))
+        if info.behind > 0:
+            lines.append(_n("{n} commit waiting on the remote",
+                            "{n} commits waiting on the remote", info.behind))
         if info.noUpstream and not info.unreadable:
             lines.append(_("This branch isn’t tracking a remote branch."))
-        if not info.dirty and not info.ahead and not info.noUpstream and not info.unreadable:
+        if not info.needsAttention and not info.noUpstream and not info.unreadable:
             lines.append(_("Nothing outstanding"))
         return "\n".join(lines)
 

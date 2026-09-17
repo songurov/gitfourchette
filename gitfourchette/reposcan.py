@@ -15,6 +15,7 @@ the dependency and build directories that make a naive walk take minutes.
 import dataclasses
 import os
 
+from gitfourchette.localization import *
 from gitfourchette.porcelain import GitError, Repo
 from gitfourchette.qt import *
 
@@ -93,6 +94,8 @@ class RepoInfo:
     "There are changes in the worktree or the index."
     ahead: int = 0
     "Commits on the current branch that the remote hasn't got."
+    behind: int = 0
+    "Commits the remote has that we haven't. Only as fresh as the last fetch."
     noUpstream: bool = False
     "The current branch isn't tracking anything, so nothing has been pushed."
     unreadable: bool = False
@@ -107,7 +110,7 @@ class RepoInfo:
 
     @property
     def needsAttention(self) -> bool:
-        return self.dirty or self.ahead > 0
+        return self.dirty or self.ahead > 0 or self.behind > 0
 
 
 def inspectRepo(path: str) -> RepoInfo:
@@ -138,13 +141,40 @@ def inspectRepo(path: str) -> RepoInfo:
             if upstream is None:
                 info.noUpstream = True
             else:
-                info.ahead, _behind = repo.ahead_behind(branch.target, upstream.target)
+                info.ahead, info.behind = repo.ahead_behind(branch.target, upstream.target)
     except (GitError, OSError, KeyError, ValueError):
         info.unreadable = True
     finally:
         repo.free()
 
     return info
+
+
+FETCH_TIMEOUT_MSEC = 60_000
+"""A repo that can't be reached in a minute shouldn't hold up the other thirteen."""
+
+
+def fetchRepo(path: str) -> bool:
+    """
+    Bring a repo's remote-tracking branches up to date, without asking anything.
+
+    This runs unattended over every repo on the machine, so it must never stop
+    to ask for a passphrase or a password: one that would ask is skipped (and
+    reported as not fetched) rather than left hanging with nobody watching.
+    """
+    from gitfourchette.gitdriver import GitDriver
+
+    try:
+        GitDriver.runSync(
+            # Keep credential prompts of every kind out of an unattended run
+            "-c", "core.askPass=", "-c", "credential.helper=",
+            "fetch", "--all", "--prune", "--quiet",
+            directory=path, strict=True, timeoutMsec=FETCH_TIMEOUT_MSEC,
+            env={"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": "",
+                 "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"})
+    except (ChildProcessError, OSError):
+        return False
+    return True
 
 
 class RepoScanner(QThread):
@@ -160,15 +190,20 @@ class RepoScanner(QThread):
     progress = Signal(list)
     "Everything known so far, emitted repeatedly while the scan runs."
 
+    activity = Signal(str)
+    "What the scan is busy with, for the status line. Empty when it's just walking."
+
     resultsReady = Signal(list)
     "The complete, inspected list. Emitted once, unless cancelled."
 
     BatchSize = 8
 
-    def __init__(self, roots: list[str], maxDepth: int, parent=None):
+    def __init__(self, roots: list[str], maxDepth: int, fetch: bool = False, parent=None):
         super().__init__(parent)
         self.roots = roots
         self.maxDepth = maxDepth
+        self.fetch = fetch
+        self.fetchFailures: list[str] = []
         self._cancelled = False
 
     def cancel(self):
@@ -187,6 +222,11 @@ class RepoScanner(QThread):
             return
         self.progress.emit(list(infos))
 
+        if self.fetch:
+            self._fetchAll(infos)
+            if self._cancelled:
+                return
+
         for i, info in enumerate(infos):
             if self._cancelled:
                 return
@@ -195,7 +235,18 @@ class RepoScanner(QThread):
                 self.progress.emit(list(infos))
 
         if not self._cancelled:
+            self.activity.emit("")
             self.resultsReady.emit(infos)
+
+    def _fetchAll(self, infos: list[RepoInfo]):
+        """Ask every remote what it has, so 'behind' means something."""
+        for i, info in enumerate(infos):
+            if self._cancelled:
+                return
+            self.activity.emit(_("Fetching {0} ({1} of {2})…", os.path.basename(info.path),
+                                 i + 1, len(infos)))
+            if not fetchRepo(info.path):
+                self.fetchFailures.append(info.path)
 
 
 def defaultScanRoots() -> list[str]:
