@@ -17,7 +17,10 @@ from gitfourchette.qt import *
 from gitfourchette.toolbox import compactPath, escape
 
 
-MAX_COMMITS = 5000
+# Keep the dashboard responsive on very large repositories. Commit metadata is
+# cheap, while calculating a tree diff for every commit is comparatively costly.
+MAX_COMMITS = 1500
+MAX_DIFF_STATS = 250
 AI_HINTS = re.compile(r"\b(ai|chatgpt|copilot|claude|generated|generated-by)\b", re.IGNORECASE)
 BOT_HINTS = re.compile(r"\b(bot|github-actions|dependabot|renovate)\b", re.IGNORECASE)
 
@@ -68,7 +71,7 @@ def collectAnalysis(path: str) -> list[CommitRecord]:
                 evidence = _("AI-related metadata")
 
             files = insertions = deletions = 0
-            if commit.parents:
+            if commit.parents and index < MAX_DIFF_STATS:
                 try:
                     diff = repo.diff(commit.parents[0].tree, commit.tree)
                     stats = diff.stats
