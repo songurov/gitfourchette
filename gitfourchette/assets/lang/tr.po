@@ -83,7 +83,7 @@ msgstr "dosya adı"
 
 #: blameview/blamegutter.py:235
 msgid "revision"
-msgstr "gözden geçirme"
+msgstr "revizyon"
 
 #: blameview/blamescrubberdelegate.py:59 blameview/blamescrubbermodel.py:42
 msgid "Uncommitted Changes in Working Directory"
@@ -91,7 +91,7 @@ msgstr "Çalışma Dizinindeki İşlenmemiş Değişiklikler"
 
 #: blameview/blametextedit.py:43
 msgid "Blame File at Uncommitted Revision"
-msgstr "İşlenmemiş Revizyondaki Hata Dosyası"
+msgstr "İşlenmemiş Revizyonda Dosyanın Satır Geçmişi"
 
 #: blameview/blametextedit.py:44
 msgid "Show Diff in Working Directory"
@@ -100,7 +100,7 @@ msgstr "Çalışma Dizininde Farkları Göster"
 #: blameview/blametextedit.py:46
 #, python-brace-format
 msgid "Blame File at {0}"
-msgstr "{0} konumundaki hatalı dosya"
+msgstr "{0} İşlemesinde Dosyanın Satır Geçmişi"
 
 #: blameview/blametextedit.py:47
 #, python-brace-format

@@ -2219,7 +2219,7 @@ msgstr "Все удалённые репозитории"
 
 #: forms/newtagdialog.py:43
 msgid "&Create && Push"
-msgstr "&Создать &и отправить"
+msgstr "&Создать и отправить"
 
 #: forms/newtagdialog.py:71
 #, python-brace-format
