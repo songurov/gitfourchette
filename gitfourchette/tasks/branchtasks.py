@@ -521,7 +521,20 @@ class FastForwardBranch(RepoTask):
 
 
 class MergeBranch(RepoTask):
-    def flow(self, them: str | Oid, silentFastForward=False, autoFastForwardOptionName=""):
+    def flow(self, them: str | Oid, silentFastForward=False, autoFastForwardOptionName="", destination=""):
+        if destination:
+            if not destination.startswith(RefPrefix.HEADS) or destination == them:
+                raise AbortTask(_("Select a different local branch as the merge destination."))
+            destinationBranch = self.repo.references[destination]
+            sourceBranch = self.repo.references[them]
+            text = _("Merge {0} into {1}?", bquo(sourceBranch.shorthand), bquo(destinationBranch.shorthand))
+            switching = self.repo.head_is_detached or self.repo.head.name != destination
+            if switching:
+                text = paragraphs(text, _("The current branch will be switched to {0} first.", bquo(destinationBranch.shorthand)))
+            yield from self.flowConfirm(text=text, verb=_("Merge"))
+            if switching:
+                yield from self.flowSubtask(SwitchBranch, destinationBranch.shorthand, askForConfirmation=False)
+
         # Figure out oid
         if isinstance(them, str):
             assert them.startswith("refs/")

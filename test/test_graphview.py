@@ -765,7 +765,7 @@ def testSelect3PlusCommits(tempDir, mainWindow):
     assert findTextInWidget(rw.specialDiffView, "5 items selected")
 
     cm = summonContextMenu(rw.graphView.viewport())
-    assert cm.actions()[0].text().lower().startswith("no actions available")
+    assert cm.actions()[0].text() == "Ask AI…"
     cm.close()
 
 

@@ -10,6 +10,51 @@ Learn more on GitFourchette’s homepage at [gitfourchette.org](https://gitfourc
 
 ![Screenshot of GitFourchette running under KDE Plasma 6](https://gitfourchette.org/_static/appstream/packshot-shadow-light.png)
 
+## Ask AI about commits
+
+Select one or more commits and right-click **Ask AI…** (the first menu item).
+It is enabled when `codex` or `claude` is available on your `PATH`. Sign in to
+the CLI beforehand; GitFourchette uses its existing authentication.
+
+Choose Codex or Claude and ask questions about the selected commits. The chat
+includes their commit messages and patches, and keeps previous questions and
+answers while the dialog is open. It starts with the CLI's configured default
+model. Use `/model` to choose a model, `/model MODEL_NAME` to enter one, or
+`/model default` to restore the CLI default. The last provider and model choice
+are remembered. Send with **Ctrl+Enter**, and use **Stop** to cancel a request.
+
+Five preset buttons prepare editable prompts: **Code review**, **Find bugs**,
+**Performance**, **Security**, and **Summary**. You can also send `/review`,
+`/bugs`, `/performance`, `/security`, or `/summary`, optionally followed by
+additional instructions.
+
+For questions such as “What did Alice do in the last two days?”, change the
+chat scope to **Developer activity**, choose an author (or type part of their
+name/email), set **Last 2 days**, and click **Load commits**. Review the matching
+commits, then use a preset or ask your own question. The search uses commit dates
+across local and remote-tracking branches already present in the repository;
+it does not fetch. Changing scope, author, or period starts a new conversation.
+
+You can also right-click a local or remote branch to open **Ask AI about branch…**
+or any of the five presets directly. Select a base branch and **Load branch**:
+the review uses the aggregate changes from the common ancestor to the selected
+branch tip, without checking out either branch. Changing the base starts a new chat.
+
+Choose the **Response language** (Romanian by default; custom languages are also
+accepted). This preference is remembered and applies to all presets and questions.
+**Include project rules and skills** adds `AGENTS.md`, `AGENTS.override.md`,
+`CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, Claude/Cursor rules, and
+`SKILL.md` files under `.claude/skills`, `.agents/skills`, and `.codex/skills`.
+Rules in affected subdirectories are included too. Tracked guidance is read from
+the reviewed revision; additional local guidance is labeled separately. **View
+rules** shows the included text and any files omitted due to size limits. Rules
+are used as review criteria; skill scripts are not automatically executed.
+
+Analysis uses Codex's read-only sandbox or Claude's read-only file tools. Large
+diffs are capped at 180 KB and marked as truncated. No requests are sent until
+you submit a question. Codex integration uses its documented
+[non-interactive JSONL interface](https://learn.chatgpt.com/docs/non-interactive-mode).
+
 ## Documentation
 
 - [GitFourchette's website](https://gitfourchette.org) ([source code](https://github.com/jorio/gitfourchette.org))

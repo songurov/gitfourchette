@@ -42,6 +42,57 @@ def testCurrentBranchCannotSwitchOrMerge(tempDir, mainWindow):
     # assert not findMenuAction(menu, "rebase").isEnabled()
 
 
+@pytest.mark.parametrize("source,target,allowed", [
+    ("refs/remotes/origin/master", "refs/heads/master", True),
+    ("refs/heads/master", "refs/heads/no-parent", True),
+    ("refs/heads/master", "refs/heads/master", False),
+    ("refs/heads/master", "refs/remotes/origin/master", False),
+    ("refs/tags/annotated_tag", "refs/heads/master", False),
+    ("refs/heads/missing", "refs/heads/master", False),
+])
+def testBranchDropTargets(tempDir, mainWindow, source, target, allowed):
+    from gitfourchette.sidebar.sidebar import BRANCH_MIME_TYPE
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    sb = rw.sidebar
+    index = sb.nodeToFilterIndex(sb.findNodeByRef(target))
+    sb.scrollTo(index)
+    mime = QMimeData()
+    mime.setData(BRANCH_MIME_TYPE, source.encode())
+    pair = sb.branchDropTarget(mime, sb.visualRect(index).center())
+    assert pair == ((source, target) if allowed else None)
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def testBranchDropMergeDestination(tempDir, mainWindow, cancel):
+    from gitfourchette.sidebar.sidebar import BRANCH_MIME_TYPE
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    original = rw.repo.head.target
+    destinationBefore = rw.repo.references["refs/heads/no-parent"].target
+    sb = rw.sidebar
+    index = sb.nodeToFilterIndex(sb.findNodeByRef("refs/heads/no-parent"))
+    mime = QMimeData()
+    mime.setData(BRANCH_MIME_TYPE, b"refs/heads/master")
+
+    class BranchDropEvent(QDropEvent):
+        def source(self):
+            return sb
+
+    event = BranchDropEvent(QPointF(sb.visualRect(index).center()), Qt.DropAction.CopyAction,
+                            mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    sb.dropEvent(event)
+    assert event.isAccepted()
+    if cancel:
+        rejectQMessageBox(rw, "merge.+master.+into.+no-parent")
+        assert rw.repo.head.name == "refs/heads/master"
+        assert rw.repo.references["refs/heads/no-parent"].target == destinationBefore
+    else:
+        acceptQMessageBox(rw, "merge.+master.+into.+no-parent")
+        acceptQMessageBox(rw, "can .*fast.forward")
+        waitUntilTrue(lambda: rw.repo.references["refs/heads/no-parent"].target == original)
+        assert rw.repo.head.name == "refs/heads/no-parent"
+    assert rw.repo.references["refs/heads/master"].target == original
+
+
 def testSidebarWithDetachedHead(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     shell("git checkout 7f82283", wd)

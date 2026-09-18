@@ -386,6 +386,16 @@ class GraphView(QListView):
             if special == SpecialRow.TruncatedHistory:
                 actions = self._contextMenuActionsTruncatedHistory()
 
+        commits = tuple(index.data(CommitLogModel.Role.Oid)
+                        for index in sorted(self.selectedIndexes(), key=lambda i: i.row())
+                        if index.data(CommitLogModel.Role.SpecialRow) == SpecialRow.Commit)
+        if commits and len(commits) == len(self.selectedIndexes()):
+            from gitfourchette.exttools.aichat import availableProviders
+            aiAction = ActionDef(_("Ask AI…"), lambda: self.askAi(commits),
+                                 enabled=bool(availableProviders()),
+                                 tip=_("Ask Codex or Claude about the selected commits."))
+            actions = [aiAction, *([ActionDef.SEPARATOR, *actions] if actions else [])]
+
         # Fall back to no-op menu
         if actions is None:
             actions = [
@@ -396,6 +406,11 @@ class GraphView(QListView):
         menu.setObjectName("GraphViewCM")
         menu.aboutToHide.connect(menu.deleteLater)
         menu.popup(self.mapToGlobal(point))
+
+    def askAi(self, commits):
+        from gitfourchette.forms.aichatdialog import AiChatDialog
+        dialog = AiChatDialog(self.repoModel.repo, commits, self)
+        dialog.open()
 
     def _contextMenuActionsUncommittedChanges(self):
         mainWindow = GFApplication.instance().mainWindow

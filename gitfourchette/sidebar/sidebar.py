@@ -29,6 +29,7 @@ from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost
 
 INVALID_MOUSEPRESS = (-1, SidebarClickZone.Invalid)
+BRANCH_MIME_TYPE = "application/x-gitfourchette-branch"
 
 
 class Sidebar(QTreeView):
@@ -48,6 +49,8 @@ class Sidebar(QTreeView):
 
         self.setObjectName("Sidebar")
         self.setMouseTracking(True)  # for eye icons
+        self.setAcceptDrops(True)
+        self.branchDragStart = None
         self.setMinimumWidth(128)
         self.setIndentation(16)
         self.setHeaderHidden(True)
@@ -523,12 +526,27 @@ class Sidebar(QTreeView):
 
         # --------------------
 
+        if item in (SidebarItem.LocalBranch, SidebarItem.RemoteBranch):
+            from gitfourchette.exttools.aichat import PRESETS, availableProviders
+            enabled = bool(availableProviders())
+            aiActions = [ActionDef(_("Ask AI about branch…"), lambda: self.askAiBranch(data), enabled=enabled)]
+            aiActions.extend(ActionDef(_(caption) + "…", lambda key=command: self.askAiBranch(data, key), enabled=enabled)
+                             for command, (caption, _prompt) in PRESETS.items())
+            actions = [*aiActions, ActionDef.SEPARATOR, *actions]
+
         if not actions:
             return None
 
         menu = ActionDef.makeQMenu(self, actions)
         menu.setToolTipsVisible(True)
         return menu
+
+    def askAiBranch(self, ref, preset=""):
+        from gitfourchette.forms.aichatdialog import AiChatDialog
+        dialog = AiChatDialog(self.sidebarModel.repo, [], self, branch=ref)
+        if preset:
+            dialog.usePreset(preset)
+        dialog.open()
 
     def onCustomContextMenuRequested(self, point: QPoint):
         if APP_TESTMODE and point == QPoint_zero:
@@ -783,11 +801,73 @@ class Sidebar(QTreeView):
         Bypass QTreeView's mouseMoveEvent to prevent the original branch
         expand indicator from taking over mouse input.
         """
+        if self.branchDragStart is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            start, ref = self.branchDragStart
+            if (event.position().toPoint() - start).manhattanLength() >= QApplication.startDragDistance():
+                self.branchDragStart = None
+                self.mousePressCache = INVALID_MOUSEPRESS
+                mime = QMimeData()
+                mime.setData(BRANCH_MIME_TYPE, ref.encode())
+                drag = QDrag(self)
+                drag.setMimeData(mime)
+                drag.exec(Qt.DropAction.CopyAction)
+                self.statusMessage.emit("")
+                return
         QAbstractItemView.mouseMoveEvent(self, event)
+
+    def branchDropTarget(self, mime, pos):
+        if not mime.hasFormat(BRANCH_MIME_TYPE):
+            return None
+        source = bytes(mime.data(BRANCH_MIME_TYPE)).decode("utf-8", errors="replace")
+        sourceNode = self.sidebarModel.nodesByRef.get(source)
+        index = self.indexAt(pos)
+        if sourceNode is None or not sourceNode.isLeafBranchKind() or not index.isValid():
+            return None
+        target = self.filterIndexToNode(index)
+        if target.kind != SidebarItem.LocalBranch or target.data == source:
+            return None
+        return source, target.data
+
+    def dragEnterEvent(self, event):
+        if event.source() is self and event.mimeData().hasFormat(BRANCH_MIME_TYPE):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        pair = self.branchDropTarget(event.mimeData(), event.position().toPoint())
+        if event.source() is self and pair:
+            self.setCurrentIndex(self.indexAt(event.position().toPoint()))
+            self.statusMessage.emit(_("Merge {0} into {1}", RefPrefix.split(pair[0])[1], RefPrefix.split(pair[1])[1]))
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+        else:
+            self.statusMessage.emit("")
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.statusMessage.emit("")
+        event.accept()
+
+    def dropEvent(self, event):
+        pair = self.branchDropTarget(event.mimeData(), event.position().toPoint())
+        self.statusMessage.emit("")
+        if event.source() is not self or not pair:
+            event.ignore()
+            return
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        source, destination = pair
+        MergeBranch.invoke(self, source, destination=destination)
 
     def mousePressEvent(self, event: QMouseEvent):
         pos = event.position().toPoint()
         index, _node, zone = self.resolveClick(pos)
+        self.branchDragStart = None
+        if (event.button() == Qt.MouseButton.LeftButton and zone == SidebarClickZone.Select
+                and _node is not None and _node.isLeafBranchKind()):
+            self.branchDragStart = (pos, _node.data)
 
         # Save click info for mouseReleaseEvent
         self.mousePressCache = (index.row(), zone)
@@ -802,6 +882,7 @@ class Sidebar(QTreeView):
         event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        self.branchDragStart = None
         pos = event.position().toPoint()
         index, node, zone = self.resolveClick(pos)
 
