@@ -6,6 +6,8 @@
 
 import textwrap
 
+import pytest
+
 from gitfourchette import settings
 from gitfourchette.forms.prefsdialog import PrefsDialog
 from gitfourchette.nav import NavLocator
@@ -249,20 +251,25 @@ def testPrefsQtStyleVariantPicker(mainWindow):
     assert accent1 != accent2
 
 
-def testRomanianIsOfferedAndTranslatesTheApp(tempDir, mainWindow):
+@pytest.mark.parametrize(["nativeName", "applySettings", "pushBranch", "repoMenu"], [
+    ("rom.n", "aplică setările", "Fă push la ramură", "&Depozit"),  # "română", in its own name
+    ("русский", "Применение настроек", "Отправить ветку", "&Репо"),
+    ("Türkçe", "Ayarları Uygula", "Dalı gönder", "De&po"),
+], ids=["ro", "ru", "tr"])
+def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName, applySettings, pushBranch, repoMenu):
     from gitfourchette.tasks import PushBranch
     from gitfourchette.tasks.taskbook import TaskBook
 
     dlg = GFApplication.instance().openPrefsDialog("language")
     comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_language")
-    qcbSetIndex(comboBox, "rom.n")  # "română", in its own name
+    qcbSetIndex(comboBox, nativeName)
     dlg.accept()
-    acceptQMessageBox(mainWindow, "aplică setările")
+    acceptQMessageBox(mainWindow, applySettings)
     try:
-        assert TaskBook.names[PushBranch] == "Fă push la ramură"
+        assert TaskBook.names[PushBranch] == pushBranch
         mainWindow.fillGlobalMenuBar()
         menus = [a.text() for a in mainWindow.menuBar().actions()]
-        assert "&Depozit" in menus  # the Repo menu
+        assert repoMenu in menus
     finally:
         # Straight back to English, without another "restart needed" box
         from gitfourchette import settings

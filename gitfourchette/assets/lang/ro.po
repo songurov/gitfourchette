@@ -239,7 +239,7 @@ msgstr "Context"
 
 #: diffview/diffdocument.py:374
 msgid "<no newline at end of file>"
-msgstr "<no newline at end of file>"
+msgstr "<fără linie nouă la sfârșitul fișierului>"
 
 #: diffview/diffview.py:67
 msgid "Stage Selection"

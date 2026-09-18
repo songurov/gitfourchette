@@ -7,8 +7,8 @@ ko 98
 pt 1
 pt_BR 1
 ro 100
-ru 14
-tr 1
+ru 100
+tr 100
 uk 8
 zh_Hans 73
 zh_Hant 1
