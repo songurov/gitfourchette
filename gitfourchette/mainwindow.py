@@ -22,6 +22,7 @@ from gitfourchette.dropzone import DropAction, DropZone
 from gitfourchette.exttools.toolprocess import ToolProcess, setUpToolCommand
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.aboutdialog import AboutDialog
+from gitfourchette.forms.analysisview import AnalysisDialog
 from gitfourchette.forms.clonedialog import CloneDialog
 from gitfourchette.forms.maintoolbar import MainToolBar
 from gitfourchette.forms.repostub import RepoStub
@@ -224,6 +225,7 @@ class MainWindow(QMainWindow):
             "File": _("&File"),
             "Edit": _("&Edit"),
             "View": _("&View"),
+            "Analysis": _("&Analysis"),
             "Repo": _("&Repo"),
             "Commands": _("&Commands"),
             "Mount": _("&Mount"),
@@ -237,7 +239,7 @@ class MainWindow(QMainWindow):
             menu.setToolTipsVisible(True)
             rootMenus[key] = menu
 
-        fileMenu, editMenu, viewMenu, repoMenu, commandsMenu, mountMenu, helpMenu = iter(rootMenus.values())
+        fileMenu, editMenu, viewMenu, analysisMenu, repoMenu, commandsMenu, mountMenu, helpMenu = iter(rootMenus.values())
 
         self.autoHideMenuBar.reconnectToMenus()
 
@@ -313,6 +315,16 @@ class MainWindow(QMainWindow):
             ActionDef(_("Find Previous"), lambda: self.dispatchSearchCommand(SearchBar.Op.Previous),
                       shortcuts=GlobalShortcuts.findPrevious,
                       tip=_("Find previous occurrence")),
+        )
+
+        # -------------------------------------------------------------
+
+        ActionDef.addToQMenu(
+            analysisMenu,
+            ActionDef(_("&Overview"), lambda: self.openAnalysis(0)),
+            ActionDef(_("Developer &KPI"), lambda: self.openAnalysis(1)),
+            ActionDef(_("&Activity by Day"), lambda: self.openAnalysis(2)),
+            ActionDef(_("&AI / Manual"), lambda: self.openAnalysis(3)),
         )
 
         # -------------------------------------------------------------
@@ -757,6 +769,25 @@ class MainWindow(QMainWindow):
         if not isinstance(rw, RepoWidget):  # it might be a RepoStub
             raise NoRepoWidgetError()
         return rw
+
+    def openAnalysis(self, tabIndex: int = 0) -> None:
+        """Open the local repository analysis dashboard for the active tab."""
+        try:
+            repoWidget = self.currentRepoWidget()
+        except NoRepoWidgetError:
+            self.statusBar2.showMessage(_("Open a repository before running Analysis."))
+            return
+
+        dialog = getattr(self, "analysisDialog", None)
+        if dialog is not None:
+            dialog.close()
+
+        dialog = AnalysisDialog(self, repoWidget.workdir)
+        dialog.tabs.setCurrentIndex(max(0, min(tabIndex, dialog.tabs.count() - 1)))
+        self.analysisDialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def tabWidgetForWorkdirPath(self, workdir: str) -> RepoWidget | RepoStub | None:
         widget: RepoWidget | RepoStub
