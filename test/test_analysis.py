@@ -18,6 +18,7 @@ def testAnalysisMenuOpensDashboard(tempDir, mainWindow):
     assert isinstance(dialog, AnalysisDialog)
     assert dialog.tabs.count() == 4
     assert dialog.tabs.currentIndex() == 1
+    waitUntilTrue(lambda: dialog.developerTable.rowCount() > 0)
     assert dialog.developerTable.rowCount() > 0
     dialog.close()
 

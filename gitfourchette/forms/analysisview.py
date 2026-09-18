@@ -71,6 +71,21 @@ class AnalysisTableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
+class AnalysisWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, path: str):
+        super().__init__()
+        self.path = path
+
+    def run(self):
+        try:
+            self.finished.emit(collectAnalysis(self.path))
+        except Exception as exc:  # pragma: no cover - depends on repository state
+            self.failed.emit(str(exc))
+
+
 def collectAnalysis(path: str) -> list[CommitRecord]:
     """Collect bounded, local-only history data for the selected repository."""
     repo = Repo(path)
@@ -116,12 +131,22 @@ class AnalysisDialog(QDialog):
     def __init__(self, parent: QWidget, repoPath: str):
         super().__init__(parent)
         self.repoPath = repoPath
-        self.records = collectAnalysis(repoPath)
+        self.records = []
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(_("Analysis — {0}", compactPath(repoPath)))
         self.resize(1100, 760)
 
         root = QVBoxLayout(self)
+        self.loadingWidget = QWidget(self)
+        loadingLayout = QHBoxLayout(self.loadingWidget)
+        loadingLayout.setContentsMargins(0, 0, 0, 0)
+        loadingLayout.addWidget(QLabel(_("Loading repository history…"), self.loadingWidget))
+        progress = QProgressBar(self.loadingWidget)
+        progress.setRange(0, 0)
+        progress.setFixedWidth(180)
+        loadingLayout.addWidget(progress)
+        loadingLayout.addStretch(1)
+        root.addWidget(self.loadingWidget)
         header = QHBoxLayout()
         title = QLabel(f"<h2>{escape(os.path.basename(repoPath))}</h2>", self)
         header.addWidget(title)
@@ -146,7 +171,30 @@ class AnalysisDialog(QDialog):
         self.tabs.addTab(self.developerPage, _("Developer KPI"))
         self.tabs.addTab(self.activityPage, _("Activity"))
         self.tabs.addTab(self.aiPage, _("AI / Manual"))
+        self.tabs.setEnabled(False)
+        self._startAnalysisWorker()
+
+    def _startAnalysisWorker(self):
+        self.analysisThread = QThread(self)
+        self.analysisWorker = AnalysisWorker(self.repoPath)
+        self.analysisWorker.moveToThread(self.analysisThread)
+        self.analysisThread.started.connect(self.analysisWorker.run)
+        self.analysisWorker.finished.connect(self._analysisReady)
+        self.analysisWorker.failed.connect(self._analysisFailed)
+        self.analysisWorker.finished.connect(self.analysisThread.quit)
+        self.analysisWorker.failed.connect(self.analysisThread.quit)
+        self.analysisThread.finished.connect(self.analysisWorker.deleteLater)
+        self.analysisThread.finished.connect(self.analysisThread.deleteLater)
+        self.analysisThread.start()
+
+    def _analysisReady(self, records):
+        self.records = records
+        self.loadingWidget.hide()
+        self.tabs.setEnabled(True)
         self.refresh()
+
+    def _analysisFailed(self, message):
+        self.loadingWidget.findChild(QLabel).setText(_("Could not load analysis: {0}", message))
 
     def _makeOverviewPage(self):
         page = QWidget(self.tabs)
@@ -156,8 +204,7 @@ class AnalysisDialog(QDialog):
         layout.addWidget(QLabel(f"<b>{escape(_('Developer contribution overview'))}</b>"))
         self.overviewTable = self._table(
             [_('Developer'), _('Commits'), _('Active days'), _('Files'), _('Added'), _('Deleted')])
-        layout.addWidget(self.overviewTable)
-        layout.addStretch(1)
+        layout.addWidget(self.overviewTable, 1)
         return page
 
     def _makeDeveloperPage(self):
@@ -168,7 +215,7 @@ class AnalysisDialog(QDialog):
         self.developerTable = self._table([
             _('Developer'), _('KPI'), _('Commits'), _('Active days'), _('Files'),
             _('Added'), _('Deleted'), _('AI signal')])
-        layout.addWidget(self.developerTable)
+        layout.addWidget(self.developerTable, 1)
         return page
 
     def _makeActivityPage(self):
@@ -185,7 +232,8 @@ class AnalysisDialog(QDialog):
         self.activityTable = self._table([
             _('Date'), _('Developer'), _('Commit'), _('Files'), _('Added'), _('Deleted')])
         self.activityTable.setSortingEnabled(True)
-        layout.addWidget(self.activityTable)
+        self.activityTable.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.activityTable, 1)
         return page
 
     def _makeAiPage(self):
@@ -195,8 +243,7 @@ class AnalysisDialog(QDialog):
             _("AI origin cannot be proven from Git alone. Signals below are evidence, not verdicts.")))
         self.aiTable = self._table([
             _('Developer'), _('Commits'), _('AI signal'), _('Automation'), _('Unclassified'), _('Confidence')])
-        layout.addWidget(self.aiTable)
-        layout.addStretch(1)
+        layout.addWidget(self.aiTable, 1)
         return page
 
     @staticmethod
@@ -208,7 +255,10 @@ class AnalysisDialog(QDialog):
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setAlternatingRowColors(True)
         table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         table.horizontalHeader().setStretchLastSection(True)
+        table.setSortingEnabled(True)
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         return table
 
     def _filteredRecords(self) -> list[CommitRecord]:
@@ -282,7 +332,7 @@ class AnalysisDialog(QDialog):
             values = [developer.name, developer.commits, len(developer.activeDays),
                       developer.files, developer.insertions, developer.deletions]
             for column, value in enumerate(values):
-                self.overviewTable.setItem(row, column, QTableWidgetItem(str(value)))
+                self.overviewTable.setItem(row, column, AnalysisTableItem(value))
 
     def _fillDevelopers(self, stats: list[DeveloperStats]):
         self.developerTable.setRowCount(len(stats))
@@ -294,7 +344,7 @@ class AnalysisDialog(QDialog):
                       len(developer.activeDays), developer.files, developer.insertions,
                       developer.deletions, _("signal") if developer.aiCommits else _("none")]
             for column, value in enumerate(values):
-                self.developerTable.setItem(row, column, QTableWidgetItem(str(value)))
+                self.developerTable.setItem(row, column, AnalysisTableItem(value))
 
     def refreshActivity(self):
         self._fillActivity(self._filteredRecords())
@@ -319,4 +369,4 @@ class AnalysisDialog(QDialog):
             values = [developer.name, developer.commits, developer.aiCommits,
                       developer.automationCommits, unknown, confidence]
             for column, value in enumerate(values):
-                self.aiTable.setItem(row, column, QTableWidgetItem(str(value)))
+                self.aiTable.setItem(row, column, AnalysisTableItem(value))
