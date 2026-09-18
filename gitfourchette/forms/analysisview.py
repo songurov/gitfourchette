@@ -55,6 +55,22 @@ class DeveloperStats:
     records: list[CommitRecord] = field(default_factory=list)
 
 
+class AnalysisTableItem(QTableWidgetItem):
+    """Table item with numeric-aware sorting for KPI/activity columns."""
+
+    def __init__(self, value):
+        super().__init__(str(value))
+        self.sortValue = value
+
+    def __lt__(self, other):
+        if isinstance(other, AnalysisTableItem):
+            try:
+                return self.sortValue < other.sortValue
+            except TypeError:
+                pass
+        return super().__lt__(other)
+
+
 def collectAnalysis(path: str) -> list[CommitRecord]:
     """Collect bounded, local-only history data for the selected repository."""
     repo = Repo(path)
@@ -292,7 +308,7 @@ class AnalysisDialog(QDialog):
             values = [date, record.author, record.subject, record.files,
                       record.insertions, record.deletions]
             for column, value in enumerate(values):
-                self.activityTable.setItem(row, column, QTableWidgetItem(str(value)))
+                self.activityTable.setItem(row, column, AnalysisTableItem(value))
 
     def _fillAi(self, stats: list[DeveloperStats]):
         self.aiTable.setRowCount(len(stats))

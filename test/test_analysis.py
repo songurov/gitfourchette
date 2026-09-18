@@ -22,6 +22,17 @@ def testAnalysisMenuOpensDashboard(tempDir, mainWindow):
     dialog.close()
 
 
+def testActivitySortsNumbersNumerically(tempDir, mainWindow):
+    workdir = unpackRepo(tempDir)
+    mainWindow.openRepo(workdir)
+    mainWindow.openAnalysis(2)
+    table = mainWindow.analysisDialog.activityTable
+    table.sortItems(4, Qt.SortOrder.AscendingOrder)
+    values = [int(table.item(row, 4).text()) for row in range(table.rowCount())]
+    assert values == sorted(values)
+    mainWindow.analysisDialog.close()
+
+
 def testAnalysisCanBeOpenedRepeatedly(tempDir, mainWindow):
     workdir = unpackRepo(tempDir)
     mainWindow.openRepo(workdir)
