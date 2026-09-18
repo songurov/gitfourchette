@@ -105,3 +105,22 @@ def testEverySemanticIconUsesTheMonochromePalette():
     for iconName in semanticIcons:
         svg = (iconDir / f"{iconName}.svg").read_text()
         assert not hardcodedColor.search(svg), iconName
+
+
+def testStatusIconGeneratorReproducesCommittedIcons():
+    """
+    `update_resources.py -u` rewrites the status tiles. If its template drifts
+    from the icons in the repo, running it silently reverts their design.
+    """
+
+    import importlib.util
+
+    rootDir = pathlib.Path(__file__).parents[1]
+    spec = importlib.util.spec_from_file_location("update_resources", rootDir / "update_resources.py")
+    updateResources = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updateResources)
+
+    iconDir = rootDir / "gitfourchette/assets/icons"
+    for status, glyph in updateResources.STATUS_ICON_GLYPHS.items():
+        svg = (iconDir / f"status_{status.lower()}.svg").read_text()
+        assert updateResources.statusIconSvg(glyph) == svg, status
