@@ -17,6 +17,7 @@ from gitfourchette.reposcan import (
     DEFAULT_MAX_DEPTH, RepoDetails, RepoInfo, RepoScanner, defaultScanRoots, inspectRepoDetails)
 from gitfourchette.toolbox import *
 from gitfourchette.forms.homemascot import HomeMascot
+from gitfourchette.forms.homepitchscene import PitchScene
 
 
 class WelcomeWidget(QFrame):
@@ -54,8 +55,11 @@ class WelcomeWidget(QFrame):
         welcomeText = f"<html style=\'font-size: {fs1}pt;\'>" + welcomeText.format(app=appText)
         self.ui.welcomeLabel.setText(welcomeText)
 
-        # Walks and jumps across the logo and the welcome text
+        # Walks and jumps across the logo and the welcome text; France and
+        # Moldova shake hands on the pitch below
         self.mascot = HomeMascot(self.ui.splashPage, self.ui.logoLabel, self.ui.welcomeLabel)
+        self.pitchScene = PitchScene(self.ui.splashPage)
+        self.mascot.companions.append(self.pitchScene)
 
         self.ui.newRepoButton.clicked.connect(self.newRepo)
         self.ui.openRepoButton.clicked.connect(self.openRepo)

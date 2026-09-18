@@ -25,10 +25,8 @@ the ground follows the font, the theme and the window size.
 import dataclasses
 import math
 
+from gitfourchette.forms.pixelart import PIXEL, PixelSprite, Pixels, gridPixels, paintPixels
 from gitfourchette.qt import *
-
-PIXEL = 2
-"""Screen pixels per sprite pixel, for everything in the scene."""
 
 # The dinosaur is put together from parts, so the beret and the hand can move
 # on their own. Coordinates are sprite pixels on a CANVAS_W x CANVAS_H canvas,
@@ -129,7 +127,7 @@ _BOULE = (
     "GGGGd",
     ".GdG.",
 )
-PITCH_W, PITCH_H = 160, 5
+PITCH_W, PITCH_H = 210, 5
 """The pétanque pitch at the bottom of the page, in sprite pixels."""
 
 _COLORS = {
@@ -199,7 +197,7 @@ class Pose:
     held: int | None = None
     """Bites left of the croissant in hand, or None."""
 
-    def pixels(self) -> dict[tuple[int, int], str]:
+    def pixels(self) -> Pixels:
         """Sprite pixel -> color key, facing right. Later parts are drawn over earlier ones."""
         pixels = gridPixels(_BODY)
         pixels.update(_EYE_CLOSED if self.eyesClosed else _EYE_OPEN)
@@ -226,37 +224,7 @@ class Pose:
 STAND = Pose()
 
 
-def gridPixels(rows, keys: dict[str, str] | None = None) -> dict[tuple[int, int], str]:
-    return {(x, y): (keys[key] if keys else key)
-            for y, row in enumerate(rows) for x, key in enumerate(row) if key != "."}
-
-
-def paintPixels(widget: QWidget, pixels: dict[tuple[int, int], str], mirror: bool = False, width: int = 0):
-    painter = QPainter(widget)
-    for (x, y), key in pixels.items():
-        if mirror:
-            x = width - 1 - x
-        painter.fillRect(x * PIXEL, y * PIXEL, PIXEL, PIXEL, _COLORS[key])
-    painter.end()
-
-
-class _Sprite(QWidget):
-    """A pixel-art widget that never takes a click."""
-
-    def __init__(self, stage: QWidget, name: str, width: int, height: int):
-        super().__init__(stage)
-        self.setObjectName(name)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
-        self.setFixedSize(width * PIXEL, height * PIXEL)
-        self.hide()
-
-    def setShown(self, shown: bool):
-        if shown != self.isVisible():
-            self.setVisible(shown)
-
-
-class MascotTable(_Sprite):
+class MascotTable(PixelSprite):
     """The table at the end of the walk, and the croissant on it."""
 
     def __init__(self, stage: QWidget):
@@ -274,10 +242,10 @@ class MascotTable(_Sprite):
         if self.hasCroissant:
             keys = {"C": "D", "c": "d"} if self.toasted else {"C": "C", "c": "c"}
             pixels.update(gridPixels(_TABLE_CROISSANT, keys))
-        paintPixels(self, pixels)
+        paintPixels(self, pixels, _COLORS)
 
 
-class MascotFire(_Sprite):
+class MascotFire(PixelSprite):
     """A breath of fire, flickering, that grows out of the mouth."""
 
     def __init__(self, stage: QWidget):
@@ -289,18 +257,18 @@ class MascotFire(_Sprite):
     def paintEvent(self, event: QPaintEvent):
         pixels = {xy: key for xy, key in gridPixels(_FIRE[self.frame % 2], _FIRE_KEYS).items()
                   if xy[0] < self.length}
-        paintPixels(self, pixels, self.facing < 0, FIRE_W)
+        paintPixels(self, pixels, _COLORS, self.facing < 0, FIRE_W)
 
 
-class MascotBoule(_Sprite):
+class MascotBoule(PixelSprite):
     def __init__(self, stage: QWidget):
         super().__init__(stage, "HomeMascotBoule", BOULE_W, BOULE_W)
 
     def paintEvent(self, event: QPaintEvent):
-        paintPixels(self, gridPixels(_BOULE, _BOULE_KEYS))
+        paintPixels(self, gridPixels(_BOULE, _BOULE_KEYS), _COLORS)
 
 
-class MascotPitch(_Sprite):
+class MascotPitch(PixelSprite):
     """The pétanque pitch at the bottom of the page: sand, pebbles, and the jack."""
 
     JACK_AT = 0.72
@@ -326,7 +294,7 @@ class MascotPitch(_Sprite):
         for x in range(jack - 1, jack + 2):
             for y in range(0, 2):
                 pixels[(x, y)] = "J"
-        paintPixels(self, pixels)
+        paintPixels(self, pixels, _COLORS)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -404,6 +372,8 @@ class HomeMascot(QWidget):
         self.table = MascotTable(stage)
         self.fire = MascotFire(stage)
         self.boule = MascotBoule(stage)
+        self.companions = []
+        """Other scenes that move on this timer, with layout(pitch, ground), advance(ms), sprites() and hide()."""
         self.throwFrom = QPointF()
         self.throwDirection = 1
         self.landAt = QPointF()
@@ -530,6 +500,8 @@ class HomeMascot(QWidget):
         if not self.segments:
             for prop in self.pitch, self.table, self.fire, self.boule:
                 prop.hide()
+            for companion in self.companions:
+                companion.hide()
             return
 
         _logo, _welcome, nameLine = self.surfaces()
@@ -549,8 +521,11 @@ class HomeMascot(QWidget):
         self.landAt = QPointF(jackX - self.throwDirection * roll, ground)
         self.restAt = QPointF(jackX - self.throwDirection * 5 * PIXEL, ground)  # bien pointé
 
+        for companion in self.companions:
+            companion.layout(self.pitch.geometry(), self.pitch.groundTop())
+
         # Back to front: the dinosaur walks in front of everything
-        for prop in self.pitch, self.table, self.boule, self.fire:
+        for prop in [self.pitch, self.table, *(s for c in self.companions for s in c.sprites()), self.boule, self.fire]:
             prop.raise_()
         self.raise_()
 
@@ -671,6 +646,9 @@ class HomeMascot(QWidget):
             size = self.boule.width()
             self.boule.move(math.floor(boule.x() - size / 2), math.floor(boule.y()) - size)
 
+        for companion in self.companions:
+            companion.advance(ms)
+
         if not self.isVisible():
             self.show()
         self.update()
@@ -695,4 +673,4 @@ class HomeMascot(QWidget):
     # Drawing
 
     def paintEvent(self, event: QPaintEvent):
-        paintPixels(self, self.pose.pixels(), self.facing < 0, CANVAS_W)
+        paintPixels(self, self.pose.pixels(), _COLORS, self.facing < 0, CANVAS_W)
