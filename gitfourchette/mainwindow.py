@@ -33,7 +33,7 @@ from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.forms.workspacedialog import WorkspaceDialog
 from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.forms.welcomewidget import WelcomeWidget
-from gitfourchette.forms.whatsnewdialog import WhatsNewDialog
+from gitfourchette.forms.whatsnewdialog import WhatsNewDialog, versionCaption
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.nav import NavLocator, NavContext, NavFlags
@@ -107,6 +107,7 @@ class MainWindow(QMainWindow):
 
         self.statusBar2 = QStatusBar2(self)
         self.setStatusBar(self.statusBar2)
+        self.buildVersionCorner()
 
         self.mainToolBar = MainToolBar(self)
         self.addToolBar(self.mainToolBar)
@@ -544,6 +545,23 @@ class MainWindow(QMainWindow):
             QuickLaunchSection(_("Workspaces"), workspaces),
             QuickLaunchSection(_("Commands"), commands),
         ]
+
+    def buildVersionCorner(self) -> None:
+        """Bottom-right of the status bar: which build this is, and what's new in it."""
+        self.versionLabel = QLabel(versionCaption(), self.statusBar2)
+        self.versionLabel.setObjectName("StatusBarVersion")
+        self.versionLabel.setEnabled(False)  # dimmed, like a footnote
+        tweakWidgetFont(self.versionLabel, 90)
+
+        self.whatsNewButton = QToolButton(self.statusBar2)
+        self.whatsNewButton.setObjectName("StatusBarWhatsNew")
+        self.whatsNewButton.setText(_("What’s New"))
+        self.whatsNewButton.setToolTip(_("This year’s releases, what they brought, and who made them"))
+        self.whatsNewButton.setAutoRaise(True)
+        self.whatsNewButton.clicked.connect(self.openWhatsNew)
+
+        self.statusBar2.addPermanentWidget(self.versionLabel)
+        self.statusBar2.addPermanentWidget(self.whatsNewButton)
 
     def openWhatsNew(self) -> WhatsNewDialog:
         dialog = WhatsNewDialog(self)

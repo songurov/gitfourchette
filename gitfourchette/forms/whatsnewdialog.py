@@ -47,6 +47,19 @@ def loadReleases() -> tuple[int, list[Release]]:
     return data.get("year", 0), releases
 
 
+def versionCaption() -> str:
+    """
+    "1.11.0", or "1.11.0 · Workspaces preview" when this build carries changes
+    beyond that release - named by the newest entry that isn't an official release.
+    """
+    from gitfourchette.appconsts import APP_VERSION
+    _year, releases = loadReleases()
+    newest = releases[0] if releases else None
+    if newest is not None and newest.version != APP_VERSION and not newest.url.startswith("https://github.com/jorio/"):
+        return f"{APP_VERSION} · {newest.version}"
+    return APP_VERSION
+
+
 def releasesHtml(year: int, releases: list[Release]) -> str:
     locale = QLocale()
     people = {name for r in releases for name in r.contributors}

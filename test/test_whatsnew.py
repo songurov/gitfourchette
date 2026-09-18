@@ -60,3 +60,28 @@ def testWhatsNewIsOfferedOnHome(mainWindow):
     assert palette.currentEntry().title == "What’s New…"
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
     findQDialog(mainWindow, "what’s new").reject()
+
+
+def testVersionAndWhatsNewInTheCornerOfTheStatusBar(tempDir, mainWindow):
+    from gitfourchette.appconsts import APP_VERSION
+    label = mainWindow.statusBar().findChild(QLabel, "StatusBarVersion")
+    button = mainWindow.statusBar().findChild(QToolButton, "StatusBarWhatsNew")
+    # The upstream version, and the name of what this build adds on top of it
+    assert label.text() == f"{APP_VERSION} · Workspaces preview"
+    assert label.isVisible() and button.isVisible()
+
+    button.click()
+    findQDialog(mainWindow, "what’s new").reject()
+
+    # Same corner with a repo open
+    mainWindow.openRepo(unpackRepo(tempDir))
+    assert label.isVisible() and button.isVisible()
+
+
+def testAnOfficialBuildShowsJustItsVersion(mainWindow, monkeypatch):
+    from gitfourchette.forms import whatsnewdialog
+    from gitfourchette.appconsts import APP_VERSION
+    year, releases = loadReleases()
+    official = [r for r in releases if r.url.startswith("https://github.com/jorio/")]
+    monkeypatch.setattr(whatsnewdialog, "loadReleases", lambda: (year, official))
+    assert whatsnewdialog.versionCaption() == APP_VERSION
