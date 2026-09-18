@@ -8,14 +8,12 @@
 A little pixel-art dinosaur that lives on the Home splash page - a nod to
 Nanosaur, and to the author who brought it back.
 
-It stands on the logo and tips its beret to you: off, held to its chest with a
-bow, back on. Then it jumps onto "Welcome to", walks along it and jumps onto
-the end of the app's name, where a table holds a croissant. It toasts the
-croissant with a breath of fire, eats it in four bites, and throws a boule down
-to the pétanque pitch at the bottom of the page. The boule lands, rolls and
-stops by the jack. Then the dinosaur walks back home, and a fresh croissant
-waits for the next round - forever, but only while the splash page is on
-screen. It takes its time: about half a minute a round.
+It has a nest on the logo. It tips its beret to you, then jumps onto "Welcome
+to" and walks along it; meanwhile an egg falls from the sky onto the end of
+the app's name. The dinosaur picks it up, carries it home and lays it in the
+nest. Once the nest holds three eggs, they hatch at the start of the next
+round, and the nest starts over - forever, but only while the splash page is
+on screen. It takes its time: about half a minute a round.
 
 It stands on the glyphs themselves, not on the labels' boxes: the logo and the
 welcome text are rendered offscreen and scanned for their first opaque row, so
@@ -28,11 +26,11 @@ import math
 from gitfourchette.forms.pixelart import PIXEL, PixelSprite, Pixels, gridPixels, paintPixels
 from gitfourchette.qt import *
 
-# The dinosaur is put together from parts, so the beret and the hand can move
-# on their own. Coordinates are sprite pixels on a CANVAS_W x CANVAS_H canvas,
-# facing right; facing left mirrors the whole canvas. The legs are centered, so
-# turning around doesn't shift it. The feet touch the bottom row. The top three
-# rows are headroom for the beret.
+# The dinosaur is put together from parts, so the beret, the hand and the egg
+# can move on their own. Coordinates are sprite pixels on a CANVAS_W x CANVAS_H
+# canvas, facing right; facing left mirrors the whole canvas. The legs are
+# centered, so turning around doesn't shift it. The feet touch the bottom row.
+# The top three rows are headroom for the beret.
 CANVAS_W, CANVAS_H = 20, 21
 
 _BODY = (
@@ -57,7 +55,6 @@ _BODY = (
 )
 _EYE_OPEN = {(13, 7): "W", (14, 7): "W", (13, 8): "W", (14, 8): "K"}
 _EYE_CLOSED = {(13, 8): "o", (14, 8): "o"}
-_MOUTH_OPEN = {(14, 10): "K", (15, 10): "T", (16, 10): "K", (17, 10): "T", (18, 10): "K"}
 
 BERET_ON_HEAD = (11, 3)
 BERET_LIFTED = (12, 0)
@@ -67,10 +64,8 @@ _ARM = {
     "rest": [(15, 14), (16, 14), (16, 15)],
     "grab": [(15, 14), (16, 13), (17, 12)],
     "hold": [(15, 15), (16, 15)],
-    "reachTable": [(15, 14), (16, 14), (17, 14), (18, 14), (19, 14)],
-    "mouth": [(15, 14), (16, 13)],
-    "windup": [(15, 14), (15, 13), (15, 12)],
-    "release": [(15, 14), (16, 13), (17, 12), (18, 11)],
+    "reachDown": [(15, 14), (16, 15), (17, 16), (18, 17)],
+    "carry": [(15, 14), (16, 15)],
     "up": [(15, 13), (16, 12)],
 }
 _LEGS = {
@@ -83,52 +78,34 @@ _LEGS = {
     "tuck": {(6, 18): "O", (7, 18): "O", (11, 18): "O", (12, 18): "O",
              (6, 19): "o", (7, 19): "o", (8, 19): "o", (11, 19): "o", (12, 19): "o", (13, 19): "o"},
 }
-# The croissant in hand, bitten from the mouth's side: (pixel, color key)
-_HELD_CROISSANT = [((17, 11), "C"), ((18, 11), "C"),
-                   ((16, 12), "C"), ((17, 12), "C"), ((18, 12), "C"), ((19, 12), "C"),
-                   ((16, 13), "c"), ((19, 13), "c")]
-BITES = 4
 
-TABLE_W, TABLE_H = 12, 7
-_TABLE = (
-    "............",
-    "............",
-    "............",
-    "TTTTTTTTTTTT",
-    "tttttttttttt",
-    ".t........t.",
-    ".t........t.",
+EGG_W, EGG_H = 4, 5
+_EGG = (
+    ".VV.",
+    "VVsV",
+    "VsVV",
+    "VVVV",
+    ".VV.",
 )
-_TABLE_CROISSANT = (
-    "....cCCc....",
-    "...cCcCcC...",
-    "..cC....Cc..",
+_HATCHED = (
+    ".OO.",  # a baby's head,
+    "OKOO",  # peeking out
+    "V.VV",  # of a cracked shell
+    "VVVV",
+    ".VV.",
 )
+_CARRIED_EGG_AT = (16, 12)
+"""Where the egg sits in the dinosaur's arms, on its canvas."""
 
-FIRE_W, FIRE_H = 14, 5
-_FIRE = (
-    ("YYFFFrr.......",
-     ".YYFFFFrr.r...",
-     "YYYYFFFFrrr...",
-     ".YYFFFFrr..r..",
-     "YYFFFrr.......",),
-    ("YFFFrr..r.....",
-     "YYYFFFFrr.....",
-     "YYYFFFFFrrr.r.",
-     "YYFFFFrrr.....",
-     ".YFFrr........",),
+NEST_CAPACITY = 3
+NEST_W, NEST_H = 14, 6
+_NEST = (
+    "n.nn.n.nn.n.nn",
+    "nnnnnnnnnnnnnn",
+    ".nnnnnnnnnnnn.",
 )
-
-BOULE_W = 5
-_BOULE = (
-    ".GGG.",
-    "GgGGG",
-    "GGGGG",
-    "GGGGd",
-    ".GdG.",
-)
-PITCH_W, PITCH_H = 210, 5
-"""The pétanque pitch at the bottom of the page, in sprite pixels."""
+_NEST_SLOTS = [1, 5, 9]
+"""Where the eggs sit in the nest, left to right."""
 
 _COLORS = {
     "O": QColor("#f2a23a"),  # dino
@@ -136,29 +113,12 @@ _COLORS = {
     "Y": QColor("#ffd978"),  # belly
     "S": QColor("#2a93ad"),  # spikes
     "W": QColor("#ffffff"),  # eye
-    "K": QColor("#1b1b1b"),  # pupil, mouth
-    "T": QColor("#f4f4f4"),  # teeth
+    "K": QColor("#1b1b1b"),  # pupil
     "R": QColor("#c8373a"),  # beret: red, so it reads on dark and light themes alike
-    "C": QColor("#e3a548"),  # croissant, golden
-    "c": QColor("#b06f28"),  # croissant, browned edges
-    "D": QColor("#b9782a"),  # croissant, toasted
-    "d": QColor("#7a4416"),  # croissant, toasted edges
-    "T_": QColor("#a8733c"),  # table top
-    "t": QColor("#7b5028"),  # table edge and legs
-    "Y_": QColor("#ffe45c"),  # fire, hottest
-    "F": QColor("#ff8a1c"),  # fire
-    "r": QColor("#e0401c"),  # fire tips
-    "G": QColor("#aab2bb"),  # boule
-    "g": QColor("#eef2f5"),  # boule highlight
-    "d_": QColor("#6f7780"),  # boule shadow
-    "J": QColor("#e2572a"),  # jack
-    "P": QColor("#b59866"),  # pitch, sand
-    "p": QColor("#8f7446"),  # pitch, pebbles
+    "V": QColor("#f3ead2"),  # egg shell
+    "s": QColor("#2a93ad"),  # egg spots: same teal as the spikes
+    "n": QColor("#8a6236"),  # nest twigs
 }
-# Grids share letters across sprites; each sprite maps its letters to colors
-_TABLE_KEYS = {"T": "T_", "t": "t", "C": "C", "c": "c"}
-_FIRE_KEYS = {"Y": "Y_", "F": "F", "r": "r"}
-_BOULE_KEYS = {"G": "G", "g": "g", "d": "d_"}
 
 WALK_SPEED = 22.0
 """Pixels per second: an unhurried stroll."""
@@ -169,19 +129,12 @@ STEP_MS = 260
 TURN_MS = 800
 GREET_MS = 3600
 """Beret off, held to the chest with a bow, back on."""
-
-# At the table, in ms from arriving
-FIRE_AT, FIRE_END = 400, 2000
-TOASTED_AT = 1000
-TAKE_AT = 2500
-BITES_AT = 3100
-BITE_MS = 600
-WINDUP_AT = BITES_AT + BITES * BITE_MS + 400
-THROW_AT = WINDUP_AT + 400
-FLIGHT_MS = 1400
-ROLL_MS = 1200
-CHEER_AT = THROW_AT + FLIGHT_MS + ROLL_MS
-TABLE_MS = CHEER_AT + 600
+PICK_MS = 1400
+PLACE_MS = 1400
+LET_GO_AT = 800
+"""When the egg leaves the hands, while picking it up or laying it."""
+FALL_MS = 1800
+BOUNCE_MS = 300
 
 FRAME_MS = 50
 """20 fps is plenty for pixel art, and keeps an idle Home cheap."""
@@ -193,16 +146,12 @@ class Pose:
     arm: str = "rest"
     beret: tuple[int, int] = BERET_ON_HEAD
     eyesClosed: bool = False
-    mouthOpen: bool = False
-    held: int | None = None
-    """Bites left of the croissant in hand, or None."""
+    carrying: bool = False
 
     def pixels(self) -> Pixels:
         """Sprite pixel -> color key, facing right. Later parts are drawn over earlier ones."""
         pixels = gridPixels(_BODY)
         pixels.update(_EYE_CLOSED if self.eyesClosed else _EYE_OPEN)
-        if self.mouthOpen:
-            pixels.update(_MOUTH_OPEN)
         pixels.update(_LEGS[self.legs])
         bx, by = self.beret
         pixels[(bx + 3, by)] = "R"
@@ -210,91 +159,54 @@ class Pose:
             pixels[(x, by + 1)] = "R"
         for x in range(bx, bx + 7):
             pixels[(x, by + 2)] = "R"
+        if self.carrying:
+            ex, ey = _CARRIED_EGG_AT
+            for (x, y), key in gridPixels(_EGG).items():
+                pixels[(ex + x, ey + y)] = key
         # The hand goes over what it's holding
         for xy in _ARM[self.arm]:
             pixels[xy] = "o"
-        if self.held:
-            eaten = BITES - self.held
-            for (x, y), color in _HELD_CROISSANT:
-                if x - 16 >= eaten:
-                    pixels[(x, y)] = color
         return {xy: key for xy, key in pixels.items() if 0 <= xy[0] < CANVAS_W and 0 <= xy[1] < CANVAS_H}
 
 
 STAND = Pose()
 
 
-class MascotTable(PixelSprite):
-    """The table at the end of the walk, and the croissant on it."""
+class FallingEgg(PixelSprite):
+    def __init__(self, stage: QWidget):
+        super().__init__(stage, "HomeMascotEgg", EGG_W, EGG_H)
+
+    def paintEvent(self, event: QPaintEvent):
+        paintPixels(self, gridPixels(_EGG), _COLORS)
+
+
+class Nest(PixelSprite):
+    """On the logo: twigs, and the eggs brought home so far."""
 
     def __init__(self, stage: QWidget):
-        super().__init__(stage, "HomeMascotTable", TABLE_W, TABLE_H)
-        self.hasCroissant = True
-        self.toasted = False
+        super().__init__(stage, "HomeMascotNest", NEST_W, NEST_H)
+        self.eggs = 0
+        self.hatched = False
+        self.wobble = 0
 
-    def setCroissant(self, present: bool, toasted: bool):
-        if (present, toasted) != (self.hasCroissant, self.toasted):
-            self.hasCroissant, self.toasted = present, toasted
+    def setEggs(self, count: int, hatched: bool = False, wobble: int = 0):
+        if (count, hatched, wobble) != (self.eggs, self.hatched, self.wobble):
+            self.eggs, self.hatched, self.wobble = count, hatched, wobble
             self.update()
 
-    def paintEvent(self, event: QPaintEvent):
-        pixels = gridPixels(_TABLE, _TABLE_KEYS)
-        if self.hasCroissant:
-            keys = {"C": "D", "c": "d"} if self.toasted else {"C": "C", "c": "c"}
-            pixels.update(gridPixels(_TABLE_CROISSANT, keys))
-        paintPixels(self, pixels, _COLORS)
-
-
-class MascotFire(PixelSprite):
-    """A breath of fire, flickering, that grows out of the mouth."""
-
-    def __init__(self, stage: QWidget):
-        super().__init__(stage, "HomeMascotFire", FIRE_W, FIRE_H)
-        self.frame = 0
-        self.length = FIRE_W
-        self.facing = 1
-
-    def paintEvent(self, event: QPaintEvent):
-        pixels = {xy: key for xy, key in gridPixels(_FIRE[self.frame % 2], _FIRE_KEYS).items()
-                  if xy[0] < self.length}
-        paintPixels(self, pixels, _COLORS, self.facing < 0, FIRE_W)
-
-
-class MascotBoule(PixelSprite):
-    def __init__(self, stage: QWidget):
-        super().__init__(stage, "HomeMascotBoule", BOULE_W, BOULE_W)
-
-    def paintEvent(self, event: QPaintEvent):
-        paintPixels(self, gridPixels(_BOULE, _BOULE_KEYS), _COLORS)
-
-
-class MascotPitch(PixelSprite):
-    """The pétanque pitch at the bottom of the page: sand, pebbles, and the jack."""
-
-    JACK_AT = 0.72
-    """Where the jack sits along the pitch."""
-
-    def __init__(self, stage: QWidget):
-        super().__init__(stage, "HomeMascotPitch", PITCH_W, PITCH_H + 2)
-
-    def groundTop(self) -> float:
-        """Where boules rest, in stage coordinates."""
-        return self.y() + 2 * PIXEL
-
-    def jackX(self) -> float:
-        return self.x() + self.JACK_AT * self.width()
-
-    def paintEvent(self, event: QPaintEvent):
+    def pixels(self) -> Pixels:
         pixels = {}
-        for x in range(PITCH_W):
-            for y in range(2, PITCH_H + 2):
-                # A fixed scatter of pebbles, so the sand doesn't shimmer
-                pixels[(x, y)] = "p" if (x * 7 + y * 13) % 11 == 0 else "P"
-        jack = round(self.JACK_AT * PITCH_W)
-        for x in range(jack - 1, jack + 2):
-            for y in range(0, 2):
-                pixels[(x, y)] = "J"
-        paintPixels(self, pixels, _COLORS)
+        egg = gridPixels(_HATCHED if self.hatched else _EGG)
+        for slot in _NEST_SLOTS[:self.eggs]:
+            for (x, y), key in egg.items():
+                pixels[(slot + x + self.wobble, y)] = key
+        # The twigs go in front, so the eggs sit in the nest, not on it
+        for (x, y), key in gridPixels(_NEST).items():
+            pixels[(x, y + NEST_H - len(_NEST))] = key
+        return {xy: key for xy, key in pixels.items() if 0 <= xy[0] < NEST_W}
+
+    def paintEvent(self, event: QPaintEvent):
+        paintPixels(self, self.pixels(), _COLORS)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -307,11 +219,12 @@ class Surface:
 
 @dataclasses.dataclass(frozen=True)
 class Segment:
-    kind: str  # "greet", "walk", "jump", "table", "turn"
+    kind: str  # "greet", "walk", "jump", "pick", "place", "turn"
     start: QPointF
     end: QPointF
     duration: float  # ms
     facing: int  # +1 right, -1 left; for "turn", the direction it ends up facing
+    carrying: bool = False
 
 
 def inkRows(image: QImage) -> list[tuple[int, int, int]]:
@@ -368,19 +281,15 @@ class HomeMascot(QWidget):
         self.stage = stage
         self.logo = logo
         self.welcome = welcome
-        self.pitch = MascotPitch(stage)
-        self.table = MascotTable(stage)
-        self.fire = MascotFire(stage)
-        self.boule = MascotBoule(stage)
-        self.companions = []
-        """Other scenes that move on this timer, with layout(pitch, ground), advance(ms), sprites() and hide()."""
-        self.throwFrom = QPointF()
-        self.throwDirection = 1
-        self.landAt = QPointF()
-        self.restAt = QPointF()
+        self.nest = Nest(stage)
+        self.egg = FallingEgg(stage)
+        self.eggSpot = QPointF()
+        """Where the egg lands: on the end of the app's name."""
 
         self.segments: list[Segment] = []
         self.elapsed = 0.0
+        self.rounds = 0
+        """Rounds completed: how many eggs have been brought home, hatchings included."""
         self.pose = STAND
         self.facing = 1
         self.feet = QPointF()
@@ -422,18 +331,14 @@ class HomeMascot(QWidget):
             return None
         return logo, lines[0], lines[-1]
 
-    def tableRect(self, nameLine: Surface) -> QRectF:
-        """Right at the end of the name, standing on its letters."""
-        width, height = TABLE_W * PIXEL, TABLE_H * PIXEL
-        return QRectF(nameLine.right - width, nameLine.top - height, width, height)
-
-    def pitchRect(self) -> QRectF:
-        """Centered at the bottom of the page."""
-        width, height = PITCH_W * PIXEL, (PITCH_H + 2) * PIXEL
-        return QRectF((self.stage.width() - width) / 2, self.stage.height() - height - 24, width, height)
+    def nestRect(self, logo: Surface, home: QPointF) -> QRectF:
+        """On the logo, just behind where the dinosaur stands."""
+        width, height = NEST_W * PIXEL, NEST_H * PIXEL
+        right = home.x() - 5 * PIXEL
+        return QRectF(right - width, logo.top - height, width, height)
 
     def plan(self) -> list[Segment]:
-        """Beret on the logo → "Welcome to" → the croissant at the end of the name, and back."""
+        """Beret on the logo → "Welcome to" → the egg at the end of the name, and back home with it."""
         found = self.surfaces()
         if found is None:
             return []
@@ -443,48 +348,56 @@ class HomeMascot(QWidget):
         def on(surface: Surface, x: float) -> QPointF:
             return QPointF(max(surface.left + body, min(surface.right - body, x)), surface.top)
 
-        start = on(logo, logo.left + body * 2)
+        # Home is the right end of the logo's top, leaving the left end to the nest
+        home = on(logo, logo.right - body)
         welcomeFrom = on(welcomeLine, welcomeLine.left + body * 2)
         welcomeTo = on(welcomeLine, welcomeLine.right - body * 2)
-        # Close enough that the fire reaches the croissant and the hand reaches the table
-        table = self.tableRect(nameLine)
-        atTable = on(nameLine, table.left() - (CANVAS_W // 2 + 1) * PIXEL)
-        # Landing on "…chette", a few steps before the table
+        self.eggSpot = QPointF(nameLine.right - 3 * PIXEL, nameLine.top)
+        # Close enough for the arms to reach down to the egg
+        atEgg = on(nameLine, self.eggSpot.x() - 9 * PIXEL)
+        # Landing on "…chette", a few steps before the egg
         nameFrom = on(nameLine, min(nameLine.right - 0.45 * (nameLine.right - nameLine.left),
-                                    atTable.x() - 6 * PIXEL))
+                                    atEgg.x() - 6 * PIXEL))
 
-        def walk(a: QPointF, b: QPointF) -> Segment:
-            return Segment("walk", a, b, 1000 * abs(b.x() - a.x()) / WALK_SPEED, 1 if b.x() >= a.x() else -1)
+        def walk(a: QPointF, b: QPointF, carrying=False) -> Segment:
+            return Segment("walk", a, b, 1000 * abs(b.x() - a.x()) / WALK_SPEED, 1 if b.x() >= a.x() else -1, carrying)
 
-        def jump(a: QPointF, b: QPointF) -> Segment:
-            return Segment("jump", a, b, JUMP_MS, 1 if b.x() >= a.x() else -1)
+        def jump(a: QPointF, b: QPointF, carrying=False) -> Segment:
+            return Segment("jump", a, b, JUMP_MS, 1 if b.x() >= a.x() else -1, carrying)
 
         return [
-            Segment("greet", start, start, GREET_MS, 1),
-            jump(start, welcomeFrom),
+            Segment("greet", home, home, GREET_MS, 1),
+            jump(home, welcomeFrom),
             walk(welcomeFrom, welcomeTo),
             jump(welcomeTo, nameFrom),
-            walk(nameFrom, atTable),
-            Segment("table", atTable, atTable, TABLE_MS, 1),
-            Segment("turn", atTable, atTable, TURN_MS, -1),
-            walk(atTable, nameFrom),
-            jump(nameFrom, welcomeTo),
-            walk(welcomeTo, welcomeFrom),
-            jump(welcomeFrom, start),
-            Segment("turn", start, start, TURN_MS, 1),
+            walk(nameFrom, atEgg),
+            Segment("pick", atEgg, atEgg, PICK_MS, 1),
+            Segment("turn", atEgg, atEgg, TURN_MS, -1, carrying=True),
+            walk(atEgg, nameFrom, carrying=True),
+            jump(nameFrom, welcomeTo, carrying=True),
+            walk(welcomeTo, welcomeFrom, carrying=True),
+            jump(welcomeFrom, home, carrying=True),
+            Segment("place", home, home, PLACE_MS, -1, carrying=True),
+            Segment("turn", home, home, TURN_MS, 1),
         ]
 
     def cycleDuration(self) -> float:
         return sum(s.duration for s in self.segments)
 
-    def segmentStart(self, kind: str) -> float:
-        """When the first segment of this kind begins, in cycle time."""
+    def segmentStart(self, kind: str, nth: int = 0) -> float:
+        """When the nth segment of this kind begins, in round time."""
         t = 0.0
         for segment in self.segments:
             if segment.kind == kind:
-                return t
+                if nth == 0:
+                    return t
+                nth -= 1
             t += segment.duration
         raise KeyError(kind)
+
+    def fallStart(self) -> float:
+        """The egg starts falling as the dinosaur sets off along "Welcome to"."""
+        return self.segmentStart("walk")
 
     # -------------------------------------------------------------------------
     # Moving
@@ -498,35 +411,17 @@ class HomeMascot(QWidget):
         self.segments = self.plan()
         self.elapsed = 0.0
         if not self.segments:
-            for prop in self.pitch, self.table, self.fire, self.boule:
-                prop.hide()
-            for companion in self.companions:
-                companion.hide()
+            self.nest.hide()
+            self.egg.hide()
             return
 
-        _logo, _welcome, nameLine = self.surfaces()
-        self.table.setGeometry(self.tableRect(nameLine).toRect())
-        self.pitch.setGeometry(self.pitchRect().toRect())
-        self.table.show()
-        self.pitch.show()
-
-        # The throw: facing the jack, a lob that lands short of it and rolls on
-        # in the same direction, stopping right by it
-        atTable = self.segments[5].start
-        jackX = self.pitch.jackX()
-        self.throwDirection = 1 if jackX >= atTable.x() else -1
-        self.throwFrom = QPointF(atTable.x() + self.throwDirection * 8 * PIXEL, atTable.y() - 12 * PIXEL)
-        roll = min(0.25 * self.pitch.width(), max(10.0, 0.6 * abs(jackX - self.throwFrom.x())))
-        ground = self.pitch.groundTop()
-        self.landAt = QPointF(jackX - self.throwDirection * roll, ground)
-        self.restAt = QPointF(jackX - self.throwDirection * 5 * PIXEL, ground)  # bien pointé
-
-        for companion in self.companions:
-            companion.layout(self.pitch.geometry(), self.pitch.groundTop())
+        logo, _welcome, _name = self.surfaces()
+        self.nest.setGeometry(self.nestRect(logo, self.segments[0].start).toRect())
+        self.nest.show()
 
         # Back to front: the dinosaur walks in front of everything
-        for prop in [self.pitch, self.table, *(s for c in self.companions for s in c.sprites()), self.boule, self.fire]:
-            prop.raise_()
+        self.nest.raise_()
+        self.egg.raise_()
         self.raise_()
 
     @staticmethod
@@ -544,50 +439,51 @@ class HomeMascot(QWidget):
         return STAND
 
     @staticmethod
-    def tablePose(t: float) -> Pose:
-        if FIRE_AT <= t < FIRE_END:
-            return Pose(mouthOpen=True)
-        if FIRE_END <= t < TAKE_AT:
-            return Pose(arm="reachTable")
-        if TAKE_AT <= t < WINDUP_AT:
-            bitesTaken = int((t - BITES_AT) // BITE_MS) + 1 if t >= BITES_AT else 0
-            left = BITES - bitesTaken
-            if left > 0:
-                return Pose(arm="mouth", held=left, mouthOpen=bitesTaken > 0)
-            return STAND  # all gone; a moment to savor it
-        if WINDUP_AT <= t < THROW_AT:
-            return Pose(arm="windup")
-        if THROW_AT <= t < THROW_AT + 300:
-            return Pose(arm="release")
-        if CHEER_AT <= t < TABLE_MS:
-            return Pose(legs="tuck", arm="up")  # bien pointé!
-        return STAND
+    def handsPose(t: float, carryingBefore: bool) -> Pose:
+        """Bending down to pick the egg up (or to lay it), then straightening up."""
+        carrying = carryingBefore if t < LET_GO_AT else not carryingBefore
+        if t < LET_GO_AT + 300:
+            return Pose(arm="reachDown", carrying=carrying)
+        return Pose(arm="carry" if carrying else "rest", carrying=carrying)
 
-    def boulePosition(self, t: float) -> QPointF | None:
-        """Where the boule is at time t of the table segment, or None before the throw."""
-        if t < THROW_AT:
+    def eggPosition(self, t: float) -> QPointF | None:
+        """Where the loose egg is at round time t: falling, bouncing, or lying there. None when held or not yet."""
+        start = self.fallStart()
+        pickedUp = self.segmentStart("pick") + LET_GO_AT
+        if t < start or t >= pickedUp:
             return None
-        if t < THROW_AT + FLIGHT_MS:
-            # A lob: it rises above the hand first, then falls onto the sand.
-            # The longer the fall, the higher the arc has to be for that.
-            progress = (t - THROW_AT) / FLIGHT_MS
-            a, b = self.throwFrom, self.landAt
-            lift = 60 + 0.25 * max(0.0, b.y() - a.y())
-            x = a.x() + (b.x() - a.x()) * progress
-            y = a.y() + (b.y() - a.y()) * progress - 4 * lift * progress * (1 - progress)
-            return QPointF(x, y)
-        progress = min(1.0, (t - THROW_AT - FLIGHT_MS) / ROLL_MS)
-        eased = 1 - (1 - progress) ** 2  # the sand slows it down
-        return self.landAt + (self.restAt - self.landAt) * eased
+        ground = self.eggSpot.y()
+        if t < start + FALL_MS:
+            progress = (t - start) / FALL_MS
+            return QPointF(self.eggSpot.x(), ground * progress * progress)  # gravity
+        if t < start + FALL_MS + BOUNCE_MS:
+            progress = (t - start - FALL_MS) / BOUNCE_MS
+            return QPointF(self.eggSpot.x(), ground - 4 * PIXEL * math.sin(math.pi * progress))
+        return QPointF(self.eggSpot)
+
+    def nestState(self, t: float) -> tuple[int, bool, int]:
+        """Eggs in the nest at round time t: (count, hatched, wobble)."""
+        before = self.rounds % NEST_CAPACITY
+        if before == 0 and self.rounds > 0 and t < GREET_MS:
+            # A full nest hatches while the dinosaur greets you: the eggs
+            # wobble, then crack open; the babies are gone by the time it leaves
+            if t < GREET_MS / 2:
+                return NEST_CAPACITY, False, int(t // 150) % 2
+            return NEST_CAPACITY, True, 0
+        laid = t >= self.segmentStart("place") + LET_GO_AT
+        return before + laid, False, 0
 
     def advance(self, ms: float):
-        """Move `ms` further along the round. The timer calls it; so can tests."""
+        """Move `ms` further along. The timer calls it; so can tests."""
         self.replanIfNeeded()
         if not self.segments:
             self.hide()
             return
 
-        self.elapsed = (self.elapsed + ms) % self.cycleDuration()
+        total = self.elapsed + ms
+        cycle = self.cycleDuration()
+        self.rounds += int(total // cycle)
+        self.elapsed = total % cycle
         t = self.elapsed
         for segment in self.segments:
             if t < segment.duration:
@@ -597,26 +493,23 @@ class HomeMascot(QWidget):
         a, b = segment.start, segment.end
         self.feet = QPointF(a)
         self.facing = segment.facing
-        tableTime = self.elapsed - self.segmentStart("table")  # < 0 before the table
 
         if segment.kind == "greet":
             self.pose = self.greetPose(t)
-        elif segment.kind == "table":
-            self.pose = self.tablePose(t)
-            if t >= WINDUP_AT:
-                self.facing = self.throwDirection  # face the jack to throw
-            if t >= CHEER_AT:
-                hop = math.sin(math.pi * (t - CHEER_AT) / (TABLE_MS - CHEER_AT))
-                self.feet = QPointF(a.x(), a.y() - 3 * PIXEL * hop)
+        elif segment.kind == "pick":
+            self.pose = self.handsPose(t, carryingBefore=False)
+        elif segment.kind == "place":
+            self.pose = self.handsPose(t, carryingBefore=True)
         elif segment.kind == "turn":
             # Look the way it came for a moment, then turn
             self.facing = segment.facing if progress >= 0.5 else -segment.facing
-            self.pose = STAND
+            self.pose = Pose(arm="carry" if segment.carrying else "rest", carrying=segment.carrying)
         elif segment.kind == "walk":
-            self.pose = Pose(legs="stride") if int(t // STEP_MS) % 2 else STAND
+            self.pose = Pose(legs="stride" if int(t // STEP_MS) % 2 else "stand",
+                             arm="carry" if segment.carrying else "rest", carrying=segment.carrying)
             self.feet = a + (b - a) * progress
         else:
-            self.pose = Pose(legs="tuck", arm="up")
+            self.pose = Pose(legs="tuck", arm="carry" if segment.carrying else "up", carrying=segment.carrying)
             # Straight line between the two ledges, lifted by an arc that clears the higher one
             lift = 20 + max(0.0, a.y() - b.y())
             x = a.x() + (b.x() - a.x()) * progress
@@ -625,29 +518,12 @@ class HomeMascot(QWidget):
 
         self.move(math.floor(self.feet.x() - self.width() / 2), math.floor(self.feet.y()) - self.height())
 
-        # The croissant gets toasted by the fire, then taken; a fresh one waits
-        # by the time the next round starts
-        self.table.setCroissant(tableTime < TAKE_AT, tableTime >= TOASTED_AT)
+        egg = self.eggPosition(self.elapsed)
+        self.egg.setShown(egg is not None)
+        if egg is not None:
+            self.egg.standOn(egg.x(), egg.y())
 
-        breathing = segment.kind == "table" and FIRE_AT <= t < FIRE_END
-        self.fire.setShown(breathing)
-        if breathing:
-            self.fire.frame = int(t // 100)
-            self.fire.length = min(FIRE_W, max(3, round(FIRE_W * (t - FIRE_AT) / 300)))
-            self.fire.facing = self.facing
-            mouthX = self.feet.x() + self.facing * (CANVAS_W / 2) * PIXEL
-            self.fire.move(math.floor(mouthX if self.facing > 0 else mouthX - self.fire.width()),
-                           math.floor(self.feet.y() - (CANVAS_H - 8) * PIXEL))
-            self.fire.update()
-
-        boule = self.boulePosition(tableTime) if tableTime >= 0 else None
-        self.boule.setShown(boule is not None)
-        if boule is not None:
-            size = self.boule.width()
-            self.boule.move(math.floor(boule.x() - size / 2), math.floor(boule.y()) - size)
-
-        for companion in self.companions:
-            companion.advance(ms)
+        self.nest.setEggs(*self.nestState(self.elapsed))
 
         if not self.isVisible():
             self.show()

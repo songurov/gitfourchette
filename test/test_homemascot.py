@@ -4,6 +4,8 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import itertools
+
 from gitfourchette.forms import homemascot as hm
 from gitfourchette.forms.homemascot import HomeMascot
 from .util import *
@@ -18,18 +20,15 @@ def stillMascot(mainWindow) -> HomeMascot:
     return mascot
 
 
-def at(mascot: HomeMascot, t: float):
-    """Put the mascot at time t of the round."""
+def at(mascot: HomeMascot, t: float, rounds: int = 0):
+    """Put the mascot at time t of a round, after `rounds` eggs brought home."""
+    mascot.rounds = rounds
     mascot.elapsed = 0.0
     mascot.advance(t)
 
 
 def endOf(mascot: HomeMascot, index: int):
     at(mascot, sum(s.duration for s in mascot.segments[:index + 1]) - 1)
-
-
-def atTable(mascot: HomeMascot, t: float):
-    at(mascot, mascot.segmentStart("table") + t)
 
 
 def stageRect(widget: QWidget, stage: QWidget) -> QRect:
@@ -56,15 +55,13 @@ def testWalksTheWholeRound(mainWindow):
     mascot = stillMascot(mainWindow)
     logo, welcomeLine, nameLine = mascot.surfaces()
     kinds = [s.kind for s in mascot.segments]
-    assert kinds == ["greet", "jump", "walk", "jump", "walk", "table", "turn",
-                     "walk", "jump", "walk", "jump", "turn"]
+    assert kinds == ["greet", "jump", "walk", "jump", "walk", "pick", "turn",
+                     "walk", "jump", "walk", "jump", "place", "turn"]
 
     at(mascot, 1)
     assert mascot.feet.y() == logo.top
     endOf(mascot, 1)
     assert abs(mascot.feet.y() - welcomeLine.top) < 1  # landed on "Welcome to"
-    endOf(mascot, 2)
-    assert mascot.facing == 1
     endOf(mascot, 3)
     assert abs(mascot.feet.y() - nameLine.top) < 1  # landed on the name
     endOf(mascot, 6)
@@ -72,15 +69,21 @@ def testWalksTheWholeRound(mainWindow):
     endOf(mascot, 10)
     assert abs(mascot.feet.y() - logo.top) < 1  # home again
     assert logo.left <= mascot.feet.x() <= logo.right
-    endOf(mascot, 11)
+    endOf(mascot, 12)
     assert mascot.facing == 1  # ready for the next round
 
 
 def testTakesItsTime(mainWindow):
-    """It was too busy: a round takes a while, and it strolls."""
     mascot = stillMascot(mainWindow)
     assert mascot.cycleDuration() >= 25_000
     assert hm.WALK_SPEED <= 25
+
+
+def testNoSceneAtTheBottomAnyMore(mainWindow):
+    """The pitch with the landmarks was dropped for a simpler page."""
+    stage = mainWindow.welcomeWidget.ui.splashPage
+    names = {w.objectName() for w in stage.findChildren(QWidget)}
+    assert not names & {"HomeMascotPitch", "HomeMascotTable", "HomeEiffelTower", "HomeTriumphalArch"}
 
 
 def testTipsItsBeretBeforeSettingOff(mainWindow):
@@ -99,92 +102,106 @@ def testTipsItsBeretBeforeSettingOff(mainWindow):
     assert mascot.pose.beret == hm.BERET_LIFTED
     endOf(mascot, 0)
     assert mascot.pose.beret == hm.BERET_ON_HEAD
-    assert not mascot.pose.eyesClosed
     # ...all without taking a step
     assert mascot.feet == start
 
 
-def testToastsTheCroissantWithFireThenEatsIt(mainWindow):
+def testAnEggFallsOntoTheEndOfTheName(mainWindow):
     mascot = stillMascot(mainWindow)
     _logo, _welcomeLine, nameLine = mascot.surfaces()
-    table = mascot.table.geometry()
+    fall = mascot.fallStart()
 
-    # The table stands on the end of the name, the dinosaur stops just before it
-    assert table.bottom() + 1 == round(nameLine.top)
-    assert abs(table.right() + 1 - nameLine.right) <= 1
-    atTable(mascot, 0)
-    assert mascot.geometry().right() <= table.left() + hm.PIXEL
-    assert not mascot.fire.isVisible()
+    at(mascot, fall - 1)
+    assert not mascot.egg.isVisible()
 
-    # Fire, out of the mouth, towards the croissant
-    atTable(mascot, hm.FIRE_AT + 200)
-    assert mascot.fire.isVisible()
-    assert mascot.pose.mouthOpen
-    assert mascot.fire.geometry().left() >= mascot.feet.x()
-    assert mascot.fire.geometry().right() >= table.left()
-    atTable(mascot, hm.TOASTED_AT + 100)
-    assert mascot.table.hasCroissant and mascot.table.toasted
+    # It falls from above, faster and faster
+    heights = []
+    for k in (100, 600, 1100, 1600):
+        at(mascot, fall + k)
+        assert mascot.egg.isVisible()
+        heights.append(mascot.egg.geometry().bottom())
+    steps = [b - a for a, b in itertools.pairwise(heights)]
+    assert steps[0] > 0
+    assert all(later > earlier for earlier, later in itertools.pairwise(steps))  # accelerating
 
-    # Then it takes it and eats it, bite by bite
-    atTable(mascot, hm.FIRE_END + 100)
-    assert not mascot.fire.isVisible()
-    assert mascot.pose.arm == "reachTable"
-    bitesLeft = []
-    for t in range(hm.TAKE_AT + 50, hm.WINDUP_AT, 150):
-        atTable(mascot, t)
-        assert not mascot.table.hasCroissant
-        bitesLeft.append(mascot.pose.held or 0)
-    assert bitesLeft[0] == hm.BITES
-    assert bitesLeft == sorted(bitesLeft, reverse=True)
-    assert set(bitesLeft) == set(range(hm.BITES + 1))
-
-    # A fresh, untoasted croissant for the next round
-    at(mascot, mascot.cycleDuration() + 10)
-    assert mascot.table.hasCroissant and not mascot.table.toasted
+    # Lands on the name, near its end, before the dinosaur gets there
+    at(mascot, fall + hm.FALL_MS + hm.BOUNCE_MS + 10)
+    egg = mascot.egg.geometry()
+    assert egg.bottom() + 1 == round(nameLine.top)
+    assert nameLine.right - 12 * hm.PIXEL < egg.center().x() <= nameLine.right
+    assert fall + hm.FALL_MS + hm.BOUNCE_MS < mascot.segmentStart("pick")
+    # ...and it's in reach when the dinosaur stops
+    at(mascot, mascot.segmentStart("pick"))
+    assert egg.left() - mascot.geometry().right() < 2 * hm.PIXEL
 
 
-def testThrowsABouleThatStopsByTheJack(mainWindow):
+def testCarriesTheEggHome(mainWindow):
     mascot = stillMascot(mainWindow)
-    stage = mascot.stage
-    pitch = mascot.pitch.geometry()
+    pick = mascot.segmentStart("pick")
+    place = mascot.segmentStart("place")
 
-    # The pitch lies at the bottom of the page, centered
-    assert pitch.bottom() > stage.height() * 0.8
-    assert abs(pitch.center().x() - stage.width() / 2) <= 2
+    at(mascot, pick + 100)
+    assert mascot.pose.arm == "reachDown"
+    assert mascot.egg.isVisible() and not mascot.pose.carrying
+    at(mascot, pick + hm.LET_GO_AT + 10)
+    assert not mascot.egg.isVisible() and mascot.pose.carrying  # in its arms now
 
-    atTable(mascot, hm.THROW_AT - 1)
-    assert not mascot.boule.isVisible()
-    assert mascot.facing == mascot.throwDirection  # facing the jack to throw
-
-    atTable(mascot, hm.THROW_AT + 1)
-    assert mascot.boule.isVisible()
-    assert (mascot.boule.geometry().center() - mascot.throwFrom.toPoint()).manhattanLength() < 12
-
-    # A lob: it rises above the hand before it falls
-    peak = min(mascot.boulePosition(hm.THROW_AT + k).y() for k in range(0, hm.FLIGHT_MS, 50))
-    assert peak < mascot.throwFrom.y()
-
-    # Lands short of the jack and rolls on the same way, stopping right by it
-    landed = mascot.boulePosition(hm.THROW_AT + hm.FLIGHT_MS)
-    rested = mascot.boulePosition(hm.THROW_AT + hm.FLIGHT_MS + hm.ROLL_MS)
-    jack = mascot.pitch.jackX()
-    assert (jack - landed.x()) * mascot.throwDirection > 0
-    assert (rested.x() - landed.x()) * mascot.throwDirection > 0
-    assert abs(rested.x() - jack) <= 6 * hm.PIXEL
-    assert rested.y() == mascot.pitch.groundTop()
-
-    # Still there while it walks home, gone when the next round starts
-    endOf(mascot, 10)
-    assert mascot.boule.isVisible()
-    at(mascot, mascot.cycleDuration() + 10)
-    assert not mascot.boule.isVisible()
+    # Held all the way home, jumps included
+    for t in range(round(pick + hm.PICK_MS), round(place), 250):
+        at(mascot, t)
+        assert mascot.pose.carrying, t
+        assert not mascot.egg.isVisible()
 
 
-def testCheersWhenTheBouleStops(mainWindow):
+def testLaysTheEggInTheNest(mainWindow):
     mascot = stillMascot(mainWindow)
-    atTable(mascot, hm.CHEER_AT + (hm.TABLE_MS - hm.CHEER_AT) / 2)
-    assert mascot.pose.legs == "tuck"
-    assert mascot.feet.y() < mascot.segments[5].start.y()  # a little hop
+    logo, _welcomeLine, _nameLine = mascot.surfaces()
+    place = mascot.segmentStart("place")
+
+    # The nest sits on the logo, just behind the dinosaur's spot
+    nest = mascot.nest.geometry()
+    assert nest.bottom() + 1 == round(logo.top)
+    assert nest.right() < mascot.segments[0].start.x()
+
+    at(mascot, place + 100)
+    assert mascot.facing == -1  # facing the nest
+    assert mascot.nest.eggs == 0
+    at(mascot, place + hm.LET_GO_AT + 10)
+    assert mascot.nest.eggs == 1
+    assert not mascot.pose.carrying
+
+
+def testTheNestFillsUpThenHatches(mainWindow):
+    mascot = stillMascot(mainWindow)
+    place = mascot.segmentStart("place")
+
+    at(mascot, place + hm.PLACE_MS, rounds=1)
+    assert mascot.nest.eggs == 2
+    at(mascot, place + hm.PLACE_MS, rounds=2)
+    assert mascot.nest.eggs == 3
+
+    # The round after a full nest: the eggs wobble, crack open, and the nest empties
+    at(mascot, 100, rounds=3)
+    assert (mascot.nest.eggs, mascot.nest.hatched) == (3, False)
+    wobbles = set()
+    for t in range(0, round(hm.GREET_MS / 2), 150):
+        at(mascot, t, rounds=3)
+        wobbles.add(mascot.nest.wobble)
+    assert wobbles == {0, 1}
+    at(mascot, hm.GREET_MS - 100, rounds=3)
+    assert (mascot.nest.eggs, mascot.nest.hatched) == (3, True)
+    at(mascot, hm.GREET_MS + 100, rounds=3)
+    assert mascot.nest.eggs == 0
+    at(mascot, place + hm.PLACE_MS, rounds=3)
+    assert mascot.nest.eggs == 1  # and it starts over
+
+
+def testRoundsAreCountedAsTheyGoBy(mainWindow):
+    mascot = stillMascot(mainWindow)
+    at(mascot, 0)
+    mascot.advance(mascot.cycleDuration() * 2 + 10)
+    assert mascot.rounds == 2
+    assert mascot.nest.eggs == 2
 
 
 def testJumpsArcAboveBothLedges(mainWindow):
@@ -223,13 +240,12 @@ def colorsIn(widget: QWidget) -> set[str]:
 
 def testEverythingIsDrawnAndLetsClicksThrough(mainWindow):
     mascot = stillMascot(mainWindow)
-    atTable(mascot, hm.TOASTED_AT + 100)  # fire still going, croissant already toasted
-    for widget in mascot, mascot.table, mascot.fire, mascot.boule, mascot.pitch:
+    at(mascot, mascot.fallStart() + hm.FALL_MS + hm.BOUNCE_MS + 10, rounds=1)
+    for widget in mascot, mascot.nest, mascot.egg:
         assert widget.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents), widget.objectName()
     assert {hm._COLORS[k].name() for k in "OSR"} <= colorsIn(mascot)  # dino, spikes, beret
-    assert {hm._COLORS[k].name() for k in ("T_", "D")} <= colorsIn(mascot.table)  # toasted croissant
-    assert hm._COLORS["F"].name() in colorsIn(mascot.fire)
-    assert {hm._COLORS[k].name() for k in "PJ"} <= colorsIn(mascot.pitch)  # sand and jack
+    assert {hm._COLORS[k].name() for k in "Vs"} <= colorsIn(mascot.egg)
+    assert {hm._COLORS[k].name() for k in "nV"} <= colorsIn(mascot.nest)  # twigs, and an egg
 
 
 def testFacingLeftMirrorsTheDinosaur(mainWindow):
@@ -250,8 +266,8 @@ def testFacingLeftMirrorsTheDinosaur(mainWindow):
     assert sum(right) / len(right) > mascot.width() / 2 > sum(left) / len(left)
 
 
-def testWalksInFrontOfTheProps(mainWindow):
+def testWalksInFrontOfTheNestAndTheEgg(mainWindow):
     mascot = stillMascot(mainWindow)
     widgets = [w for w in mascot.stage.children() if isinstance(w, QWidget)]
-    for prop in mascot.table, mascot.pitch, mascot.boule, mascot.fire:
+    for prop in mascot.nest, mascot.egg:
         assert widgets.index(mascot) > widgets.index(prop), prop.objectName()
