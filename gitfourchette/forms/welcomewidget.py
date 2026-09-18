@@ -9,10 +9,12 @@ import pathlib
 import re
 
 from gitfourchette import settings
-from gitfourchette.reposcan import DEFAULT_MAX_DEPTH, RepoInfo, RepoScanner, defaultScanRoots
+from gitfourchette.forms.repositorystatistics import CommitActivityChart, ContributorDonut
 from gitfourchette.forms.ui_welcomewidget import Ui_WelcomeWidget
 from gitfourchette.localization import *
 from gitfourchette.qt import *
+from gitfourchette.reposcan import (
+    DEFAULT_MAX_DEPTH, RepoDetails, RepoInfo, RepoScanner, defaultScanRoots, inspectRepoDetails)
 from gitfourchette.toolbox import *
 
 
@@ -56,10 +58,16 @@ class WelcomeWidget(QFrame):
         self.ui.cloneRepoButton.clicked.connect(self.cloneRepo)
 
         self.scanner: RepoScanner | None = None
+        self.repoInfos: dict[str, RepoInfo] = {}
+        self.detailCache: dict[str, RepoDetails] = {}
         self._buildReadmePage()
         self._buildRepoPane()
-        self.ui.splitter.setStretchFactor(0, 3)
-        self.ui.splitter.setStretchFactor(1, 2)
+
+        # Repository manager navigation on the left, selected repo on the right.
+        self.ui.splitter.insertWidget(0, self.ui.repoPane)
+        self.ui.splitter.setStretchFactor(0, 1)
+        self.ui.splitter.setStretchFactor(1, 4)
+        self.ui.splitter.setSizes([280, 900])
 
     README_NAMES = ("README.md", "README.markdown", "README.rst", "README.txt", "README")
     README_SIZE_LIMIT = 512 * 1024
@@ -73,12 +81,81 @@ class WelcomeWidget(QFrame):
         self.readmeTitle.setObjectName("HomeReadmeTitle")
         self.readmeTitle.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
-        self.readmeView = QTextBrowser(page)
+        self.repoPathLabel = QLabel(page)
+        self.repoPathLabel.setObjectName("HomeRepoPath")
+        self.repoPathLabel.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.repoPathLabel.setWordWrap(True)
+
+        self.repoFacts = QLabel(page)
+        self.repoFacts.setObjectName("HomeRepoFacts")
+        self.repoFacts.setTextFormat(Qt.TextFormat.RichText)
+        self.repoFacts.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        self.repoTabs = QTabWidget(page)
+        self.repoTabs.setObjectName("HomeRepoTabs")
+
+        summaryPage = QWidget(self.repoTabs)
+        summaryLayout = QVBoxLayout(summaryPage)
+        summaryLayout.setContentsMargins(8, 8, 8, 8)
+
+        self.readmeView = QTextBrowser(summaryPage)
         self.readmeView.setObjectName("HomeReadmeView")
         self.readmeView.setOpenExternalLinks(True)
+        summaryLayout.addWidget(self.readmeView)
+
+        statisticsPage = QWidget(self.repoTabs)
+        statisticsPageLayout = QVBoxLayout(statisticsPage)
+        statisticsPageLayout.setContentsMargins(0, 0, 0, 0)
+        statisticsScroll = QScrollArea(statisticsPage)
+        statisticsScroll.setWidgetResizable(True)
+        statisticsScroll.setFrameShape(QFrame.Shape.NoFrame)
+        statisticsContent = QWidget(statisticsScroll)
+        statisticsLayout = QVBoxLayout(statisticsContent)
+        statisticsLayout.setContentsMargins(12, 12, 12, 12)
+        statisticsScroll.setWidget(statisticsContent)
+        statisticsPageLayout.addWidget(statisticsScroll)
+
+        self.statisticsRange = QLabel(statisticsPage)
+        self.statisticsRange.setObjectName("HomeStatisticsRange")
+        statisticsLayout.addWidget(self.statisticsRange)
+
+        commitsHeading = QLabel(f"<b>{escape(_('Commits per month'))}</b>", statisticsPage)
+        statisticsLayout.addWidget(commitsHeading)
+        self.commitChart = CommitActivityChart(statisticsPage)
+        statisticsLayout.addWidget(self.commitChart)
+
+        lower = QHBoxLayout()
+        contributorsBox = QVBoxLayout()
+        contributorsBox.addWidget(QLabel(f"<b>{escape(_('All contributors'))}</b>", statisticsPage))
+        self.contributorTable = QTableWidget(statisticsPage)
+        self.contributorTable.setObjectName("HomeContributorTable")
+        self.contributorTable.setColumnCount(2)
+        self.contributorTable.setHorizontalHeaderLabels([_("Contributor"), _("Commits")])
+        self.contributorTable.horizontalHeader().setStretchLastSection(False)
+        self.contributorTable.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        self.contributorTable.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents)
+        self.contributorTable.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.contributorTable.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.contributorTable.verticalHeader().setVisible(False)
+        contributorsBox.addWidget(self.contributorTable)
+
+        topBox = QVBoxLayout()
+        topBox.addWidget(QLabel(f"<b>{escape(_('Top contributors'))}</b>", statisticsPage))
+        self.contributorDonut = ContributorDonut(statisticsPage)
+        topBox.addWidget(self.contributorDonut)
+        lower.addLayout(contributorsBox, 1)
+        lower.addLayout(topBox, 1)
+        statisticsLayout.addLayout(lower)
+
+        self.repoTabs.addTab(summaryPage, _("Summary"))
+        self.repoTabs.addTab(statisticsPage, _("Statistics"))
 
         layout.addWidget(self.readmeTitle)
-        layout.addWidget(self.readmeView)
+        layout.addWidget(self.repoPathLabel)
+        layout.addWidget(self.repoFacts)
+        layout.addWidget(self.repoTabs)
 
     def findReadme(self, repoPath: str) -> str:
         """Path of this repo’s README, whatever it chose to call it."""
@@ -124,8 +201,6 @@ class WelcomeWidget(QFrame):
         if not readmePath:
             return False
 
-        name = settings.history.peekRepoNickname(repoPath)
-        self.readmeTitle.setText(f"<b>{escape(name)}</b> — {escape(compactPath(repoPath))}")
         self.readmeView.setSearchPaths([repoPath])
 
         try:
@@ -145,6 +220,96 @@ class WelcomeWidget(QFrame):
 
         self.ui.leftStack.setCurrentWidget(self.ui.readmePage)
         return True
+
+    def showRepository(self, repoPath: str):
+        """Fill the repository header, Summary and Statistics for one selection."""
+        repoPath = os.path.normpath(repoPath)
+        info = self.repoInfos.get(repoPath, RepoInfo(repoPath))
+        details = self.detailCache.get(repoPath)
+        if details is None:
+            details = inspectRepoDetails(repoPath)
+            self.detailCache[repoPath] = details
+
+        name = settings.history.peekRepoNickname(repoPath)
+        self.readmeTitle.setText(f"<h2 style='margin: 0'>{escape(name)}</h2>")
+        self.repoPathLabel.setText(escape(compactPath(repoPath)))
+        self.repoFacts.setText(self._repoFactsHtml(info, details))
+
+        if not self.showReadme(repoPath):
+            self.readmeView.setPlainText(_("This repository has no README."))
+        self._showStatistics(details)
+        self.ui.leftStack.setCurrentWidget(self.ui.readmePage)
+
+    def _repoFactsHtml(self, info: RepoInfo, details: RepoDetails) -> str:
+        locale = QLocale()
+
+        def dateText(timestamp: int) -> str:
+            if not timestamp:
+                return "—"
+            dateTime = QDateTime.fromSecsSinceEpoch(timestamp).toLocalTime()
+            return locale.toString(dateTime, QLocale.FormatType.ShortFormat)
+
+        changed = str(info.changedFiles)
+        size = locale.formattedDataSize(details.sizeBytes) if details.sizeBytes else "—"
+        remotes = ", ".join(details.remotes) or "—"
+        branch = info.branch or _("Detached HEAD")
+        leftRows = [
+            (_("Changed files"), changed),
+            (_("Repository size"), size),
+            (_("Commits"), str(details.commitCount)),
+            (_("Initial commit"), dateText(details.initialCommitTime)),
+            (_("Last commit"), dateText(details.lastCommitTime)),
+        ]
+        rightRows = [
+            (_("Branch"), branch),
+            (_("Remotes"), remotes),
+            (_("Local branches"), str(details.localBranches)),
+            (_("Tags"), str(details.tags)),
+        ]
+        cells = ""
+        for row in range(max(len(leftRows), len(rightRows))):
+            cells += "<tr>"
+            for rows in (leftRows, rightRows):
+                if row < len(rows):
+                    label, value = rows[row]
+                    cells += (f"<td style='padding-right:12px'><b>{escape(label)}</b></td>"
+                              f"<td style='padding-right:36px'>{escape(value)}</td>")
+                else:
+                    cells += "<td></td><td></td>"
+            cells += "</tr>"
+        return f"<table>{cells}</table>"
+
+    def _showStatistics(self, details: RepoDetails):
+        locale = QLocale()
+        if details.initialCommitTime and details.lastCommitTime:
+            first = QDateTime.fromSecsSinceEpoch(details.initialCommitTime).date()
+            last = QDateTime.fromSecsSinceEpoch(details.lastCommitTime).date()
+            self.statisticsRange.setText(
+                f"<b>{escape(locale.toString(first, QLocale.FormatType.LongFormat))}</b>"
+                f" &ndash; <b>{escape(locale.toString(last, QLocale.FormatType.LongFormat))}</b>")
+        else:
+            self.statisticsRange.setText(_("No commits yet"))
+
+        topNames = [name for name, _count in details.contributors[:5]]
+        monthLabels = []
+        for month in details.months:
+            date = QDate.fromString(month + "-01", "yyyy-MM-dd")
+            monthLabels.append(locale.toString(date, "MMM yyyy"))
+        series = [
+            (name, [details.monthlyContributors.get(month, {}).get(name, 0)
+                    for month in details.months])
+            for name in topNames
+        ]
+        self.commitChart.setData(monthLabels, series)
+        self.contributorDonut.setData(details.contributors)
+
+        self.contributorTable.setRowCount(len(details.contributors))
+        for row, (name, count) in enumerate(details.contributors):
+            self.contributorTable.setItem(row, 0, QTableWidgetItem(name))
+            countItem = QTableWidgetItem(str(count))
+            countItem.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.contributorTable.setItem(row, 1, countItem)
+        self.contributorTable.resizeRowsToContents()
 
     def showSplash(self):
         self.ui.leftStack.setCurrentWidget(self.ui.splashPage)
@@ -323,14 +488,30 @@ class WelcomeWidget(QFrame):
     def populate(self, repos: list[RepoInfo], scanning: bool = False):
         """Lay the repos out as the folder tree they live in."""
         byPath = {os.path.normpath(r.path): r for r in repos}
-        for path in settings.history.getRecentRepoPaths(settings.prefs.maxRecentRepos):
+        recentPaths = [os.path.normpath(p) for p in
+                       settings.history.getRecentRepoPaths(settings.prefs.maxRecentRepos)]
+        for path in recentPaths:
             byPath.setdefault(os.path.normpath(path), RepoInfo(path=os.path.normpath(path)))
         paths = list(byPath)
+        self.repoInfos = byPath
 
         self.repoTree.clear()
         noReadme = 0
         folders: dict[str, QTreeWidgetItem] = {}
         prefix = os.path.commonpath(paths) if len(paths) > 1 else (os.path.dirname(paths[0]) if paths else "")
+
+        if recentPaths:
+            recentRoot = QTreeWidgetItem([_("Recent")])
+            recentRoot.setExpanded(True)
+            self.repoTree.addTopLevelItem(recentRoot)
+            for path in recentPaths:
+                recentRoot.addChild(self._repoTreeItem(byPath[path]))
+
+        repositoryRoot = None
+        if paths:
+            repositoryRoot = QTreeWidgetItem([_("Repositories")])
+            repositoryRoot.setExpanded(True)
+            self.repoTree.addTopLevelItem(repositoryRoot)
 
         for path in sorted(paths, key=lambda p: p.casefold()):
             relative = os.path.relpath(path, prefix) if prefix and path.startswith(prefix) else path
@@ -344,26 +525,17 @@ class WelcomeWidget(QFrame):
                     folder.setIcon(0, stockIcon("git-folder"))
                     folders[key] = folder
                     if parent is None:
-                        self.repoTree.addTopLevelItem(folder)
+                        repositoryRoot.addChild(folder)
                     else:
                         parent.addChild(folder)
                 parent = folder
 
             info = byPath[path]
-            label = settings.history.peekRepoNickname(path)
-            badge = self.statusBadge(info)
-            leaf = QTreeWidgetItem([f"{label}  {badge}" if badge else label])
-            leaf.setData(0, WelcomeWidget.PathRole, path)
-            leaf.setToolTip(0, self.statusToolTip(info))
+            leaf = self._repoTreeItem(info)
             if not info.unreadable and not self.findReadme(path):
                 noReadme += 1
-            leaf.setIcon(0, stockIcon("git-folder" if os.path.isdir(path) else "achtung"))
-            if info.needsAttention:
-                font = leaf.font(0)
-                font.setBold(True)
-                leaf.setFont(0, font)
             if parent is None:
-                self.repoTree.addTopLevelItem(leaf)
+                repositoryRoot.addChild(leaf)
             else:
                 parent.addChild(leaf)
 
@@ -380,6 +552,20 @@ class WelcomeWidget(QFrame):
         self.paneStatus.setText(count + (f" · {elide(where, ems=40)}" if where else ""))
         self.paneStatus.setToolTip("\n".join(roots))
         self.applyFilter(self.filterEdit.text())
+
+    def _repoTreeItem(self, info: RepoInfo) -> QTreeWidgetItem:
+        path = os.path.normpath(info.path)
+        label = settings.history.peekRepoNickname(path)
+        badge = self.statusBadge(info)
+        item = QTreeWidgetItem([f"{label}  {badge}" if badge else label])
+        item.setData(0, WelcomeWidget.PathRole, path)
+        item.setToolTip(0, self.statusToolTip(info))
+        item.setIcon(0, stockIcon("git-folder" if os.path.isdir(path) else "achtung"))
+        if info.needsAttention:
+            font = item.font(0)
+            font.setBold(True)
+            item.setFont(0, font)
+        return item
 
     @staticmethod
     def statusBadge(info: RepoInfo) -> str:
@@ -446,9 +632,9 @@ class WelcomeWidget(QFrame):
 
     def onCurrentItemChanged(self, item: QTreeWidgetItem | None, previous=None):
         path = item.data(0, WelcomeWidget.PathRole) if item is not None else ""
-        # A repo without a README leaves Home as it was: an empty panel where
-        # the welcome screen used to be is worse than the welcome screen.
-        if not path or not self.showReadme(path):
+        if path:
+            self.showRepository(path)
+        else:
             self.showSplash()
 
     def onItemActivated(self, item: QTreeWidgetItem, column: int = 0):

@@ -11,7 +11,8 @@ import pathlib
 from gitfourchette import settings
 from gitfourchette.forms.welcomewidget import WelcomeWidget
 from gitfourchette.reposcan import (
-    DEFAULT_MAX_DEPTH, RepoInfo, defaultScanRoots, fetchRepo, findRepos, inspectRepo)
+    DEFAULT_MAX_DEPTH, RepoInfo, defaultScanRoots, fetchRepo, findRepos, inspectRepo,
+    inspectRepoDetails)
 from .util import *
 
 
@@ -172,8 +173,28 @@ def testHomeTreeMirrorsTheFolderStructure(tempDir, mainWindow):
     waitForScan(welcome)
 
     labels = treeLabels(welcome)
-    assert ["job", "mobile", "prt", "web", "vcrm-core", "my", "oss", "gitfourchette"] == labels
+    assert ["Repositories", "job", "mobile", "prt", "web", "vcrm-core",
+            "my", "oss", "gitfourchette"] == labels
     assert {web, mobile, mine} == set(leafPaths(welcome))
+
+
+def testHomeHasASeparateRecentSection(tempDir, mainWindow):
+    root = tempDir.name
+    older = makeRepoAt(root, "work/older")
+    newer = makeRepoAt(root, "work/newer")
+    settings.history.addRepo(older)
+    settings.history.addRepo(newer)
+
+    welcome = mainWindow.welcomeWidget
+    welcome.populate([inspectRepo(older), inspectRepo(newer)])
+
+    recent = welcome.repoTree.topLevelItem(0)
+    repositories = welcome.repoTree.topLevelItem(1)
+    assert "Recent" == recent.text(0)
+    assert "Repositories" == repositories.text(0)
+    assert ["newer", "older"] == [
+        recent.child(i).text(0).split("  ")[0] for i in range(recent.childCount())]
+    assert 2 == leafPaths(welcome).count(older), "recent repos also stay in the full tree"
 
 
 def testHomeTreeFilterKeepsTheFoldersOfWhatMatches(tempDir, mainWindow):
@@ -188,7 +209,8 @@ def testHomeTreeFilterKeepsTheFoldersOfWhatMatches(tempDir, mainWindow):
 
     welcome.filterEdit.setText("vcrm")
     # The matching repo stays, and so do the folders that lead to it
-    assert ["job", "web", "vcrm-core"] == treeLabels(welcome, onlyVisible=True)
+    assert ["Repositories", "job", "web", "vcrm-core"] == treeLabels(
+        welcome, onlyVisible=True)
 
     welcome.filterEdit.setText("")
     assert len(treeLabels(welcome, onlyVisible=True)) > 3
@@ -354,8 +376,33 @@ def testInspectReportsUncommittedWork(tempDir, mainWindow):
     writeFile(f"{wd}/newfile.txt", "work in progress")
     info = inspectRepo(wd)
     assert info.dirty
+    assert 1 == info.changedFiles
     assert info.needsAttention
     assert "master" == info.branch
+
+
+def testInspectRepoDetailsFeedsTheHomeHeaderAndStatistics(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    details = inspectRepoDetails(wd)
+
+    assert details.sizeBytes > 0
+    assert details.commitCount > 0
+    assert details.initialCommitTime <= details.lastCommitTime
+    assert "origin" in details.remotes
+    assert details.localBranches > 0
+    assert details.months
+    assert sum(count for _name, count in details.contributors) == details.commitCount
+
+    welcome = mainWindow.welcomeWidget
+    welcome.populate([inspectRepo(wd)])
+    welcome.repoTree.setCurrentItem(findItem(welcome, os.path.normpath(wd)))
+
+    facts = welcome.repoFacts.text()
+    assert "Repository size" in facts
+    assert "Initial commit" in facts
+    assert str(details.commitCount) in facts
+    assert welcome.commitChart.months
+    assert welcome.contributorTable.rowCount() == len(details.contributors)
 
 
 def testInspectReportsUnpushedCommits(tempDir, mainWindow):
@@ -835,10 +882,11 @@ def testSelectingARepoShowsItsReadme(tempDir, mainWindow):
     assert "withreadme" in welcome.readmeTitle.text()
     assert "This is alpha." in welcome.readmeView.toPlainText()
 
-    # A repo without one leaves Home as it was, rather than showing an empty
-    # panel or the previous repo's text
+    # A repo without one still has a useful header and Statistics tab.
     welcome.repoTree.setCurrentItem(findItem(welcome, b))
-    assert welcome.ui.leftStack.currentWidget() is welcome.ui.splashPage
+    assert welcome.ui.leftStack.currentWidget() is welcome.ui.readmePage
+    assert "withoutreadme" in welcome.readmeTitle.text()
+    assert "no README" in welcome.readmeView.toPlainText()
     assert not welcome.showReadme(b)
 
     # Picking a folder goes back to the splash

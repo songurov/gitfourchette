@@ -13,7 +13,9 @@ the dependency and build directories that make a naive walk take minutes.
 """
 
 import dataclasses
+import datetime
 import os
+from collections import Counter, defaultdict
 
 from gitfourchette.localization import *
 from gitfourchette.porcelain import GitError, Repo
@@ -92,6 +94,8 @@ class RepoInfo:
     branch: str = ""
     dirty: bool = False
     "There are changes in the worktree or the index."
+    changedFiles: int = 0
+    "Number of paths changed in the worktree or index."
     ahead: int = 0
     "Commits on the current branch that the remote hasn't got."
     behind: int = 0
@@ -128,7 +132,9 @@ def inspectRepo(path: str) -> RepoInfo:
         return info
 
     try:
-        info.dirty = bool(repo.status(untracked_files="normal", ignored=False))
+        status = repo.status(untracked_files="normal", ignored=False)
+        info.changedFiles = len(status)
+        info.dirty = bool(status)
 
         if repo.head_is_unborn:
             info.noUpstream = True
@@ -148,6 +154,87 @@ def inspectRepo(path: str) -> RepoInfo:
         repo.free()
 
     return info
+
+
+@dataclasses.dataclass
+class RepoDetails:
+    """Information used by the selected-repository header and Statistics tab."""
+
+    path: str
+    sizeBytes: int = 0
+    commitCount: int = 0
+    initialCommitTime: int = 0
+    lastCommitTime: int = 0
+    remotes: list[str] = dataclasses.field(default_factory=list)
+    localBranches: int = 0
+    tags: int = 0
+    months: list[str] = dataclasses.field(default_factory=list)
+    monthlyContributors: dict[str, dict[str, int]] = dataclasses.field(default_factory=dict)
+    contributors: list[tuple[str, int]] = dataclasses.field(default_factory=list)
+
+
+def inspectRepoDetails(path: str, monthLimit: int = 12) -> RepoDetails:
+    """
+    Read the heavier facts shown only after a repository is selected.
+
+    Git does the history walk in its own optimized code. Keeping this out of
+    the background scan makes Home cheap even when it knows hundreds of repos.
+    """
+    from gitfourchette.gitdriver import GitDriver
+
+    details = RepoDetails(path)
+
+    try:
+        sizeText = GitDriver.runSync("count-objects", "-v", directory=path, strict=True)
+        sizes = {}
+        for line in sizeText.splitlines():
+            key, separator, value = line.partition(": ")
+            if separator and value.isdigit():
+                sizes[key] = int(value)
+        details.sizeBytes = 1024 * (sizes.get("size", 0) + sizes.get("size-pack", 0))
+
+        details.remotes = GitDriver.runSync("remote", directory=path, strict=True).splitlines()
+        refs = GitDriver.runSync(
+            "for-each-ref", "--format=%(refname)", "refs/heads", "refs/tags",
+            directory=path, strict=True).splitlines()
+        details.localBranches = sum(ref.startswith("refs/heads/") for ref in refs)
+        details.tags = sum(ref.startswith("refs/tags/") for ref in refs)
+
+        logText = GitDriver.runSync(
+            "log", "--format=%at%x09%aN%x09%aE", "HEAD", directory=path, strict=True)
+    except (ChildProcessError, OSError, ValueError):
+        return details
+
+    commits = []
+    contributorCounts: Counter[str] = Counter()
+    byMonth: dict[str, Counter[str]] = defaultdict(Counter)
+    for line in logText.splitlines():
+        fields = line.split("\t", 2)
+        if len(fields) != 3:
+            continue
+        timestampText, name, email = fields
+        try:
+            timestamp = int(timestampText)
+        except ValueError:
+            continue
+        contributor = name.strip() or email.strip() or _("Unknown")
+        month = datetime.datetime.fromtimestamp(timestamp, datetime.UTC).strftime("%Y-%m")
+        commits.append(timestamp)
+        contributorCounts[contributor] += 1
+        byMonth[month][contributor] += 1
+
+    details.commitCount = len(commits)
+    if commits:
+        details.initialCommitTime = min(commits)
+        details.lastCommitTime = max(commits)
+
+    allMonths = sorted(byMonth)
+    details.months = allMonths[-monthLimit:]
+    details.monthlyContributors = {
+        month: dict(byMonth[month]) for month in details.months
+    }
+    details.contributors = contributorCounts.most_common()
+    return details
 
 
 FETCH_TIMEOUT_MSEC = 60_000

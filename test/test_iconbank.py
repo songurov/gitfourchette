@@ -4,6 +4,9 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import pathlib
+import re
+
 from .util import *
 
 
@@ -82,3 +85,23 @@ def testForeignIconNamesNeverReachTheDesktopTheme(mainWindow):
     # A name we have no answer for fails here, rather than in a screenshot
     with pytest.raises(AssertionError):
         stockIcon("document-new")
+
+
+def testEverySemanticIconUsesTheMonochromePalette():
+    """Action and status icons must not quietly bring back hardcoded hues."""
+
+    iconDir = pathlib.Path(__file__).parents[1] / "gitfourchette/assets/icons"
+    semanticIcons = [
+        "achtung", "git-discard", "git-discard-lines", "git-head-detached",
+        "git-stage", "git-stage-lines", "git-unstage", "git-unstage-lines",
+        "go-newer", "go-older", "gpg-verify-bad", "gpg-verify-cantcheck",
+        "gpg-verify-expired", "gpg-verify-good-trusted", "gpg-verify-good-untrusted",
+        "input-validated", "sigkill", "status_a", "status_d", "status_m",
+        "status_r", "status_t", "status_u", "status_x", "urgent-tab",
+    ]
+    hardcodedColor = re.compile(
+        r"#[0-9a-f]{3,8}|(?:fill|stroke)(?:=|:)['\"]?(?:red|green|orange|yellow|blue|purple)",
+        re.IGNORECASE)
+    for iconName in semanticIcons:
+        svg = (iconDir / f"{iconName}.svg").read_text()
+        assert not hardcodedColor.search(svg), iconName
