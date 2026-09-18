@@ -43,6 +43,8 @@ class ActionDef:
     objectName: str = ""
     menuRole: QAction.MenuRole = QAction.MenuRole.NoRole
     kind: Kind = Kind.Action
+    properties: dict[str, object] = dataclasses.field(default_factory=dict)
+    """Dynamic properties set on the QAction, for code that inspects menus."""
 
     def replace(self, **changes):
         return dataclasses.replace(self, **changes)
@@ -52,6 +54,9 @@ class ActionDef:
 
         if self.objectName:
             action.setObjectName(self.objectName)
+
+        for name, value in self.properties.items():
+            action.setProperty(name, value)
 
         if self.callback is None:
             pass

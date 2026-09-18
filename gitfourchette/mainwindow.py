@@ -26,7 +26,8 @@ from gitfourchette.forms.aboutdialog import AboutDialog
 from gitfourchette.forms.analysisview import AnalysisDialog
 from gitfourchette.forms.clonedialog import CloneDialog
 from gitfourchette.forms.maintoolbar import MainToolBar
-from gitfourchette.forms.quicklaunch import QUICKLAUNCH_ACTION_NAME, QuickLaunch, QuickLaunchEntry, QuickLaunchSection, menuBarEntries
+from gitfourchette.forms.quicklaunch import (
+    QUICKLAUNCH_ACTION_NAME, WORKS_WITHOUT_REPO, QuickLaunch, QuickLaunchEntry, QuickLaunchSection, menuBarEntries)
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.forms.workspacedialog import WorkspaceDialog
@@ -48,6 +49,10 @@ from gitfourchette.trash import Trash
 logger = logging.getLogger(__name__)
 
 USERS_GUIDE_URL = "https://gitfourchette.org/guide"
+
+
+WITHOUT_REPO = {WORKS_WITHOUT_REPO: True}
+"""ActionDef properties for a command that works on Home, with no repo open."""
 
 
 class NoRepoWidgetError(Exception):
@@ -256,17 +261,17 @@ class MainWindow(QMainWindow):
 
             ActionDef(_("&New Repository…"), self.newRepo,
                       shortcuts=QKeySequence.StandardKey.New, icon="folder-new",
-                      tip=_("Create an empty Git repo")),
+                      tip=_("Create an empty Git repo"), properties=WITHOUT_REPO),
 
             ActionDef(_("C&lone Repository…"), self.cloneDialog,
                       shortcuts="Ctrl+Shift+N", icon="folder-download",
-                      tip=_("Download a Git repo and open it")),
+                      tip=_("Download a Git repo and open it"), properties=WITHOUT_REPO),
 
             ActionDef.SEPARATOR,
 
             ActionDef(_("&Open Repository…"), self.openDialog,
                       shortcuts=QKeySequence.StandardKey.Open, icon="folder-open",
-                      tip=_("Open a Git repo on your machine")),
+                      tip=_("Open a Git repo on your machine"), properties=WITHOUT_REPO),
 
             ActionDef(_("Open &Recent"),
                       icon="folder-open-recent",
@@ -288,7 +293,7 @@ class MainWindow(QMainWindow):
             ActionDef(_("&Settings…"), GFApplication.instance().openPrefsDialog,
                       shortcuts=QKeySequence.StandardKey.Preferences, icon="configure",
                       menuRole=QAction.MenuRole.PreferencesRole,
-                      tip=_("Configure {app}", app=qAppName())),
+                      tip=_("Configure {app}", app=qAppName()), properties=WITHOUT_REPO),
 
             TaskBook.action(self, tasks.SetUpGitIdentity, taskArgs=('', False)
                             ).replace(menuRole=QAction.MenuRole.ApplicationSpecificRole),
@@ -302,7 +307,7 @@ class MainWindow(QMainWindow):
             ActionDef(_("&Quit"), self.close,
                       shortcuts=QKeySequence.StandardKey.Quit, icon="application-exit",
                       tip=_("Quit {app}", app=qAppName()),
-                      menuRole=QAction.MenuRole.QuitRole),
+                      menuRole=QAction.MenuRole.QuitRole, properties=WITHOUT_REPO),
         )
 
         # -------------------------------------------------------------
@@ -349,8 +354,10 @@ class MainWindow(QMainWindow):
                       tip=_("Type a few letters of any command, repo or workspace, and press Enter")),
             ActionDef.SEPARATOR,
             self.mainToolBar.toggleViewAction(),
-            ActionDef(englishTitleCase(_("Show status bar")), self.toggleStatusBar, checkState=-1, objectName="ShowStatusBarAction"),
-            ActionDef(englishTitleCase(_("Show menu bar")), self.toggleMenuBar, checkState=-1, objectName="ShowMenuBarAction"),
+            ActionDef(englishTitleCase(_("Show status bar")), self.toggleStatusBar, checkState=-1,
+                      objectName="ShowStatusBarAction", properties=WITHOUT_REPO),
+            ActionDef(englishTitleCase(_("Show menu bar")), self.toggleMenuBar, checkState=-1,
+                      objectName="ShowMenuBarAction", properties=WITHOUT_REPO),
             ActionDef.SEPARATOR,
             TaskBook.action(self, tasks.JumpToUncommittedChanges, accel="U"),
             TaskBook.action(self, tasks.JumpToHEAD, accel="H"),
@@ -386,6 +393,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
+        self.mainToolBar.toggleViewAction().setProperty(WORKS_WITHOUT_REPO, True)
         self.showStatusBarAction = viewMenu.findChild(QAction, "ShowStatusBarAction")
         self.showMenuBarAction = viewMenu.findChild(QAction, "ShowMenuBarAction")
         self.showMenuBarAction.setVisible(not MACOS)
@@ -411,7 +419,8 @@ class MainWindow(QMainWindow):
                 *commandActions,
                 ActionDef.SEPARATOR,
                 ActionDef(_("Edit Commands…"), icon="document-edit",
-                          callback=lambda: GFApplication.instance().openPrefsDialog("commands")),
+                          callback=lambda: GFApplication.instance().openPrefsDialog("commands"),
+                          properties=WITHOUT_REPO),
             )
 
             # Don't share commandsMenu with the toolbar button: commandsMenu.aboutToShow
@@ -427,6 +436,9 @@ class MainWindow(QMainWindow):
 
         mountItems = GFApplication.instance().mountManager.makeMenu(self)
         if mountItems:
+            # Mounted commits outlive the tab they came from
+            mountItems = [item if item is ActionDef.SEPARATOR else item.replace(properties=WITHOUT_REPO)
+                          for item in mountItems]
             ActionDef.addToQMenu(mountMenu, *mountItems)
         else:
             mountMenu.deleteLater()
@@ -440,12 +452,12 @@ class MainWindow(QMainWindow):
                 _("&About {0}", qAppName()),
                 lambda: AboutDialog.popUp(self),
                 icon="gitfourchette",
-                menuRole=QAction.MenuRole.AboutRole,),
+                menuRole=QAction.MenuRole.AboutRole, properties=WITHOUT_REPO),
 
             ActionDef(
                 _("{0} User’s Guide", qAppName()),
                 lambda: QDesktopServices.openUrl(QUrl(USERS_GUIDE_URL)),
-                icon="help-contents"),
+                icon="help-contents", properties=WITHOUT_REPO),
 
             ActionDef.SEPARATOR,
 
@@ -453,19 +465,36 @@ class MainWindow(QMainWindow):
                 _("Open Trash…"),
                 self.openRescueFolder,
                 icon="SP_TrashIcon",
-                tip=_("Explore changes that you may have discarded by mistake")),
+                tip=_("Explore changes that you may have discarded by mistake"), properties=WITHOUT_REPO),
 
             ActionDef(
                 _("Empty Trash…"),
                 self.clearRescueFolder,
-                tip=_("Delete all discarded changes from the trash folder")),
+                tip=_("Delete all discarded changes from the trash folder"), properties=WITHOUT_REPO),
         )
 
     def quickLaunchSections(self) -> list[QuickLaunchSection]:
         """What the Quick Launch palette offers, section by section."""
         history = settings.history
 
-        commands = menuBarEntries(self.globalMenuBar, skip=[self.recentMenu, self.workspaceMenu])
+        # On Home there's no repo for Push, Blame or Find to act on: offer only
+        # what works there, plus what the Home page itself can do
+        try:
+            self.currentRepoWidget()
+            onHome = False
+        except NoRepoWidgetError:
+            onHome = True
+        commands = menuBarEntries(self.globalMenuBar, skip=[self.recentMenu, self.workspaceMenu],
+                                  withoutRepo=onHome)
+        if onHome:
+            welcome = self.welcomeWidget
+            commands += [
+                QuickLaunchEntry(_("Fetch All Repositories"), welcome.fetchAllButton.click, icon="git-fetch",
+                                 keywords=_("home")),
+                QuickLaunchEntry(_("Rescan Repositories"), lambda: welcome.rescan(force=True),
+                                 icon="SP_BrowserReload", keywords=_("home search folders")),
+            ]
+            commands.sort(key=lambda e: e.title.casefold())
 
         current = history.currentWorkspace
         home = QuickLaunchEntry(

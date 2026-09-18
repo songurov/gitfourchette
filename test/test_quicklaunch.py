@@ -252,9 +252,9 @@ def testSwitchWorkspaceDrillsDownAndBack(tempDir, mainWindow):
     assert palette.lineEdit.placeholderText() == "Switch Workspace"
     assert palette.visibleTitles() == ["Home", "job"]
 
-    # Backspace on an empty field goes back to everything
+    # Backspace on an empty field goes back to everything (on Home: Home's commands)
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Backspace)
-    assert "Push Branch…" in palette.visibleTitles()
+    assert "Open Repository…" in palette.visibleTitles()
 
     # ...and the list is searchable like the rest
     query(palette, "switch work")
@@ -302,3 +302,58 @@ def testPaletteRenders(tempDir, mainWindow):
     for row in palette.runnableRows():
         assert not palette.model.item(row).icon().isNull()
     palette.close()
+
+
+HOME_COMMANDS = {"Open Repository…", "Clone Repository…", "New Repository…", "Settings…", "Quit",
+                 "Fetch All Repositories", "Rescan Repositories", "Open Trash…", "Show Toolbar"}
+REPO_COMMANDS = {"Push Branch…", "Pull Remote Branch…", "New Local Branch…", "Stash Changes…", "Find…",
+                 "Blame File…", "Overview", "Close Tab", "Apply Patch File…", "Refresh",
+                 "Local Config Files › .gitignore", "Go to HEAD Commit"}
+
+
+def testOnHomeOnlyWhatWorksWithoutARepo(mainWindow):
+    """With no repo open, Push or Blame have nothing to act on: they're not offered."""
+    palette = openPalette(mainWindow)
+    commands = {e.title for e in section(palette, "Commands").entries}
+    assert HOME_COMMANDS <= commands
+    assert not (REPO_COMMANDS & commands)
+    palette.close()
+
+
+def testWithARepoEverythingButHomeChores(tempDir, mainWindow):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+    commands = {e.title for e in section(palette, "Commands").entries}
+    assert REPO_COMMANDS <= commands
+    assert "Open Repository…" in commands
+    assert not ({"Fetch All Repositories", "Rescan Repositories"} & commands)
+    palette.close()
+
+
+def testHomeChoresRunOnTheHomePage(tempDir, mainWindow):
+    from .test_home import waitForScan
+    settings.history.scanRoots = [tempDir.name]
+    welcome = mainWindow.welcomeWidget
+    waitForScan(welcome)
+
+    palette = openPalette(mainWindow)
+    query(palette, "fetch all")
+    assert palette.currentEntry().title == "Fetch All Repositories"
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert not welcome.fetchAllButton.isEnabled(), "the Home page's own Fetch All is running"
+    waitForScan(welcome)
+    assert welcome.fetchAllButton.isEnabled()
+
+
+def testNewMenuItemsStayOffHomeUntilMarked():
+    """Opt-in: an item nobody vouched for doesn't show up on Home by accident."""
+    from gitfourchette.forms.quicklaunch import WORKS_WITHOUT_REPO, menuBarEntries
+    bar = QMenuBar()
+    menu = bar.addMenu("File")
+    menu.addAction("Needs a repo")
+    marked = menu.addAction("Works anywhere")
+    marked.setProperty(WORKS_WITHOUT_REPO, True)
+
+    assert [e.title for e in menuBarEntries(bar)] == ["Needs a repo", "Works anywhere"]
+    assert [e.title for e in menuBarEntries(bar, withoutRepo=True)] == ["Works anywhere"]
+    bar.deleteLater()

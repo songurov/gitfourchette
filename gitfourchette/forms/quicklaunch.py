@@ -22,6 +22,10 @@ from gitfourchette.toolbox import *
 
 QUICKLAUNCH_ACTION_NAME = "QuickLaunchAction"
 
+WORKS_WITHOUT_REPO = "gfWorksWithoutRepo"
+"""QAction property: the command makes sense on Home, with no repo open.
+Opt-in, so a new menu item stays off Home until someone says it works there."""
+
 _DetailRole = Qt.ItemDataRole.UserRole + 1
 _IsHeaderRole = Qt.ItemDataRole.UserRole + 2
 _EntryRole = Qt.ItemDataRole.UserRole + 3
@@ -74,7 +78,7 @@ class QuickLaunchSection:
     entries: list[QuickLaunchEntry]
 
 
-def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = ()) -> list[QuickLaunchEntry]:
+def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = (), withoutRepo: bool = False) -> list[QuickLaunchEntry]:
     """
     Every enabled, visible command in the menu bar, alphabetically.
 
@@ -83,6 +87,9 @@ def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = ()) -> list[QuickL
     their own sections instead). Items in other submenus are prefixed with
     the submenu's name, e.g. "Local Config Files › .gitignore". The root
     menu's name isn't shown, but the query can still match it ("data overview").
+
+    With `withoutRepo`, only the commands marked WORKS_WITHOUT_REPO: on Home,
+    Push or Blame have nothing to act on.
     """
     skip = set(skip)
     entries: dict[str, QuickLaunchEntry] = {}
@@ -92,6 +99,8 @@ def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = ()) -> list[QuickL
             if action.isSeparator() or not action.isVisible() or not action.isEnabled():
                 continue
             if action.objectName() == QUICKLAUNCH_ACTION_NAME:
+                continue
+            if withoutRepo and action.menu() is None and not action.property(WORKS_WITHOUT_REPO):
                 continue
 
             text = stripAccelerators(action.text()).strip()
