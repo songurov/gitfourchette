@@ -5,6 +5,7 @@
 # -----------------------------------------------------------------------------
 
 import copy
+import dataclasses
 import gc
 import logging
 import os
@@ -463,14 +464,23 @@ class MainWindow(QMainWindow):
         commands = menuBarEntries(self.globalMenuBar, skip=[self.recentMenu, self.workspaceMenu])
 
         current = history.currentWorkspace
-        workspaces = [QuickLaunchEntry(
+        home = QuickLaunchEntry(
             _("Home"), lambda: self.switchToWorkspace(""), icon="git-home",
-            detail=_("current") if not current else "")]
+            detail=_("current") if not current else "", keywords=_("workspace"))
+        named = []
         for name in history.workspaceNames():
             numRepos = len((history.getWorkspace(name) or {}).get("repos", []))
             detail = _("current") if name == current else _n("{n} repo", "{n} repos", numRepos)
-            workspaces.append(QuickLaunchEntry(
-                name, lambda n=name: self.switchToWorkspace(n), detail=detail, icon="folder-recent"))
+            named.append(QuickLaunchEntry(
+                name, lambda n=name: self.switchToWorkspace(n), detail=detail, icon="folder-recent",
+                keywords=_("workspace")))
+        switch = QuickLaunchEntry(
+            _("Switch Workspace…"), lambda: None, icon="folder-recent",
+            detail=_n("{n} workspace", "{n} workspaces", len(named)),
+            drillDown=QuickLaunchSection(_("Switch Workspace"), [home, *named]))
+        # Home and Switch Workspace stay one keystroke away; the named workspaces
+        # only show up once you type (Switch Workspace lists them all)
+        workspaces = [home, switch, *(dataclasses.replace(e, searchOnly=True) for e in named)]
 
         repos = []
         for path in history.getRecentRepoPaths(settings.prefs.maxRecentRepos):
@@ -480,9 +490,9 @@ class MainWindow(QMainWindow):
                 detail=compactPath(path), icon="git-folder", keywords=path))
 
         return [
-            QuickLaunchSection(_("Commands"), commands),
-            QuickLaunchSection(_("Workspaces"), workspaces),
             QuickLaunchSection(_("Recent Repositories"), repos),
+            QuickLaunchSection(_("Workspaces"), workspaces),
+            QuickLaunchSection(_("Commands"), commands),
         ]
 
     def openQuickLaunch(self) -> QuickLaunch:

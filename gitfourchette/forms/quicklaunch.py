@@ -44,6 +44,12 @@ class QuickLaunchEntry:
     keywords: str = ""
     """Extra text the query may match (e.g. a repo's full path)."""
 
+    drillDown: "QuickLaunchSection | None" = None
+    """If set, Enter shows this section instead of running anything (Backspace goes back)."""
+
+    searchOnly: bool = False
+    """Hidden until something is typed, to keep the first screen short."""
+
     def score(self, terms: list[str]) -> int:
         """
         Lower is better; -1 means no match.
@@ -168,6 +174,7 @@ class QuickLaunch(QDialog):
         self.setWindowTitle(_("Quick Launch"))
         self.setWindowFlags(Qt.WindowType.Popup)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.rootSections = sections
         self.sections = sections
 
         blank = QPixmap(16, 16)
@@ -175,7 +182,6 @@ class QuickLaunch(QDialog):
         self.blankIcon = QIcon(blank)
 
         self.lineEdit = QLineEdit(self)
-        self.lineEdit.setPlaceholderText(_("Command, repo or workspace"))
         self.lineEdit.setClearButtonEnabled(True)
         self.lineEdit.installEventFilter(self)
 
@@ -190,7 +196,8 @@ class QuickLaunch(QDialog):
         self.listView.setIconSize(QSize(16, 16))
         self.listView.clicked.connect(self.runIndex)
 
-        self.hintLabel = QLabel(_("Enter: run · Esc: close"), self)
+        self.placeholder = _("Command, repo or workspace")
+        self.hintLabel = QLabel(self)
         self.hintLabel.setEnabled(False)  # dimmed
         tweakWidgetFont(self.hintLabel, 90)
 
@@ -202,8 +209,20 @@ class QuickLaunch(QDialog):
         layout.addWidget(self.hintLabel)
 
         self.lineEdit.textChanged.connect(self.refill)
-        self.refill()
+        self.showSections(sections)
         self.lineEdit.setFocus()
+
+    def showSections(self, sections: list[QuickLaunchSection]):
+        """Switch between the main list and a drill-down (e.g. Switch Workspace)."""
+        self.sections = sections
+        isRoot = sections is self.rootSections
+        self.lineEdit.setPlaceholderText(self.placeholder if isRoot else sections[0].title)
+        self.hintLabel.setText(_("Enter: run · Esc: close") if isRoot
+                               else _("Enter: run · Backspace: back · Esc: close"))
+        with QSignalBlockerContext(self.lineEdit):
+            self.lineEdit.clear()
+        self.refill()
+        self.listView.scrollToTop()
 
     def popUp(self):
         """Show the palette at the top of its window, like a search field."""
@@ -231,7 +250,7 @@ class QuickLaunch(QDialog):
                 scored = [(entry.score(terms), i, entry) for i, entry in enumerate(section.entries)]
                 entries = [entry for score, _i, entry in sorted(scored, key=lambda t: t[:2]) if score >= 0]
             else:
-                entries = section.entries
+                entries = [entry for entry in section.entries if not entry.searchOnly]
             if not entries:
                 continue
 
@@ -299,6 +318,9 @@ class QuickLaunch(QDialog):
         entry = index.data(_EntryRole) if index.isValid() else None
         if entry is None:
             return
+        if entry.drillDown is not None:
+            self.showSections([entry.drillDown])
+            return
         # Close first: the command may open a dialog, which shouldn't fight
         # a popup that still holds the keyboard.
         self.close()
@@ -323,5 +345,9 @@ class QuickLaunch(QDialog):
                 return True
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self.runCurrent()
+                return True
+            if (key == Qt.Key.Key_Backspace and not self.lineEdit.text()
+                    and self.sections is not self.rootSections):
+                self.showSections(self.rootSections)
                 return True
         return super().eventFilter(watched, event)

@@ -36,6 +36,10 @@ def query(palette: QuickLaunch, text: str):
     QTest.keyClicks(palette.lineEdit, text)
 
 
+def section(palette: QuickLaunch, title: str):
+    return next(s for s in palette.sections if s.title == title)
+
+
 @pytest.mark.parametrize("keys", ["Meta+P", "Ctrl+Shift+A"])
 def testShortcutOpensQuickLaunch(tempDir, mainWindow, keys):
     mainWindow.openRepo(unpackRepo(tempDir))
@@ -54,14 +58,14 @@ def testCommandsComeFromTheMenuBar(tempDir, mainWindow):
     # Tasks from the Repo menu, with their shortcut shown as the detail
     for title in ["Push Branch…", "Pull Remote Branch…", "Fetch Remote Branches", "New Local Branch…"]:
         assert title in titles
-    push = next(e for e in palette.sections[0].entries if e.title == "Push Branch…")
+    push = next(e for e in section(palette, "Commands").entries if e.title == "Push Branch…")
     assert push.detail == QKeySequence("Ctrl+P").toString(QKeySequence.SequenceFormat.NativeText)
 
     # Items of a static submenu carry its name
     assert "Local Config Files › .gitignore" in titles
 
     # Commands are alphabetical, and mnemonics are gone
-    commands = [e.title for e in palette.sections[0].entries]
+    commands = [e.title for e in section(palette, "Commands").entries]
     assert commands == sorted(commands, key=str.casefold)
     assert not any("&" in t for t in commands)
 
@@ -72,7 +76,7 @@ def testCommandsComeFromTheMenuBar(tempDir, mainWindow):
     # Section headers are shown but can't be run
     headers = [palette.model.item(r).text() for r in range(palette.model.rowCount())
                if r not in palette.runnableRows()]
-    assert headers == ["Commands", "Workspaces", "Recent Repositories"]
+    assert headers == ["Recent Repositories", "Workspaces", "Commands"]
     # ...and the first one is in view, not scrolled past by the initial selection
     assert palette.listView.verticalScrollBar().value() == 0
     palette.close()
@@ -174,18 +178,18 @@ def testArrowKeysSkipSectionHeaders(tempDir, mainWindow):
 
     palette = openPalette(mainWindow)
     query(palette, "alpha")
-    # "alpha team" (Workspaces), then "alpha" (Recent Repositories): a header sits between them
-    assert palette.visibleTitles() == ["alpha team", "alpha"]
-    assert palette.currentEntry().title == "alpha team"
+    # "alpha" (Recent Repositories), then "alpha team" (Workspaces): a header sits between them
+    assert palette.visibleTitles() == ["alpha", "alpha team"]
+    assert palette.currentEntry().title == "alpha"
 
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Down)
-    assert palette.currentEntry().title == "alpha"
+    assert palette.currentEntry().title == "alpha team"
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Down)  # already last: stays
-    assert palette.currentEntry().title == "alpha"
+    assert palette.currentEntry().title == "alpha team"
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Up)
-    assert palette.currentEntry().title == "alpha team"
+    assert palette.currentEntry().title == "alpha"
     QTest.keyClick(palette.lineEdit, Qt.Key.Key_Up)  # already first: stays
-    assert palette.currentEntry().title == "alpha team"
+    assert palette.currentEntry().title == "alpha"
     palette.close()
 
 
@@ -195,9 +199,83 @@ def testCurrentWorkspaceIsMarked(tempDir, mainWindow):
     mainWindow.switchToWorkspace("mine")
 
     palette = openPalette(mainWindow)
-    workspaces = {e.title: e.detail for e in palette.sections[1].entries}
+    workspaces = {e.title: e.detail for e in section(palette, "Workspaces").entries}
     assert workspaces["mine"] == "current"
     assert workspaces["Home"] == ""
+    palette.close()
+
+
+def testRecentReposFirstThenHomeAndSwitchWorkspace(tempDir, mainWindow):
+    openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "job")
+
+    palette = openPalette(mainWindow)
+    titles = palette.visibleTitles()
+    # Newest repo first, then the two ways out, then the commands
+    assert titles[:4] == ["bravo", "alpha", "Home", "Switch Workspace…"]
+    assert palette.currentEntry().title == "bravo"
+    assert "Push Branch…" in titles[4:]
+    # Named workspaces wait for a search (Switch Workspace lists them)
+    assert "job" not in titles
+    query(palette, "job")
+    assert palette.visibleTitles() == ["job"]
+    palette.close()
+
+
+def testHomeIsOneSearchAway(tempDir, mainWindow):
+    openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "job")
+    mainWindow.switchToWorkspace("job")
+
+    palette = openPalette(mainWindow)
+    query(palette, "home")
+    assert palette.currentEntry().title == "Home"
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert not paletteIsOpen(mainWindow)
+    assert "" == settings.history.currentWorkspace
+
+
+def testSwitchWorkspaceDrillsDownAndBack(tempDir, mainWindow):
+    a, b = openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "job")
+    mainWindow.switchToWorkspace("")
+
+    palette = openPalette(mainWindow)
+    query(palette, "switch work")
+    assert palette.currentEntry().title == "Switch Workspace…"
+    assert palette.currentEntry().detail == "1 workspace"
+
+    # Enter opens the list instead of closing the palette
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert paletteIsOpen(mainWindow)
+    assert palette.lineEdit.text() == ""
+    assert palette.lineEdit.placeholderText() == "Switch Workspace"
+    assert palette.visibleTitles() == ["Home", "job"]
+
+    # Backspace on an empty field goes back to everything
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Backspace)
+    assert "Push Branch…" in palette.visibleTitles()
+
+    # ...and the list is searchable like the rest
+    query(palette, "switch work")
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    query(palette, "jo")
+    assert palette.visibleTitles() == ["job"]
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert not paletteIsOpen(mainWindow)
+    assert "job" == settings.history.currentWorkspace
+    assert [a, b] == mainWindow.openTabPaths()
+
+
+def testBackspaceStillDeletesText(tempDir, mainWindow):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+    query(palette, "switch work")
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    QTest.keyClicks(palette.lineEdit, "ho")
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Backspace)  # not empty: a normal backspace
+    assert palette.lineEdit.text() == "h"
+    assert palette.lineEdit.placeholderText() == "Switch Workspace"
     palette.close()
 
 
