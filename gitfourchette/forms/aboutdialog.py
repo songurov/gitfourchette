@@ -33,6 +33,47 @@ def simpleLink(url):
     return f"<a href='{url}'>{url}</a>"
 
 
+# The flag shown next to a language: the country most of its speakers live in.
+# Traditional Chinese gets none - any flag there would be a political statement.
+LANGUAGE_FLAGS = {
+    "cs": "CZ", "de": "DE", "es": "ES", "fr": "FR", "it": "IT", "ko": "KR", "pt": "PT",
+    "pt_BR": "BR", "ro": "RO", "ru": "RU", "tr": "TR", "uk": "UA", "zh_Hans": "CN",
+}
+
+
+def flagEmoji(countryCode: str) -> str:
+    """"MD" -> 🇲🇩: two regional indicator symbols."""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in countryCode.upper() if "A" <= c.upper() <= "Z")
+
+
+def translatorRow(lang: str, people: list) -> str:
+    """
+    One language of the translator credits. A translator is a name, or
+    {"name", "url", "country"}: a linked name, and the country they translate
+    from - which then names the row and picks its flag ("Română (Moldova)").
+    """
+    names = []
+    countries = set()
+    for person in people:
+        if isinstance(person, str):
+            names.append(escape(person))
+            continue
+        name = escape(person["name"])
+        names.append(f"<a href='{escape(person['url'])}'>{name}</a>" if person.get("url") else name)
+        if person.get("country"):
+            countries.add(person["country"].upper())
+
+    language = localeCodeToLanguageName(lang)
+    country = next(iter(countries)) if len(countries) == 1 else ""
+    if country:
+        # "Moldova", in its own language's words when Qt knows them
+        territory = QLocale(f"{lang.split('_')[0]}_{country}").nativeTerritoryName() or country
+        language = f"{language} ({territory.removeprefix('Republica ')})"
+    flag = flagEmoji(country or LANGUAGE_FLAGS.get(lang, ""))
+    label = f"{flag} {language}" if flag else language
+    return f"<tr><th>{label}:</th><td>{'<br>'.join(names)}</td></tr>\n"
+
+
 class AboutDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
@@ -127,7 +168,7 @@ class AboutDialog(QDialog):
         translatorCredits = json.loads(translatorCreditsPath.read_text("utf-8"))
         translatorFilter = availableLocaleCodes()
         translatorMarkup = "<center><table>" + "".join(
-            f"<tr><th>{localeCodeToLanguageName(lang)}:</th><td>{'<br>'.join(people)}</td></tr>\n"
+            translatorRow(lang, people)
             for lang, people in translatorCredits.items()
             if lang in translatorFilter
         ) + "</table></center>"

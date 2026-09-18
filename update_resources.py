@@ -419,10 +419,28 @@ def formatTranslatorCredits(jsonReportPath: str):
             table[languageCode] = [p["full_name"] for p in people if p["username"] != "jorio"]
             contribs[languageCode] = sum(p["change_count"] for p in people)
 
+    # Keep what Weblate doesn't know about: languages translated elsewhere, and
+    # translators given a link or a country by hand (they replace their plain name)
+    creditsPath = Path(LANG_DIR, "credits.json")
+    with suppress(FileNotFoundError):
+        for languageCode, people in json.loads(creditsPath.read_text("utf-8")).items():
+            if languageCode not in table:
+                table[languageCode] = people
+                contribs[languageCode] = 0
+                continue
+            for person in people:
+                if not isinstance(person, dict):
+                    continue
+                names = table[languageCode]
+                if person["name"] in names:
+                    names[names.index(person["name"])] = person
+                else:
+                    names.append(person)
+
     sortedKeys = sorted(table.keys(), key=lambda k: contribs[k], reverse=True)
     table = {k: table[k] for k in sortedKeys}
 
-    Path(LANG_DIR, "credits.json").write_text(json.dumps(table, indent="\t") + "\n")
+    creditsPath.write_text(json.dumps(table, indent="\t") + "\n")
 
 
 def formatContributors():
