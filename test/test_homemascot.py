@@ -39,60 +39,120 @@ def testStandsOnTheGlyphsNotOnTheLabels(mainWindow):
     assert abs(welcomeLine.left - nameLine.left) < 4
 
 
-def testWalksTheWholeLoop(mainWindow):
+def at(mascot: HomeMascot, t: float):
+    """Put the mascot at cycle time t."""
+    mascot.elapsed = 0.0
+    mascot.advance(t)
+
+
+def endOf(mascot: HomeMascot, index: int):
+    at(mascot, sum(s.duration for s in mascot.segments[:index + 1]) - 1)
+
+
+def testWalksTheWholeRound(mainWindow):
     mascot = stillMascot(mainWindow)
     logo, welcomeLine, nameLine = mascot.surfaces()
     kinds = [s.kind for s in mascot.segments]
-    assert kinds == ["idle", "jump", "walk", "jump", "walk", "idle", "walk", "jump", "walk", "jump"]
+    assert kinds == ["greet", "jump", "walk", "jump", "walk", "eat", "turn",
+                     "walk", "jump", "walk", "jump", "turn"]
 
-    def endOf(index: int):
-        """Move to the very end of segment `index`."""
-        mascot.elapsed = 0.0
-        mascot.advance(sum(s.duration for s in mascot.segments[:index + 1]) - 1)
-
-    # Starts on the logo
-    mascot.elapsed = 0.0
-    mascot.advance(1)
+    at(mascot, 1)
     assert mascot.feet.y() == logo.top
-    # Lands on "Welcome to", walks right along it
-    endOf(1)
-    assert abs(mascot.feet.y() - welcomeLine.top) < 1
-    endOf(2)
+    endOf(mascot, 1)
+    assert abs(mascot.feet.y() - welcomeLine.top) < 1  # landed on "Welcome to"
+    endOf(mascot, 2)
     assert mascot.facing == 1
-    assert mascot.feet.x() > welcomeLine.left + (welcomeLine.right - welcomeLine.left) / 2
-    # Lands on the end of the name
-    endOf(3)
-    assert abs(mascot.feet.y() - nameLine.top) < 1
-    assert mascot.feet.x() > welcomeLine.right - 20
-    # Turns around there, and walks back
-    endOf(5)
-    assert mascot.facing == -1
-    endOf(6)
-    assert mascot.facing == -1
-    # Back on the logo at the end of the loop
-    endOf(9)
-    assert abs(mascot.feet.y() - logo.top) < 1
+    endOf(mascot, 3)
+    assert abs(mascot.feet.y() - nameLine.top) < 1  # landed on the name
+    endOf(mascot, 6)
+    assert mascot.facing == -1  # turned around after eating
+    endOf(mascot, 10)
+    assert abs(mascot.feet.y() - logo.top) < 1  # home again
     assert logo.left <= mascot.feet.x() <= logo.right
+    endOf(mascot, 11)
+    assert mascot.facing == 1  # ready for the next round
+
+
+def testTakesItsTime(mainWindow):
+    """It was too busy: a round takes a while, and it strolls."""
+    mascot = stillMascot(mainWindow)
+    assert mascot.cycleDuration() >= 20_000
+    assert homemascot.WALK_SPEED <= 25
+
+
+def testTipsItsHatBeforeSettingOff(mainWindow):
+    mascot = stillMascot(mainWindow)
+    start = QPointF(mascot.segments[0].start)
+
+    at(mascot, 200)
+    assert mascot.pose.hat == homemascot.HAT_ON_HEAD
+    assert mascot.pose.arm == "reachHat"
+    at(mascot, 700)
+    assert mascot.pose.hat == homemascot.HAT_LIFTED
+    at(mascot, 1700)  # the bow: hat to the chest, eyes down
+    assert mascot.pose.hat == homemascot.HAT_AT_CHEST
+    assert mascot.pose.eyesDown
+    at(mascot, 2600)
+    assert mascot.pose.hat == homemascot.HAT_LIFTED
+    endOf(mascot, 0)
+    assert mascot.pose.hat == homemascot.HAT_ON_HEAD
+    # ...all without taking a step
+    assert mascot.feet == start
+    at(mascot, homemascot.GREET_MS + 1)
+    assert mascot.segments[1].kind == "jump"
+
+
+def testEatsTheCroissantAtTheTable(mainWindow):
+    mascot = stillMascot(mainWindow)
+    _logo, _welcomeLine, nameLine = mascot.surfaces()
+    table = mascot.table.geometry()
+    eat = mascot.segmentStart("eat")
+
+    # The table stands on the end of the name, the mascot stops just before it
+    assert table.bottom() + 1 == round(nameLine.top)
+    assert abs(table.right() + 1 - nameLine.right) <= 1
+    assert mascot.segments[5].start.x() + 3 * homemascot.PIXEL < table.left()
+
+    at(mascot, eat - 1)
+    assert mascot.table.hasCroissant
+    at(mascot, eat + 700)
+    assert mascot.pose.arm == "reachTable"
+    assert mascot.table.hasCroissant
+
+    # Taken: it leaves the table for the hand, then goes bite by bite
+    bitesLeft = []
+    for t in range(homemascot.EAT_TAKE_AT + 100, homemascot.EAT_MS, 200):
+        at(mascot, eat + t)
+        assert not mascot.table.hasCroissant
+        bitesLeft.append(mascot.pose.held or 0)
+    assert bitesLeft[0] == homemascot.BITES
+    assert bitesLeft == sorted(bitesLeft, reverse=True)
+    assert set(bitesLeft) == set(range(homemascot.BITES + 1))
+    assert bitesLeft[-1] == 0
+
+    # Walks home without it, and a fresh one is there for the next round
+    endOf(mascot, 9)
+    assert not mascot.table.hasCroissant
+    at(mascot, mascot.cycleDuration() + 10)
+    assert mascot.table.hasCroissant
 
 
 def testJumpsArcAboveBothLedges(mainWindow):
     mascot = stillMascot(mainWindow)
     jump = mascot.segments[1]
-    mascot.elapsed = 0.0
-    mascot.advance(mascot.segments[0].duration + jump.duration / 2)
-    assert mascot.sprite is homemascot._JUMP
+    at(mascot, mascot.segments[0].duration + jump.duration / 2)
+    assert mascot.pose.legs == "tuck"
     assert mascot.feet.y() < min(jump.start.y(), jump.end.y())
 
 
 def testLegsMoveWhileWalking(mainWindow):
     mascot = stillMascot(mainWindow)
     walkStart = sum(s.duration for s in mascot.segments[:2])
-    sprites = set()
+    legs = set()
     for step in range(4):
-        mascot.elapsed = 0.0
-        mascot.advance(walkStart + 1 + step * homemascot.STEP_MS)
-        sprites.add(mascot.sprite)
-    assert sprites == {homemascot._STAND, homemascot._STRIDE}
+        at(mascot, walkStart + 1 + step * homemascot.STEP_MS)
+        legs.add(mascot.pose.legs)
+    assert legs == {"stand", "stride"}
 
 
 def testOnlyAnimatesWhileTheSplashIsShown(tempDir, mainWindow):
@@ -108,11 +168,16 @@ def testOnlyAnimatesWhileTheSplashIsShown(tempDir, mainWindow):
 
 def testIsDrawnAndLetsClicksThrough(mainWindow):
     mascot = stillMascot(mainWindow)
-    assert mascot.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    for widget in mascot, mascot.table:
+        assert widget.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
     image = mascot.grab().toImage()
     colors = {image.pixelColor(x, y).name() for x in range(image.width()) for y in range(image.height())}
     assert homemascot._COLORS["B"].name() in colors
     assert homemascot._COLORS["H"].name() in colors
+    table = mascot.table.grab().toImage()
+    colors = {table.pixelColor(x, y).name() for x in range(table.width()) for y in range(table.height())}
+    assert homemascot._COLORS["T"].name() in colors
+    assert homemascot._COLORS["C"].name() in colors  # the croissant
 
 
 def testFacingLeftMirrorsTheEyes(mainWindow):
@@ -120,12 +185,19 @@ def testFacingLeftMirrorsTheEyes(mainWindow):
 
     def eyeColumns():
         image = mascot.grab().toImage()
-        y = 4 * homemascot.PIXEL + 1
+        y = 7 * homemascot.PIXEL + 1
         eye = homemascot._COLORS["E"].name()
         return [x for x in range(image.width()) if image.pixelColor(x, y).name() == eye]
 
+    mascot.pose = homemascot.STAND
     mascot.facing = 1
     right = eyeColumns()
     mascot.facing = -1
     left = eyeColumns()
     assert right and left and right != left
+
+
+def testWalksInFrontOfTheTable(mainWindow):
+    mascot = stillMascot(mainWindow)
+    widgets = [w for w in mascot.stage.children() if isinstance(w, QWidget)]
+    assert widgets.index(mascot) > widgets.index(mascot.table)

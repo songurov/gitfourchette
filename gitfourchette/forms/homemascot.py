@@ -7,9 +7,12 @@
 """
 A little pixel-art character that lives on the Home splash page.
 
-It stands on the logo, jumps onto "Welcome to", walks along it, jumps onto the
-end of the app's name, turns around, and comes back the same way - forever,
-but only while the splash page is on screen.
+It stands on the logo and tips its hat to you: takes it off, holds it to its
+chest with a bow, puts it back on. Then it jumps onto "Welcome to", walks along
+it and jumps onto the end of the app's name, where a table holds a croissant.
+It eats it in four bites, turns around and walks back home. A fresh croissant
+is waiting by the next round - forever, but only while the splash page is on
+screen. It takes its time: about twenty seconds a round.
 
 It stands on the glyphs themselves, not on the labels' boxes: the logo and the
 welcome text are rendered offscreen and scanned for their first opaque row, so
@@ -21,51 +24,138 @@ import math
 
 from gitfourchette.qt import *
 
-# One character per pixel, facing right. '.' is transparent.
-_STAND = (
-    "....HHHH....",
-    "....HHHH....",
-    "..HHHHHHHH..",
-    "...BBBBBB...",
-    "...BBEBEB...",
-    "...BBBBBB...",
-    ".BBBBBBBBBB.",
-    "...BBBBBB...",
-    "...BBBBBB...",
-    "...BBBBBB...",
-    "...BB..BB...",
-    "...BB..BB...",
-)
-_STRIDE = (*_STAND[:10], "..BB....BB..", ".BB......BB.")
-_JUMP = (
-    *_STAND[:5],
-    ".BBBBBBBBBB.",  # arms up
-    "...BBBBBB...",
-    "...BBBBBB...",
-    "...BBBBBB...",
-    "...BB..BB...",
-    "....B..B....",  # legs tucked
+# The character is put together from parts, so the hat and the hand can move
+# on their own. Coordinates are sprite pixels on a CANVAS_W x CANVAS_H canvas,
+# facing right; facing left mirrors the whole canvas. The body is centered, so
+# turning around doesn't shift it. The feet touch the bottom row.
+CANVAS_W, CANVAS_H = 16, 15
+
+HAT_ON_HEAD = (4, 3)
+HAT_LIFTED = (5, 0)
+HAT_AT_CHEST = (8, 8)
+
+_BODY = [(x, y) for x in range(5, 11) for y in range(6, 13)]
+_BACK_ARM = {"rest": [(3, 9), (4, 9)], "up": [(3, 8), (4, 8)]}
+_FRONT_ARM = {
+    "rest": [(11, 9), (12, 9)],
+    "up": [(11, 8), (12, 8)],
+    "reachHat": [(11, 8), (12, 7), (12, 6)],
+    "lift": [(11, 8), (12, 7), (12, 6), (12, 5), (12, 4), (12, 3)],
+    "hold": [(11, 9), (12, 10)],
+    "reachTable": [(11, 9), (12, 9), (13, 9), (14, 9), (15, 9)],
+    "mouth": [(11, 9), (12, 8)],
+}
+_LEGS = {
+    "stand": [(5, 13), (6, 13), (9, 13), (10, 13), (5, 14), (6, 14), (9, 14), (10, 14)],
+    "stride": [(4, 13), (5, 13), (10, 13), (11, 13), (3, 14), (4, 14), (11, 14), (12, 14)],
+    "tuck": [(5, 13), (6, 13), (9, 13), (10, 13), (6, 14), (9, 14)],
+}
+# The croissant in hand, bitten from the side of the mouth: (pixel, color key)
+_HELD_CROISSANT = [((13, 7), "C"), ((14, 7), "C"),
+                   ((12, 8), "C"), ((13, 8), "C"), ((14, 8), "C"), ((15, 8), "C"),
+                   ((12, 9), "c"), ((15, 9), "c")]
+BITES = 4
+
+# The table, with a croissant on it. French: a proper crescent, golden, flaky.
+TABLE_W, TABLE_H = 12, 7
+_TABLE = (
     "............",
+    "............",
+    "............",
+    "TTTTTTTTTTTT",
+    "tttttttttttt",
+    ".t........t.",
+    ".t........t.",
 )
+_TABLE_CROISSANT = (
+    "....cCCc....",
+    "...cCcCcC...",
+    "..cC....Cc..",
+)
+
 _COLORS = {
     "H": QColor("#70767d"),  # hat
     "B": QColor("#4a8ec2"),  # body
     "E": QColor("#16324a"),  # eyes
+    "C": QColor("#e3a548"),  # croissant, golden
+    "c": QColor("#b06f28"),  # croissant, browned edges
+    "T": QColor("#a8733c"),  # table top
+    "t": QColor("#7b5028"),  # table edge and legs
 }
 
 PIXEL = 3
 """Screen pixels per sprite pixel."""
 
-WALK_SPEED = 42.0
-"""Pixels per second."""
+WALK_SPEED = 22.0
+"""Pixels per second: an unhurried stroll."""
 
-JUMP_MS = 560
-IDLE_MS = 900
-STEP_MS = 150
+JUMP_MS = 900
+STEP_MS = 260
 """How long each leg position lasts while walking."""
+TURN_MS = 800
+
+GREET_MS = 3200
+"""Hat off, a bow with the hat to the chest, hat back on."""
+
+EAT_MS = 4400
+EAT_TAKE_AT = 1000
+"""When the croissant leaves the table for the hand."""
+EAT_BITE_MS = 600
 
 FRAME_MS = 50
 """20 fps is plenty for pixel art, and keeps an idle Home cheap."""
+
+
+@dataclasses.dataclass(frozen=True)
+class Pose:
+    legs: str = "stand"
+    arm: str = "rest"
+    hat: tuple[int, int] = HAT_ON_HEAD
+    eyesDown: bool = False
+    held: int | None = None
+    """Bites left of the croissant in hand, or None."""
+
+    def pixels(self) -> dict[tuple[int, int], str]:
+        """Sprite pixel -> color key, facing right. Later parts are drawn over earlier ones."""
+        pixels = {}
+        for xy in _BODY:
+            pixels[xy] = "B"
+        eyeRow = 8 if self.eyesDown else 7
+        pixels[(7, eyeRow)] = pixels[(9, eyeRow)] = "E"
+        for xy in _BACK_ARM["up" if self.arm == "up" else "rest"]:
+            pixels[xy] = "B"
+        for xy in _LEGS[self.legs]:
+            pixels[xy] = "B"
+        hx, hy = self.hat
+        for x in range(hx + 2, hx + 6):
+            pixels[(x, hy)] = pixels[(x, hy + 1)] = "H"
+        for x in range(hx, hx + 8):
+            pixels[(x, hy + 2)] = "H"
+        # The hand goes over the hat it's holding
+        for xy in _FRONT_ARM[self.arm]:
+            pixels[xy] = "B"
+        if self.held:
+            eaten = BITES - self.held
+            for (x, y), color in _HELD_CROISSANT:
+                if x - 12 >= eaten:
+                    pixels[(x, y)] = color
+        return pixels
+
+
+STAND = Pose()
+
+
+def paintPixels(widget: QWidget, pixels: dict[tuple[int, int], str], mirror: bool, width: int):
+    painter = QPainter(widget)
+    for (x, y), key in pixels.items():
+        if mirror:
+            x = width - 1 - x
+        painter.fillRect(x * PIXEL, y * PIXEL, PIXEL, PIXEL, _COLORS[key])
+    painter.end()
+
+
+def gridPixels(rows) -> dict[tuple[int, int], str]:
+    return {(x, y): key for y, row in enumerate(rows) for x, key in enumerate(row) if key != "."}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,11 +168,11 @@ class Surface:
 
 @dataclasses.dataclass(frozen=True)
 class Segment:
-    kind: str  # "idle", "walk", "jump"
+    kind: str  # "greet", "walk", "jump", "eat", "turn"
     start: QPointF
     end: QPointF
     duration: float  # ms
-    facing: int  # +1 right, -1 left; for "idle", the direction it ends up facing
+    facing: int  # +1 right, -1 left; for "turn", the direction it ends up facing
 
 
 def inkRows(image: QImage) -> list[tuple[int, int, int]]:
@@ -128,21 +218,46 @@ def lineSurfaces(image: QImage, origin: QPointF, dpr: float) -> list[Surface]:
     return surfaces
 
 
+class MascotTable(QWidget):
+    """The table at the end of the walk, and the croissant on it."""
+
+    def __init__(self, stage: QWidget):
+        super().__init__(stage)
+        self.setObjectName("HomeMascotTable")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setFixedSize(TABLE_W * PIXEL, TABLE_H * PIXEL)
+        self.hasCroissant = True
+        self.hide()
+
+    def setCroissant(self, present: bool):
+        if present != self.hasCroissant:
+            self.hasCroissant = present
+            self.update()
+
+    def paintEvent(self, event: QPaintEvent):
+        pixels = gridPixels(_TABLE)
+        if self.hasCroissant:
+            pixels.update(gridPixels(_TABLE_CROISSANT))
+        paintPixels(self, pixels, False, TABLE_W)
+
+
 class HomeMascot(QWidget):
     def __init__(self, stage: QWidget, logo: QLabel, welcome: QLabel):
         super().__init__(stage)
         self.setObjectName("HomeMascot")
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
-        self.setFixedSize(len(_STAND[0]) * PIXEL, len(_STAND) * PIXEL)
+        self.setFixedSize(CANVAS_W * PIXEL, CANVAS_H * PIXEL)
 
         self.stage = stage
         self.logo = logo
         self.welcome = welcome
+        self.table = MascotTable(stage)
 
         self.segments: list[Segment] = []
         self.elapsed = 0.0
-        self.sprite = _STAND
+        self.pose = STAND
         self.facing = 1
         self.feet = QPointF()
         self.geometryKey = None
@@ -183,25 +298,31 @@ class HomeMascot(QWidget):
             return None
         return logo, lines[0], lines[-1]
 
+    def tableRect(self, nameLine: Surface) -> QRectF:
+        """Right at the end of the name, standing on its letters."""
+        width, height = TABLE_W * PIXEL, TABLE_H * PIXEL
+        return QRectF(nameLine.right - width, nameLine.top - height, width, height)
+
     def plan(self) -> list[Segment]:
-        """Logo → "Welcome to" → the end of the app name, and back."""
+        """Hat tip on the logo → "Welcome to" → the croissant at the end of the name, and back."""
         found = self.surfaces()
         if found is None:
             return []
         logo, welcomeLine, nameLine = found
-        half = self.width() / 2
+        body = 3 * PIXEL  # half the body's width: keep both feet on the ledge
 
         def on(surface: Surface, x: float) -> QPointF:
-            # Keep both feet on the ledge
-            x = max(surface.left + half * 0.6, min(surface.right - half * 0.6, x))
-            return QPointF(x, surface.top)
+            return QPointF(max(surface.left + body, min(surface.right - body, x)), surface.top)
 
-        start = on(logo, logo.left + half)
-        welcomeFrom = on(welcomeLine, welcomeLine.left + half)
-        welcomeTo = on(welcomeLine, welcomeLine.right - half)
-        # "…chette": the last stretch of the name
-        nameFrom = on(nameLine, nameLine.right - 0.3 * (nameLine.right - nameLine.left))
-        nameTo = on(nameLine, nameLine.right - half)
+        start = on(logo, logo.left + body * 2)
+        welcomeFrom = on(welcomeLine, welcomeLine.left + body * 2)
+        welcomeTo = on(welcomeLine, welcomeLine.right - body * 2)
+        # Close enough to the table for the outstretched hand to reach the croissant
+        table = self.tableRect(nameLine)
+        atTable = on(nameLine, table.left() - 6 * PIXEL)
+        # Landing on "…chette", a few steps before the table
+        nameFrom = on(nameLine, min(nameLine.right - 0.45 * (nameLine.right - nameLine.left),
+                                    atTable.x() - 4 * PIXEL))
 
         def walk(a: QPointF, b: QPointF) -> Segment:
             return Segment("walk", a, b, 1000 * abs(b.x() - a.x()) / WALK_SPEED, 1 if b.x() >= a.x() else -1)
@@ -210,20 +331,31 @@ class HomeMascot(QWidget):
             return Segment("jump", a, b, JUMP_MS, 1 if b.x() >= a.x() else -1)
 
         return [
-            Segment("idle", start, start, IDLE_MS, 1),
+            Segment("greet", start, start, GREET_MS, 1),
             jump(start, welcomeFrom),
             walk(welcomeFrom, welcomeTo),
             jump(welcomeTo, nameFrom),
-            walk(nameFrom, nameTo),
-            Segment("idle", nameTo, nameTo, IDLE_MS, -1),  # turns around
-            walk(nameTo, nameFrom),
+            walk(nameFrom, atTable),
+            Segment("eat", atTable, atTable, EAT_MS, 1),
+            Segment("turn", atTable, atTable, TURN_MS, -1),
+            walk(atTable, nameFrom),
             jump(nameFrom, welcomeTo),
             walk(welcomeTo, welcomeFrom),
             jump(welcomeFrom, start),
+            Segment("turn", start, start, TURN_MS, 1),
         ]
 
     def cycleDuration(self) -> float:
         return sum(s.duration for s in self.segments)
+
+    def segmentStart(self, kind: str) -> float:
+        """When the first segment of this kind begins, in cycle time."""
+        t = 0.0
+        for segment in self.segments:
+            if segment.kind == kind:
+                return t
+            t += segment.duration
+        raise KeyError(kind)
 
     # -------------------------------------------------------------------------
     # Moving
@@ -236,9 +368,40 @@ class HomeMascot(QWidget):
         self.geometryKey = key
         self.segments = self.plan()
         self.elapsed = 0.0
+        if self.segments:
+            _logo, _welcome, nameLine = self.surfaces()
+            self.table.setGeometry(self.tableRect(nameLine).toRect())
+            self.table.show()
+            self.raise_()  # in front of the table, not behind it
+        else:
+            self.table.hide()
+
+    @staticmethod
+    def greetPose(t: float) -> Pose:
+        if t < 450:
+            return Pose(arm="reachHat")
+        if t < 1000:
+            return Pose(arm="lift", hat=HAT_LIFTED)
+        if t < 2400:
+            return Pose(arm="hold", hat=HAT_AT_CHEST, eyesDown=True)  # the bow
+        if t < 2900:
+            return Pose(arm="lift", hat=HAT_LIFTED)
+        return Pose(arm="reachHat")
+
+    @staticmethod
+    def eatPose(t: float) -> Pose:
+        if t < 500:
+            return STAND
+        if t < EAT_TAKE_AT:
+            return Pose(arm="reachTable")
+        bitesTaken = int((t - EAT_TAKE_AT) // EAT_BITE_MS) - 1  # hold it a moment first
+        left = BITES - max(0, bitesTaken)
+        if left > 0:
+            return Pose(arm="mouth", held=left)
+        return STAND  # all gone; a moment to savor it
 
     def advance(self, ms: float):
-        """Move `ms` further along the cycle. The timer calls it; so can tests."""
+        """Move `ms` further along the round. The timer calls it; so can tests."""
         self.replanIfNeeded()
         if not self.segments:
             self.hide()
@@ -252,29 +415,35 @@ class HomeMascot(QWidget):
             t -= segment.duration
         progress = t / segment.duration if segment.duration else 1.0
         a, b = segment.start, segment.end
+        self.feet = QPointF(a)
+        self.facing = segment.facing
 
-        if segment.kind == "idle":
+        if segment.kind == "greet":
+            self.pose = self.greetPose(t)
+        elif segment.kind == "eat":
+            self.pose = self.eatPose(t)
+        elif segment.kind == "turn":
             # Look the way it came for a moment, then turn
             self.facing = segment.facing if progress >= 0.5 else -segment.facing
-            self.sprite = _STAND
-            self.feet = QPointF(a)
+            self.pose = STAND
         elif segment.kind == "walk":
-            self.facing = segment.facing
-            self.sprite = _STRIDE if int(t // STEP_MS) % 2 else _STAND
+            self.pose = Pose(legs="stride") if int(t // STEP_MS) % 2 else STAND
             self.feet = a + (b - a) * progress
         else:
-            self.facing = segment.facing
-            self.sprite = _JUMP
+            self.pose = Pose(legs="tuck", arm="up")
             # Straight line between the two ledges, lifted by an arc that clears the higher one
-            lift = 24 + max(0.0, a.y() - b.y())
+            lift = 20 + max(0.0, a.y() - b.y())
             x = a.x() + (b.x() - a.x()) * progress
             y = a.y() + (b.y() - a.y()) * progress - 4 * lift * progress * (1 - progress)
             self.feet = QPointF(x, y)
 
+        # The croissant leaves the table when it's taken, and a fresh one is
+        # there by the time the next round starts
+        self.table.setCroissant(self.elapsed < self.segmentStart("eat") + EAT_TAKE_AT)
+
         self.move(math.floor(self.feet.x() - self.width() / 2), math.floor(self.feet.y()) - self.height())
         if not self.isVisible():
             self.show()
-            self.raise_()
         self.update()
 
     def appear(self):
@@ -297,12 +466,4 @@ class HomeMascot(QWidget):
     # Drawing
 
     def paintEvent(self, event: QPaintEvent):
-        painter = QPainter(self)
-        for row, line in enumerate(self.sprite):
-            if self.facing < 0:
-                line = line[::-1]
-            for col, char in enumerate(line):
-                color = _COLORS.get(char)
-                if color is not None:
-                    painter.fillRect(col * PIXEL, row * PIXEL, PIXEL, PIXEL, color)
-        painter.end()
+        paintPixels(self, self.pose.pixels(), self.facing < 0, CANVAS_W)
