@@ -47,6 +47,25 @@ class MainToolBar(QToolBar):
         self.backAction = TaskBook.toolbarAction(self, tasks.JumpBack).toQAction(self)
         self.forwardAction = TaskBook.toolbarAction(self, tasks.JumpForward).toQAction(self)
 
+        # Home has no repo in front of you, so the repo buttons step aside. These
+        # take their place: the ways into a repo. MainWindow connects them.
+        self.openRepoAction = ActionDef(
+            _p("toolbar", "Open"), icon="folder-open",
+            tip=_("Open a Git repo on your machine")).toQAction(self)
+        self.cloneRepoAction = ActionDef(
+            _p("toolbar", "Clone"), icon="folder-download",
+            tip=_("Download a Git repo and open it")).toQAction(self)
+        self.newRepoAction = ActionDef(
+            _p("toolbar", "New"), icon="folder-new",
+            tip=_("Create an empty Git repo")).toQAction(self)
+        self.quickLaunchAction = ActionDef(
+            _p("toolbar", "Quick Launch"), icon="edit-find",
+            tip=_("Type a few letters of any command, repo or workspace, and press Enter")).toQAction(self)
+        homeSeparator = QAction(self)
+        homeSeparator.setSeparator(True)
+        self.homeActions = [self.openRepoAction, self.cloneRepoAction, self.newRepoAction,
+                            homeSeparator, self.quickLaunchAction]
+
         self.workdirAction = TaskBook.toolbarAction(self, tasks.JumpToUncommittedChanges).toQAction(self)
         self.headAction = TaskBook.toolbarAction(self, tasks.JumpToHEAD).toQAction(self)
 
@@ -87,6 +106,7 @@ class MainToolBar(QToolBar):
         ).toQAction(self)
 
         defs = [
+            *self.homeActions,
             self.backAction,
             self.forwardAction,
             self.workdirAction,
@@ -120,7 +140,8 @@ class MainToolBar(QToolBar):
         # place instead of sliding left on Home.
         allActions = self.actions()
         spacerIndex = next(i for i, a in enumerate(allActions) if isinstance(a, QWidgetAction))
-        self.repoScopedActions = [*allActions[:spacerIndex], self.openInAction, self.repoAction]
+        self.repoScopedActions = [a for a in allActions[:spacerIndex] if a not in self.homeActions]
+        self.repoScopedActions += [self.openInAction, self.repoAction]
 
         repoButton = self.widgetForAction(self.repoAction)
         assert isinstance(repoButton, QToolButton)
@@ -159,6 +180,8 @@ class MainToolBar(QToolBar):
         """
         for action in self.repoScopedActions:
             action.setVisible(visible)
+        for action in self.homeActions:
+            action.setVisible(not visible)
 
     def fillThemeMenu(self):
         dark = self.darkTheme

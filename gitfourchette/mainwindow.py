@@ -136,6 +136,10 @@ class MainWindow(QMainWindow):
 
         self.welcomeWidget.ui.recentReposButton.setMenu(self.recentMenu)
         self.mainToolBar.workspaceAction.setMenu(self.workspaceMenu)
+        self.mainToolBar.openRepoAction.triggered.connect(self.openDialog)
+        self.mainToolBar.cloneRepoAction.triggered.connect(lambda: self.cloneDialog())  # not triggered(checked) as the URL
+        self.mainToolBar.newRepoAction.triggered.connect(self.newRepo)
+        self.mainToolBar.quickLaunchAction.triggered.connect(self.openQuickLaunch)
 
         self.fillGlobalMenuBar()
 

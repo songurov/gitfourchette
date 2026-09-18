@@ -1154,3 +1154,78 @@ def testFetchAllCanBeStoppedPartWayThrough(tempDir, mainWindow):
 
     assert not welcome.scanner.isRunning()
     assert welcome.fetchAllButton.isEnabled(), "the button comes back when the fetch stops"
+
+
+def homeToolbarTexts(mainWindow) -> list[str]:
+    return [stripAccelerators(a.text()) for a in mainWindow.mainToolBar.homeActions
+            if a.isVisible() and a.text()]
+
+
+def testToolbarOffersTheWaysIntoARepoOnHome(tempDir, mainWindow):
+    # The repo buttons step aside on Home; these take their place
+    assert ["Open", "Clone", "New", "Quick Launch"] == homeToolbarTexts(mainWindow)
+
+    mainWindow.openRepo(unpackRepo(tempDir))
+    assert [] == homeToolbarTexts(mainWindow), "a repo brings its own buttons back instead"
+
+    mainWindow.closeAllTabs()
+    assert ["Open", "Clone", "New", "Quick Launch"] == homeToolbarTexts(mainWindow)
+
+
+def testHomeToolbarOpenButton(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    mainWindow.mainToolBar.openRepoAction.trigger()
+    acceptQFileDialog(mainWindow, "open", wd)
+    assert os.path.samefile(wd, mainWindow.currentRepoWidget().workdir)
+
+
+def testHomeToolbarNewButton(tempDir, mainWindow):
+    path = os.path.realpath(tempDir.name + "/fresh")
+    os.makedirs(path)
+    mainWindow.mainToolBar.newRepoAction.trigger()
+    acceptQFileDialog(mainWindow, "new repo", path)
+    assert path == os.path.normpath(mainWindow.currentRepoWidget().repo.workdir)
+
+
+def testHomeToolbarCloneButton(tempDir, mainWindow):
+    mainWindow.mainToolBar.cloneRepoAction.trigger()
+    dlg = findQDialog(mainWindow, "clone")
+    assert dlg.ui.urlEdit.currentText() == ""
+    dlg.reject()
+
+
+def testHomeToolbarQuickLaunchButton(tempDir, mainWindow):
+    from gitfourchette.forms.quicklaunch import QuickLaunch
+    mainWindow.mainToolBar.quickLaunchAction.trigger()
+    palettes = [p for p in mainWindow.findChildren(QuickLaunch) if p.isVisible()]
+    assert len(palettes) == 1
+    palettes[0].close()
+
+
+def testRepoPaneButtonsAreNeverSqueezed(tempDir, mainWindow):
+    """The builtin theme's padding used to clip "Fetch All" when the pane was narrow."""
+    from gitfourchette.application import GFApplication
+    welcome = mainWindow.welcomeWidget
+    previousStyle = settings.prefs.qtStyle
+    settings.prefs.qtStyle = "gitfourchette-builtin,dark,#3daee9"
+    GFApplication.instance().applyQtStylePref()
+    try:
+        mainWindow.resize(1400, 900)
+        # A long status used to share the row and take the buttons' room
+        welcome.paneStatus.setText("Searching ~/Documents/job, ~/Documents/my, ~/src, ~/code, ~/work…")
+        QTest.qWait(0)
+        welcome.ui.splitter.setSizes([120, 1280])  # try hard to squeeze it
+        QTest.qWait(0)
+
+        buttons = [welcome.foldersButton, welcome.fetchAllButton, welcome.rescanButton]
+        for button in buttons:
+            assert button.width() >= button.sizeHint().width(), button.objectName()
+        # The status sits on a line of its own, above the buttons
+        assert welcome.paneStatus.geometry().bottom() < welcome.fetchAllButton.geometry().top()
+        # ...and the pane keeps a margin on the right, like on the left
+        pane = welcome.ui.repoPane
+        assert welcome.rescanButton.geometry().right() < pane.width() - 4
+    finally:
+        settings.prefs.qtStyle = previousStyle
+        GFApplication.instance().applyQtStylePref()
+        QTest.qWait(0)

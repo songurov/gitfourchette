@@ -322,7 +322,8 @@ class WelcomeWidget(QFrame):
         self.paneTitle.setObjectName("HomeRepoPaneTitle")
         self.paneTitle.setText(_("Repositories on this machine"))
 
-        self.paneStatus = QLabel(pane)
+        # Elided: "Searching ~/a, ~/b, ~/c…" must never squeeze the buttons below it
+        self.paneStatus = QElidedLabel(pane)
         self.paneStatus.setObjectName("HomeRepoPaneStatus")
         tweakWidgetFont(self.paneStatus, 90)
 
@@ -357,9 +358,10 @@ class WelcomeWidget(QFrame):
         self.foldersButton.setMenu(self.foldersMenu)
         self.foldersMenu.aboutToShow.connect(self.fillFoldersMenu)
 
+        # The status gets a line of its own. Sharing a row with the buttons, a
+        # long status squeezed them below their size and clipped "Fetch All".
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 0, 0, 0)
-        buttons.addWidget(self.paneStatus)
         buttons.addStretch(1)
         buttons.addWidget(self.foldersButton)
         buttons.addWidget(self.fetchAllButton)
@@ -368,7 +370,37 @@ class WelcomeWidget(QFrame):
         layout.addWidget(self.paneTitle)
         layout.addWidget(self.filterEdit)
         layout.addWidget(self.repoTree)
+        layout.addWidget(self.paneStatus)
         layout.addLayout(buttons)
+
+        # The pane sat flush against the splitter on the right: give it the
+        # same breathing room the window gives it on the left
+        margins = layout.contentsMargins()
+        outer = self.ui.outerLayout.contentsMargins().left()
+        layout.setContentsMargins(margins.left(), margins.top(), outer, margins.bottom())
+        self.paneButtons = [self.foldersButton, self.fetchAllButton, self.rescanButton]
+        self.paneButtonsLayout = buttons
+        self.fitRepoPaneToButtons()
+
+    def fitRepoPaneToButtons(self):
+        """
+        Never let the splitter make the pane narrower than its buttons.
+
+        The theme's padding widens them after the splitter got its first size,
+        so the pane has to ask again whenever the style or the font changes.
+        """
+        margins = self.ui.repoPaneLayout.contentsMargins()
+        spacing = max(0, self.paneButtonsLayout.spacing())
+        needed = (sum(b.sizeHint().width() for b in self.paneButtons)
+                  + spacing * (len(self.paneButtons) - 1)
+                  + margins.left() + margins.right())
+        self.ui.repoPane.setMinimumWidth(needed)
+
+    def changeEvent(self, event: QEvent):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange) and hasattr(self, "paneButtons"):
+            # Deferred: the buttons may not have been re-polished yet
+            QTimer.singleShot(0, self.fitRepoPaneToButtons)
 
     # -------------------------------------------------------------------------
     # Scanning
@@ -406,6 +438,7 @@ class WelcomeWidget(QFrame):
         # The one place that catches every way of landing here: app start with
         # no tabs, closing the last tab, or switching to Home.
         super().showEvent(event)
+        self.fitRepoPaneToButtons()
         self.refresh()
 
     def rescan(self, force: bool = False, fetch: bool = False):
