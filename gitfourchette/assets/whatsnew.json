@@ -1,0 +1,122 @@
+{
+    "year": 2026,
+    "releases": [
+        {
+            "version": "Workspaces preview",
+            "date": "2026-09-18",
+            "url": "https://github.com/songurov/gitfourchette/tree/feature/workspaces",
+            "summary": "What this build adds on top of 1.11.0, on its way to a pull request: a Home page that looks after every repo on your machine, named workspaces, a keyboard-first Quick Launch, and a look at who did what.",
+            "highlights": [
+                "Workspaces: named sets of repos you switch between in one go",
+                "Home: every repo on your machine, fetched all at once, with incoming commits and statistics",
+                "Quick Launch (Super+P or Ctrl+Shift+A): any command, repo, workspace or theme from the keyboard",
+                "Data: developer KPIs, and a developer's commits over any date range",
+                "Commit view: a Commit tab next to the Changes, with a selected file's diff in place",
+                "Commit history laid out like GitKraken; commit search narrowed by author and date",
+                "Image diffs: both revisions at once, and what changed",
+                "Colored status icons, and one consistent icon style in both themes",
+                "Romanian translation",
+                "A dinosaur on the Home page, fetching eggs for its nest (Settings can turn it off)"
+            ],
+            "contributors": ["Songurov Fiodor", "Iliyas Jorio"]
+        },
+        {
+            "version": "1.11.0",
+            "date": "2026-08-21",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.11.0",
+            "summary": "Blame a single line straight from the diff, skip pre-commit hooks when you need to, and new built-in light and dark themes that look right outside KDE.",
+            "highlights": [
+                "Blame Line: right-click a line in the diff to find the commit that introduced it",
+                "Bypass pre-commit hooks from the commit dialog (git commit --no-verify)",
+                "New platform-agnostic light and dark themes",
+                "Conflicts: preview all of \"Ours\" or \"Theirs\" in one click; Keep/Accept now explain and confirm"
+            ],
+            "contributors": ["Iliyas Jorio", "Jerry Hyun", "Michal Várady", "Cian", "CoolCat467"]
+        },
+        {
+            "version": "1.10.0",
+            "date": "2026-08-01",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.10.0",
+            "summary": "A sign-off button, a way to open the repo in your editor, a friendlier prompt for unknown SSH hosts, and a security fix for custom commands. Now requires Python 3.12.",
+            "highlights": [
+                "Dedicated sign-off button in the commit dialog (git commit --signoff)",
+                "Open the working directory in an external editor",
+                "Better prompt when connecting to an unknown host",
+                "Security: custom commands now escape file and ref names before substituting them"
+            ],
+            "contributors": ["Iliyas Jorio", "Abduloh Raupov", "grub-basket", "Michal Várady", "Andreas Nilsson Ström", "Genfood", "Sanjay Santhanam"]
+        },
+        {
+            "version": "1.9.1",
+            "date": "2026-07-14",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.9.1",
+            "summary": "A Ghostty terminal preset, better sidebar contrast on GNOME, and fixes for repo nicknames and the trash.",
+            "highlights": [
+                "Ghostty terminal preset",
+                "More legible sidebar text on some desktops (Fedora/GNOME)",
+                "Repo nicknames are saved across sessions again"
+            ],
+            "contributors": ["Iliyas Jorio", "Genfood"]
+        },
+        {
+            "version": "1.9.0",
+            "date": "2026-07-01",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.9.0",
+            "summary": "Whitespace, your way: show whitespace symbols or ignore whitespace changes, with quick toggles above the diff. Plus clearer tabs and easier repo nicknames.",
+            "highlights": [
+                "Show whitespace symbols, or ignore whitespace in diffs",
+                "Tool buttons above the diff: word wrap, whitespace, context lines, SVG preview",
+                "Tabs of repos sharing a name are told apart",
+                "Replace an existing local tag from the New Tag dialog"
+            ],
+            "contributors": ["Iliyas Jorio", "Andreas Nilsson Ström", "Mykyta Opanasiuk", "Geovane Pereira", "Kevin", "LordTenebrous", "Selçuk Özdemir", "ssantos", "vrabe", "Fabiano Caputo", "Piotr Keplicz"]
+        },
+        {
+            "version": "1.8.0",
+            "date": "2026-05-21",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.8.0",
+            "summary": "Two new searches: find the commits that touched a file, and filter the sidebar's branches, tags and stashes.",
+            "highlights": [
+                "Search commit history by path (Ctrl+F, then \"Paths\")",
+                "Search refs in the sidebar (Ctrl+F in the sidebar)"
+            ],
+            "contributors": ["Iliyas Jorio", "Towhidul I Chowdhury", "Andreas Nilsson Ström"]
+        },
+        {
+            "version": "1.7.1",
+            "date": "2026-04-11",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.7.1",
+            "summary": "A quick fix: refreshing a repo can be canceled again.",
+            "highlights": [
+                "Fixes a 1.7.0 regression where a repo refresh couldn't be canceled"
+            ],
+            "contributors": ["Iliyas Jorio"]
+        },
+        {
+            "version": "1.7.0",
+            "date": "2026-04-09",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.7.0",
+            "summary": "Compare any two commits, much better Git LFS support, ahead/behind counts in the sidebar, and mouse shortcuts you choose yourself.",
+            "highlights": [
+                "Compare two commits: Ctrl-click two commits in the history",
+                "Git LFS: marked files, and diffs of LFS images and text",
+                "Upstream status in the sidebar: ahead/behind by N, upstream missing",
+                "Customizable double-click and middle-click in file lists and the tab bar"
+            ],
+            "contributors": ["Iliyas Jorio", "Andreas Nilsson Ström", "Zach Rammell"]
+        },
+        {
+            "version": "1.6.0",
+            "date": "2026-02-01",
+            "url": "https://github.com/jorio/gitfourchette/releases/tag/v1.6.0",
+            "summary": "Browse any commit as a folder in your file manager, and let GitFourchette fetch your remotes on its own. More operations now run on standard Git.",
+            "highlights": [
+                "Mount commits as folders (FUSE 3 + mfusepy)",
+                "Auto-fetch remotes periodically (experimental; Settings → Advanced)",
+                "Merge any commit from the history, not just branch tips",
+                "More operations use standard Git instead of libgit2"
+            ],
+            "contributors": ["Iliyas Jorio", "Fabiano Caputo", "Alex Nadzharov", "LordTenebrous", "Lynn", "Cyril", "Dani Rodríguez", "Konstantin Adamov", "Neil Santos", "Tom Könecke"]
+        }
+    ]
+}

@@ -33,6 +33,7 @@ from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.forms.workspacedialog import WorkspaceDialog
 from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.forms.welcomewidget import WelcomeWidget
+from gitfourchette.forms.whatsnewdialog import WhatsNewDialog
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.nav import NavLocator, NavContext, NavFlags
@@ -459,6 +460,12 @@ class MainWindow(QMainWindow):
                 lambda: QDesktopServices.openUrl(QUrl(USERS_GUIDE_URL)),
                 icon="help-contents", properties=WITHOUT_REPO),
 
+            ActionDef(
+                _("What’s New…"),
+                self.openWhatsNew,
+                tip=_("This year’s releases, what they brought, and who made them"),
+                properties=WITHOUT_REPO),
+
             ActionDef.SEPARATOR,
 
             ActionDef(
@@ -537,6 +544,11 @@ class MainWindow(QMainWindow):
             QuickLaunchSection(_("Workspaces"), workspaces),
             QuickLaunchSection(_("Commands"), commands),
         ]
+
+    def openWhatsNew(self) -> WhatsNewDialog:
+        dialog = WhatsNewDialog(self)
+        dialog.show()
+        return dialog
 
     def openQuickLaunch(self) -> QuickLaunch:
         palette = QuickLaunch(self, self.quickLaunchSections())
