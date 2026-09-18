@@ -247,3 +247,24 @@ def testPrefsQtStyleVariantPicker(mainWindow):
 
     accent2 = mainWindow.palette().highlight().color()
     assert accent1 != accent2
+
+
+def testRomanianIsOfferedAndTranslatesTheApp(tempDir, mainWindow):
+    from gitfourchette.tasks import PushBranch
+    from gitfourchette.tasks.taskbook import TaskBook
+
+    dlg = GFApplication.instance().openPrefsDialog("language")
+    comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_language")
+    qcbSetIndex(comboBox, "rom.n")  # "română", in its own name
+    dlg.accept()
+    acceptQMessageBox(mainWindow, "aplică setările")
+    try:
+        assert TaskBook.names[PushBranch] == "Fă push la ramură"
+        mainWindow.fillGlobalMenuBar()
+        menus = [a.text() for a in mainWindow.menuBar().actions()]
+        assert "&Depozit" in menus  # the Repo menu
+    finally:
+        # Straight back to English, without another "restart needed" box
+        from gitfourchette import settings
+        settings.prefs.language = ""
+        GFApplication.instance().applyLanguagePref()

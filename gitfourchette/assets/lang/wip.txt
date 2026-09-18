@@ -6,6 +6,7 @@ it 52
 ko 98
 pt 1
 pt_BR 1
+ro 100
 ru 14
 tr 1
 uk 8
