@@ -271,3 +271,93 @@ def testWalksInFrontOfTheNestAndTheEgg(mainWindow):
     widgets = [w for w in mascot.stage.children() if isinstance(w, QWidget)]
     for prop in mascot.nest, mascot.egg:
         assert widgets.index(mascot) > widgets.index(prop), prop.objectName()
+
+
+def eyeCenter(mascot: HomeMascot) -> QPoint:
+    ex, ey = hm._EYE[3]
+    x = mascot.x() + (ex if mascot.facing > 0 else hm.CANVAS_W - ex) * hm.PIXEL
+    return QPoint(x, mascot.y() + ey * hm.PIXEL)
+
+
+def pupil(mascot: HomeMascot) -> tuple[int, int]:
+    return next(xy for xy, key in mascot.pose.pixels().items() if key == "K")
+
+
+def testLooksAtTheCursor(mainWindow):
+    mascot = stillMascot(mainWindow)
+    walk = sum(s.duration for s in mascot.segments[:2]) + 100  # walking right, eyes open
+    at(mascot, walk)
+    eye = eyeCenter(mascot)
+    ex, ey = hm._EYE[0]
+
+    cases = {
+        (40, -30): (ex + 1, ey),      # ahead and above: front, up
+        (40, 30): (ex + 1, ey + 1),   # ahead and below: front, down
+        (-40, -30): (ex, ey),         # behind and above: back, up
+        (-40, 30): (ex, ey + 1),      # behind and below: back, down
+    }
+    for (dx, dy), expected in cases.items():
+        mascot.cursorPos = lambda d=(dx, dy): eye + QPoint(*d)
+        mascot.advance(0)
+        assert pupil(mascot) == expected, (dx, dy)
+
+    # Walking the other way, "ahead" is on the other side
+    at(mascot, mascot.segmentStart("walk", 2) + 100)
+    assert mascot.facing == -1
+    eye = eyeCenter(mascot)
+    mascot.cursorPos = lambda: eye + QPoint(-40, 30)
+    mascot.advance(0)
+    assert pupil(mascot) == (ex + 1, ey + 1)
+
+    # Nobody around: it looks ahead
+    mascot.cursorPos = lambda: None
+    mascot.advance(0)
+    assert mascot.pose.look == hm.LOOK_AHEAD
+
+
+def testLookingAtTheCursorCanBeTurnedOff(mainWindow):
+    from gitfourchette.application import GFApplication
+    mascot = stillMascot(mainWindow)
+    at(mascot, sum(s.duration for s in mascot.segments[:2]) + 100)
+    mascot.cursorPos = lambda: eyeCenter(mascot) + QPoint(-40, -30)  # behind, above
+    GFApplication.applyPrefs(homeMascotFollowsCursor=False)
+    try:
+        mascot.advance(0)
+        assert mascot.pose.look == hm.LOOK_AHEAD
+    finally:
+        GFApplication.applyPrefs(homeMascotFollowsCursor=True)
+    mascot.advance(0)
+    assert mascot.pose.look != hm.LOOK_AHEAD
+
+
+def testTheSettingsSwitchTurnsTheMascotOff(mainWindow):
+    from gitfourchette.forms.prefsdialog import PrefsDialog
+    mascot = mainWindow.welcomeWidget.mascot
+    waitUntilTrue(mascot.isAnimating)
+
+    triggerMenuAction(mainWindow.menuBar(), "file/settings")
+    dlg: PrefsDialog = findQDialog(mainWindow, "settings")
+    checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_homeMascot")
+    assert checkBox.isChecked()
+    assert dlg.findChild(QCheckBox, "prefctl_homeMascotFollowsCursor").isChecked()
+    checkBox.setChecked(False)
+    dlg.accept()
+
+    # Gone, with its nest and egg, and no more ticking
+    assert not mascot.isAnimating()
+    for widget in mascot, mascot.nest, mascot.egg:
+        assert not widget.isVisible(), widget.objectName()
+
+    # Coming back to Home doesn't wake it up either
+    mainWindow.welcomeWidget.ui.splashPage.hide()
+    mainWindow.welcomeWidget.ui.splashPage.show()
+    QTest.qWait(0)
+    assert not mascot.isAnimating()
+
+    # Switched back on: right back, nest included
+    triggerMenuAction(mainWindow.menuBar(), "file/settings")
+    dlg = findQDialog(mainWindow, "settings")
+    dlg.findChild(QCheckBox, "prefctl_homeMascot").setChecked(True)
+    dlg.accept()
+    assert mascot.isAnimating()
+    assert mascot.isVisible() and mascot.nest.isVisible()

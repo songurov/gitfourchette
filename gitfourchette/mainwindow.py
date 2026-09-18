@@ -1579,6 +1579,9 @@ class MainWindow(QMainWindow):
         self.showMenuBarAction.setChecked(settings.prefs.showMenuBar)
 
     def onApplyPrefs(self, changedKeys: set[str]) -> None:
+        if "homeMascot" in changedKeys:
+            self.welcomeWidget.mascot.applyPrefs()
+
         if "showMenuBar" in changedKeys and not settings.prefs.showMenuBar:
             self.showMenuBarHiddenWarning()
 

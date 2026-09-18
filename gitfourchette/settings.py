@@ -131,6 +131,9 @@ class Prefs(PrefsFile):
     showStatusBar               : bool                  = True
     showMenuBar                 : bool                  = True
     compactUi                   : bool                  = False
+    homeMascot                  : bool                  = True
+    """The little dinosaur that fetches eggs on the Home page."""
+    homeMascotFollowsCursor     : bool                  = True
 
     _category_diff              : int                   = 0
     font                        : str                   = ""

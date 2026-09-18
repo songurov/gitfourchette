@@ -374,6 +374,10 @@ def _prefKeyTable() -> dict[str, str]:
         "showToolBar": _("Show toolbar"),
         "showMenuBar": _("Show menu bar"),
         "showMenuBar_help": _("When the menu bar is hidden, press the Alt key to show it again."),
+        "homeMascot": _("Dinosaur on the Home page"),
+        "homeMascot_help": _("A little dinosaur walks across the welcome text, fetching eggs for its nest. "
+                             "It only moves while the Home page is on screen."),
+        "homeMascotFollowsCursor": _("Dinosaur looks at the mouse pointer"),
         "resetDontShowAgain": _("Restore all “don’t show this again” messages"),
         "pygmentsPlugins": _("Allow third-party Pygments plugins"),
         "pygmentsPlugins_help": "<p>" + _("Let {app} load third-party Pygments plugins installed on your system. "

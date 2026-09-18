@@ -23,6 +23,7 @@ the ground follows the font, the theme and the window size.
 import dataclasses
 import math
 
+from gitfourchette import settings
 from gitfourchette.forms.pixelart import PIXEL, PixelSprite, Pixels, gridPixels, paintPixels
 from gitfourchette.qt import *
 
@@ -53,8 +54,10 @@ _BODY = (
     "...SSOOOOOOOYYOO....",
     ".OOO...OOOOOOO......",
 )
-_EYE_OPEN = {(13, 7): "W", (14, 7): "W", (13, 8): "W", (14, 8): "K"}
+_EYE = [(13, 7), (14, 7), (13, 8), (14, 8)]
 _EYE_CLOSED = {(13, 8): "o", (14, 8): "o"}
+LOOK_AHEAD = (1, 1)
+"""Where the pupil sits in the 2x2 eye when there's nothing to look at: front, low."""
 
 BERET_ON_HEAD = (11, 3)
 BERET_LIFTED = (12, 0)
@@ -147,11 +150,18 @@ class Pose:
     beret: tuple[int, int] = BERET_ON_HEAD
     eyesClosed: bool = False
     carrying: bool = False
+    look: tuple[int, int] = LOOK_AHEAD
+    """The pupil in the 2x2 eye: (0 back / 1 front, 0 up / 1 down), facing right."""
 
     def pixels(self) -> Pixels:
         """Sprite pixel -> color key, facing right. Later parts are drawn over earlier ones."""
         pixels = gridPixels(_BODY)
-        pixels.update(_EYE_CLOSED if self.eyesClosed else _EYE_OPEN)
+        if self.eyesClosed:
+            pixels.update(_EYE_CLOSED)
+        else:
+            for xy in _EYE:
+                pixels[xy] = "W"
+            pixels[(_EYE[0][0] + self.look[0], _EYE[0][1] + self.look[1])] = "K"
         pixels.update(_LEGS[self.legs])
         bx, by = self.beret
         pixels[(bx + 3, by)] = "R"
@@ -302,6 +312,27 @@ class HomeMascot(QWidget):
         # It lives on the splash page only: follow it in and out of view
         stage.installEventFilter(self)
         self.hide()
+
+    def cursorPos(self) -> QPoint | None:
+        """The mouse pointer on the stage, or None when it's elsewhere.
+        (On Wayland, Qt only knows where the pointer is while it's over our windows.)"""
+        pos = self.stage.mapFromGlobal(QCursor.pos())
+        return pos if self.stage.rect().contains(pos) else None
+
+    def enabled(self) -> bool:
+        return settings.prefs.homeMascot
+
+    def applyPrefs(self):
+        """The Settings switch: a disabled mascot takes its nest and egg with it, and stops ticking."""
+        if not self.enabled():
+            self.timer.stop()
+            for widget in self, self.nest, self.egg:
+                widget.hide()
+            return
+        if self.stage.isVisible():
+            self.timer.start()
+            self.geometryKey = None  # the nest was hidden: place everything again
+            self.advance(0)
 
     # -------------------------------------------------------------------------
     # Where to go
@@ -525,19 +556,36 @@ class HomeMascot(QWidget):
 
         self.nest.setEggs(*self.nestState(self.elapsed))
 
+        if settings.prefs.homeMascotFollowsCursor and not self.pose.eyesClosed:
+            look = self.lookAt(self.cursorPos())
+            if look != self.pose.look:
+                self.pose = dataclasses.replace(self.pose, look=look)
+
         if not self.isVisible():
             self.show()
         self.update()
 
+    def lookAt(self, target: QPoint | None) -> tuple[int, int]:
+        """Which corner of the eye the pupil goes to, to look at `target`."""
+        if target is None:
+            return LOOK_AHEAD
+        ex, ey = _EYE[3]  # the eye's center is the top-left corner of its last pixel
+        eyeX = self.x() + (ex if self.facing > 0 else CANVAS_W - ex) * PIXEL
+        eyeY = self.y() + ey * PIXEL
+        front = (target.x() - eyeX) * self.facing >= 0
+        down = target.y() >= eyeY
+        return int(front), int(down)
+
     def appear(self):
-        self.advance(0)
+        if self.enabled():
+            self.advance(0)
 
     def isAnimating(self) -> bool:
         return self.timer.isActive()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.stage:
-            if event.type() == QEvent.Type.Show:
+            if event.type() == QEvent.Type.Show and self.enabled():
                 self.timer.start()
                 # After the layout has placed the labels it stands on
                 QTimer.singleShot(0, self.appear)
