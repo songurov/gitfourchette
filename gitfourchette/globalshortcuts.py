@@ -19,6 +19,7 @@ class GlobalShortcuts:
     refresh: MultiShortcut = NO_SHORTCUT
     openRepoFolder: MultiShortcut = NO_SHORTCUT
     openTerminal: MultiShortcut = NO_SHORTCUT
+    quickLaunch: MultiShortcut = NO_SHORTCUT
 
     stageHotkeys: ClassVar = [Qt.Key.Key_Return, Qt.Key.Key_Enter]  # Return: main keys; Enter: on keypad
     discardHotkeys: ClassVar = [Qt.Key.Key_Delete, Qt.Key.Key_Backspace]
@@ -41,5 +42,8 @@ class GlobalShortcuts:
         cls.refresh = makeMultiShortcut(QKeySequence.StandardKey.Refresh, "Ctrl+R", "F5")
         cls.openRepoFolder = makeMultiShortcut("Ctrl+Shift+O")
         cls.openTerminal = makeMultiShortcut("Ctrl+Alt+O")
+        # Meta+P is Super+P (Cmd+P already pushes). Desktops that grab Super+P
+        # for themselves still leave Ctrl+Shift+A, a well-known "find action" key.
+        cls.quickLaunch = makeMultiShortcut("Meta+P", "Ctrl+Shift+A")
 
         cls._initialized = True

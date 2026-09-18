@@ -25,6 +25,7 @@ from gitfourchette.forms.aboutdialog import AboutDialog
 from gitfourchette.forms.analysisview import AnalysisDialog
 from gitfourchette.forms.clonedialog import CloneDialog
 from gitfourchette.forms.maintoolbar import MainToolBar
+from gitfourchette.forms.quicklaunch import QUICKLAUNCH_ACTION_NAME, QuickLaunch, QuickLaunchEntry, QuickLaunchSection, menuBarEntries
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.forms.workspacedialog import WorkspaceDialog
@@ -338,6 +339,11 @@ class MainWindow(QMainWindow):
 
         ActionDef.addToQMenu(
             viewMenu,
+            ActionDef(_("&Quick Launch…"), self.openQuickLaunch,
+                      shortcuts=GlobalShortcuts.quickLaunch, icon="edit-find",
+                      objectName=QUICKLAUNCH_ACTION_NAME,
+                      tip=_("Type a few letters of any command, repo or workspace, and press Enter")),
+            ActionDef.SEPARATOR,
             self.mainToolBar.toggleViewAction(),
             ActionDef(englishTitleCase(_("Show status bar")), self.toggleStatusBar, checkState=-1, objectName="ShowStatusBarAction"),
             ActionDef(englishTitleCase(_("Show menu bar")), self.toggleMenuBar, checkState=-1, objectName="ShowMenuBarAction"),
@@ -450,6 +456,40 @@ class MainWindow(QMainWindow):
                 self.clearRescueFolder,
                 tip=_("Delete all discarded changes from the trash folder")),
         )
+
+    def quickLaunchSections(self) -> list[QuickLaunchSection]:
+        """What the Quick Launch palette offers, section by section."""
+        history = settings.history
+
+        commands = menuBarEntries(self.globalMenuBar, skip=[self.recentMenu, self.workspaceMenu])
+
+        current = history.currentWorkspace
+        workspaces = [QuickLaunchEntry(
+            _("Home"), lambda: self.switchToWorkspace(""), icon="git-home",
+            detail=_("current") if not current else "")]
+        for name in history.workspaceNames():
+            numRepos = len((history.getWorkspace(name) or {}).get("repos", []))
+            detail = _("current") if name == current else _n("{n} repo", "{n} repos", numRepos)
+            workspaces.append(QuickLaunchEntry(
+                name, lambda n=name: self.switchToWorkspace(n), detail=detail, icon="folder-recent"))
+
+        repos = []
+        for path in history.getRecentRepoPaths(settings.prefs.maxRecentRepos):
+            nickname = history.getRepoNickname(path)
+            repos.append(QuickLaunchEntry(
+                nickname, lambda p=path: self.openRepo(p, exactMatch=True),
+                detail=compactPath(path), icon="git-folder", keywords=path))
+
+        return [
+            QuickLaunchSection(_("Commands"), commands),
+            QuickLaunchSection(_("Workspaces"), workspaces),
+            QuickLaunchSection(_("Recent Repositories"), repos),
+        ]
+
+    def openQuickLaunch(self) -> QuickLaunch:
+        palette = QuickLaunch(self, self.quickLaunchSections())
+        palette.popUp()
+        return palette
 
     def fillRecentMenu(self) -> None:
         actions = []

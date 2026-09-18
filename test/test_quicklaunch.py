@@ -1,0 +1,226 @@
+# -----------------------------------------------------------------------------
+# Copyright (C) 2026 Iliyas Jorio.
+# This file is part of GitFourchette, distributed under the GNU GPL v3.
+# For full terms, see the included LICENSE file.
+# -----------------------------------------------------------------------------
+
+import os
+
+import pytest
+
+from gitfourchette import settings
+from gitfourchette.forms.newbranchdialog import NewBranchDialog
+from gitfourchette.forms.quicklaunch import QuickLaunch, QuickLaunchEntry
+from gitfourchette.toolbox import compactPath
+from .test_workspaces import openTwoRepos, saveWorkspace
+from .util import *
+
+
+def openPalette(mainWindow) -> QuickLaunch:
+    triggerMenuAction(mainWindow.menuBar(), "view/quick launch")
+    return findPalette(mainWindow)
+
+
+def findPalette(mainWindow) -> QuickLaunch:
+    palettes = [p for p in mainWindow.findChildren(QuickLaunch) if p.isVisible()]
+    assert len(palettes) == 1
+    return palettes[0]
+
+
+def paletteIsOpen(mainWindow) -> bool:
+    return any(p.isVisible() for p in mainWindow.findChildren(QuickLaunch))
+
+
+def query(palette: QuickLaunch, text: str):
+    palette.lineEdit.clear()
+    QTest.keyClicks(palette.lineEdit, text)
+
+
+@pytest.mark.parametrize("keys", ["Meta+P", "Ctrl+Shift+A"])
+def testShortcutOpensQuickLaunch(tempDir, mainWindow, keys):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    QTest.keySequence(mainWindow, keys)
+    palette = findPalette(mainWindow)
+    assert palette.focusWidget() is palette.lineEdit
+    palette.close()
+
+
+def testCommandsComeFromTheMenuBar(tempDir, mainWindow):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+    titles = palette.visibleTitles()
+
+    # Tasks from the Repo menu, with their shortcut shown as the detail
+    for title in ["Push Branch…", "Pull Remote Branch…", "Fetch Remote Branches", "New Local Branch…"]:
+        assert title in titles
+    push = next(e for e in palette.sections[0].entries if e.title == "Push Branch…")
+    assert push.detail == QKeySequence("Ctrl+P").toString(QKeySequence.SequenceFormat.NativeText)
+
+    # Items of a static submenu carry its name
+    assert "Local Config Files › .gitignore" in titles
+
+    # Commands are alphabetical, and mnemonics are gone
+    commands = [e.title for e in palette.sections[0].entries]
+    assert commands == sorted(commands, key=str.casefold)
+    assert not any("&" in t for t in commands)
+
+    # Not listed: the palette itself, and the menus filled on demand
+    assert not any(t.startswith("Quick Launch") for t in titles)
+    assert not any(t.startswith(("Open Recent", "Workspace ›", "Clear List")) for t in titles)
+
+    # Section headers are shown but can't be run
+    headers = [palette.model.item(r).text() for r in range(palette.model.rowCount())
+               if r not in palette.runnableRows()]
+    assert headers == ["Commands", "Workspaces", "Recent Repositories"]
+    # ...and the first one is in view, not scrolled past by the initial selection
+    assert palette.listView.verticalScrollBar().value() == 0
+    palette.close()
+
+
+def testRootMenuNameIsSearchable(tempDir, mainWindow):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+    # "Overview" lives in the Data menu; its title alone doesn't say "data"
+    query(palette, "data overview")
+    assert palette.visibleTitles() == ["Overview"]
+    palette.close()
+
+
+def testTypingFiltersAndEnterRunsTheCommand(tempDir, mainWindow):
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+
+    query(palette, "new local")
+    assert palette.visibleTitles()[0] == "New Local Branch…"
+    assert palette.currentEntry().title == "New Local Branch…"
+
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert not paletteIsOpen(mainWindow)
+
+    dlg: NewBranchDialog = findQDialog(rw, "new branch")
+    dlg.reject()
+
+
+def testEveryTermMustMatch(tempDir, mainWindow):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+
+    query(palette, "branch push")
+    assert palette.visibleTitles() == ["Push Branch…"]
+
+    query(palette, "no such command anywhere")
+    assert palette.visibleTitles() == []
+    assert palette.currentEntry() is None
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)  # nothing to run: no-op
+    assert paletteIsOpen(mainWindow)
+    palette.close()
+
+
+def testEscapeClosesWithoutRunning(tempDir, mainWindow):
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    palette = openPalette(mainWindow)
+    query(palette, "new local")
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Escape)
+    assert not paletteIsOpen(mainWindow)
+    with pytest.raises(KeyError):
+        findQDialog(rw, "new branch")
+
+
+def testRecentRepoOpensInATab(tempDir, mainWindow):
+    a, b = openTwoRepos(tempDir, mainWindow)
+    mainWindow.closeTab(0)
+    assert [b] == mainWindow.openTabPaths()
+
+    palette = openPalette(mainWindow)
+    query(palette, "alpha")
+    entry = palette.currentEntry()
+    assert entry.title == "alpha"
+    assert entry.detail == compactPath(a)
+
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert a in mainWindow.openTabPaths()
+    assert a == os.path.normpath(mainWindow.currentRepoWidget().workdir)
+
+
+def testRepoMatchesOnItsPathToo(tempDir, mainWindow):
+    a, _b = openTwoRepos(tempDir, mainWindow)
+    palette = openPalette(mainWindow)
+    # A piece of the parent folder, which isn't in the repo's name
+    query(palette, os.path.basename(os.path.dirname(a)))
+    assert {"alpha", "bravo"} <= set(palette.visibleTitles())
+    palette.close()
+
+
+def testWorkspaceEntrySwitchesWorkspace(tempDir, mainWindow):
+    a, b = openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "two repos")
+    mainWindow.switchToWorkspace("")
+    assert "" == settings.history.currentWorkspace
+
+    palette = openPalette(mainWindow)
+    query(palette, "two repos")
+    assert palette.currentEntry().title == "two repos"
+    assert palette.currentEntry().detail == "2 repos"
+
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    assert "two repos" == settings.history.currentWorkspace
+    assert [a, b] == mainWindow.openTabPaths()
+
+
+def testArrowKeysSkipSectionHeaders(tempDir, mainWindow):
+    openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "alpha team")
+
+    palette = openPalette(mainWindow)
+    query(palette, "alpha")
+    # "alpha team" (Workspaces), then "alpha" (Recent Repositories): a header sits between them
+    assert palette.visibleTitles() == ["alpha team", "alpha"]
+    assert palette.currentEntry().title == "alpha team"
+
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Down)
+    assert palette.currentEntry().title == "alpha"
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Down)  # already last: stays
+    assert palette.currentEntry().title == "alpha"
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Up)
+    assert palette.currentEntry().title == "alpha team"
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Up)  # already first: stays
+    assert palette.currentEntry().title == "alpha team"
+    palette.close()
+
+
+def testCurrentWorkspaceIsMarked(tempDir, mainWindow):
+    openTwoRepos(tempDir, mainWindow)
+    saveWorkspace(mainWindow, "mine")
+    mainWindow.switchToWorkspace("mine")
+
+    palette = openPalette(mainWindow)
+    workspaces = {e.title: e.detail for e in palette.sections[1].entries}
+    assert workspaces["mine"] == "current"
+    assert workspaces["Home"] == ""
+    palette.close()
+
+
+def testScorePrefersTitlePrefixThenWordStart():
+    def entry(title):
+        return QuickLaunchEntry(title, lambda: None)
+
+    assert entry("Push Branch…").score(["push"]) == 0
+    assert entry("Force Push").score(["push"]) == 1
+    assert entry("Autopush").score(["push"]) == 2
+    assert entry("Something").score(["push"]) == -1
+    # Detail and keywords can satisfy a term, but rank below any title hit
+    assert QuickLaunchEntry("alpha", lambda: None, detail="~/code/alpha").score(["code"]) == 3
+
+
+def testPaletteRenders(tempDir, mainWindow):
+    """Not an assertion on pixels - it catches a delegate that throws while painting."""
+    openTwoRepos(tempDir, mainWindow)
+    palette = openPalette(mainWindow)
+    image = palette.grab().toImage()
+    assert not image.isNull()
+    assert image.width() >= 420
+    # Every runnable row has an icon (a blank one if need be), so titles line up
+    for row in palette.runnableRows():
+        assert not palette.model.item(row).icon().isNull()
+    palette.close()
