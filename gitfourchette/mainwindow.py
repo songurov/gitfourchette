@@ -496,6 +496,11 @@ class MainWindow(QMainWindow):
 
         self.repoMenu2.clear()
         ActionDef.addToQMenu(self.repoMenu2, *actions)
+        # This menu is created on demand from the toolbar. A shortcut owned by
+        # the transient QMenu can otherwise be swallowed while the menu grabs
+        # the keyboard, even though Ctrl+B is displayed beside the action.
+        newBranchAction = self.repoMenu2.actions()[-1]
+        newBranchAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
 
     def refreshRepoButton(self) -> None:
         try:

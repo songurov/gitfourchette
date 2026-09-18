@@ -1041,6 +1041,19 @@ def testToolbarRepoBlockSwitchesBranch(tempDir, mainWindow):
     assert "no-parent" in mainWindow.mainToolBar.repoAction.text()
 
 
+def testToolbarRepoMenuNewBranchShortcut(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    mainWindow.fillRepoButtonMenu()
+    mainWindow.repoMenu2.show()
+    QTest.qWait(0)
+    QTest.keySequence(mainWindow.repoMenu2, "Ctrl+B")
+    dlg = findQDialog(rw, "new branch")
+    assert dlg is not None
+    dlg.reject()
+    mainWindow.repoMenu2.hide()
+
+
 def testToolbarSaysNothingForAnUnloadedTab(tempDir, mainWindow):
     from gitfourchette.repowidget import RepoWidget
 
