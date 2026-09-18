@@ -9,6 +9,7 @@
 import datetime
 import os
 import re
+import time
 from dataclasses import dataclass, field
 
 from gitfourchette.localization import *
@@ -74,6 +75,7 @@ class AnalysisTableItem(QTableWidgetItem):
 class AnalysisWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
+    progress = Signal(int)
 
     def __init__(self, path: str):
         super().__init__()
@@ -81,12 +83,12 @@ class AnalysisWorker(QObject):
 
     def run(self):
         try:
-            self.finished.emit(collectAnalysis(self.path))
+            self.finished.emit(collectAnalysis(self.path, self.progress.emit))
         except Exception as exc:  # pragma: no cover - depends on repository state
             self.failed.emit(str(exc))
 
 
-def collectAnalysis(path: str) -> list[CommitRecord]:
+def collectAnalysis(path: str, progress=None) -> list[CommitRecord]:
     """Collect bounded, local-only history data for the selected repository."""
     repo = Repo(path)
     records = []
@@ -120,6 +122,9 @@ def collectAnalysis(path: str) -> list[CommitRecord]:
             records.append(CommitRecord(
                 author.time, author.name or author.email, author.email, subject,
                 files, insertions, deletions, evidence, automation))
+            if progress and index % 25 == 0:
+                progress(index + 1)
+                time.sleep(0.002)  # release the GIL so Qt can repaint/respond
     finally:
         repo.free()
     return records
@@ -140,7 +145,8 @@ class AnalysisDialog(QDialog):
         self.loadingWidget = QWidget(self)
         loadingLayout = QHBoxLayout(self.loadingWidget)
         loadingLayout.setContentsMargins(0, 0, 0, 0)
-        loadingLayout.addWidget(QLabel(_("Loading repository history…"), self.loadingWidget))
+        self.loadingLabel = QLabel(_("Loading repository history…"), self.loadingWidget)
+        loadingLayout.addWidget(self.loadingLabel)
         progress = QProgressBar(self.loadingWidget)
         progress.setRange(0, 0)
         progress.setFixedWidth(180)
@@ -179,11 +185,13 @@ class AnalysisDialog(QDialog):
         self.analysisWorker = AnalysisWorker(self.repoPath)
         self.analysisWorker.moveToThread(self.analysisThread)
         self.analysisThread.started.connect(self.analysisWorker.run)
+        self.analysisWorker.progress.connect(self._analysisProgress)
         self.analysisWorker.finished.connect(self._analysisReady)
         self.analysisWorker.failed.connect(self._analysisFailed)
         self.analysisWorker.finished.connect(self.analysisThread.quit)
         self.analysisWorker.failed.connect(self.analysisThread.quit)
         self.analysisThread.finished.connect(self.analysisWorker.deleteLater)
+        self.analysisThread.finished.connect(lambda: setattr(self, "analysisThread", None))
         self.analysisThread.finished.connect(self.analysisThread.deleteLater)
         self.analysisThread.start()
 
@@ -193,8 +201,22 @@ class AnalysisDialog(QDialog):
         self.tabs.setEnabled(True)
         self.refresh()
 
+    def _analysisProgress(self, count):
+        self.loadingLabel.setText(_("Loading repository history… {0} commits", count))
+
     def _analysisFailed(self, message):
-        self.loadingWidget.findChild(QLabel).setText(_("Could not load analysis: {0}", message))
+        self.loadingLabel.setText(_("Could not load analysis: {0}", message))
+
+    def closeEvent(self, event):
+        # Do not destroy the dialog while its worker still owns a pygit2 Repo.
+        thread = getattr(self, "analysisThread", None)
+        try:
+            if thread is not None and thread.isRunning():
+                thread.quit()
+                thread.wait()
+        except RuntimeError:
+            pass
+        super().closeEvent(event)
 
     def _makeOverviewPage(self):
         page = QWidget(self.tabs)
