@@ -26,14 +26,8 @@ _autoDarkVariants = {
     "git-lfs",
     "git-lfs-add",
     "git-lfs-remove",
-    "status_a",
-    "status_c",  # just in case we ever add this one
-    "status_d",
-    "status_m",
-    "status_r",
-    "status_t",
-    "status_x",
-    # status_u intentionally omitted. Its white outline should stand out against a white background.
+    # Not the status tiles: they're filled with their own color, and their
+    # white glyph must stay white on dark themes too.
 }
 
 

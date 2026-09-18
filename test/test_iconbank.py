@@ -96,8 +96,8 @@ def testEverySemanticIconUsesTheMonochromePalette():
         "git-stage", "git-stage-lines", "git-unstage", "git-unstage-lines",
         "go-newer", "go-older", "gpg-verify-bad", "gpg-verify-cantcheck",
         "gpg-verify-expired", "gpg-verify-good-trusted", "gpg-verify-good-untrusted",
-        "input-validated", "sigkill", "status_a", "status_d", "status_m",
-        "status_r", "status_t", "status_u", "status_x", "urgent-tab",
+        "input-validated", "sigkill", "urgent-tab",
+        # Not the status tiles: they're colored on purpose, see testStatusTilesAreColored
     ]
     hardcodedColor = re.compile(
         r"#[0-9a-f]{3,8}|(?:fill|stroke)(?:=|:)['\"]?(?:red|green|orange|yellow|blue|purple)",
@@ -121,6 +121,61 @@ def testStatusIconGeneratorReproducesCommittedIcons():
     spec.loader.exec_module(updateResources)
 
     iconDir = rootDir / "gitfourchette/assets/icons"
-    for status, glyph in updateResources.STATUS_ICON_GLYPHS.items():
+    for status, (glyph, color) in updateResources.STATUS_ICONS.items():
         svg = (iconDir / f"status_{status.lower()}.svg").read_text()
-        assert updateResources.statusIconSvg(glyph) == svg, status
+        assert updateResources.statusIconSvg(glyph, color) == svg, status
+
+
+def _statusIcons():
+    import importlib.util
+    rootDir = pathlib.Path(__file__).parents[1]
+    spec = importlib.util.spec_from_file_location("update_resources", rootDir / "update_resources.py")
+    updateResources = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updateResources)
+    return updateResources.STATUS_ICONS
+
+
+def _contrastWithWhite(color: str) -> float:
+    def channel(c: float) -> float:
+        c /= 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    qc = QColor(color)
+    luminance = 0.2126 * channel(qc.red()) + 0.7152 * channel(qc.green()) + 0.0722 * channel(qc.blue())
+    return 1.05 / (luminance + 0.05)
+
+
+def testStatusTilesAreColored():
+    """
+    A file list is scanned by hue first: every status gets its own color, and
+    the white glyph on it stays legible (WCAG 3:1, bold text).
+    """
+    icons = _statusIcons()
+    colors = [color.lower() for _glyph, color in icons.values()]
+    assert len(set(colors)) == len(colors), "two statuses share a color"
+    for status, (_glyph, color) in icons.items():
+        assert _contrastWithWhite(color) >= 3.0, (status, color)
+
+
+def testStatusTilesLookTheSameOnDarkThemes(mainWindow):
+    """The glyph must not be swapped to black by the dark variants: the tile brings its own background."""
+    from gitfourchette.toolbox import iconbank
+    from gitfourchette.toolbox.recolorsvgiconengine import RecolorSvgIconEngine
+
+    def render(iconId: str) -> QImage:
+        return iconbank.stockIcon(iconId).pixmap(32, 32).toImage()
+
+    colors = RecolorSvgIconEngine.IconColors
+    before = colors.preferDarkVariants
+    try:
+        colors.preferDarkVariants = False
+        light = render("status_m")
+        colors.preferDarkVariants = True
+        iconbank._stockIconCache.clear()
+        dark = render("status_m")
+    finally:
+        colors.preferDarkVariants = before
+        iconbank._stockIconCache.clear()
+    assert light == dark
+    # A corner of the tile, clear of the glyph, shows the tile's own color
+    corner = light.pixelColor(5, 28)
+    assert corner.name() == QColor(_statusIcons()["M"][1]).name()
