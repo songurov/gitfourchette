@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
             "File": _("&File"),
             "Edit": _("&Edit"),
             "View": _("&View"),
-            "Analysis": _("&Analysis"),
+            "Analysis": _("&Anal"),
             "Repo": _("&Repo"),
             "Commands": _("&Commands"),
             "Mount": _("&Mount"),
