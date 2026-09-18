@@ -322,10 +322,9 @@ class MainWindow(QMainWindow):
 
         ActionDef.addToQMenu(
             analysisMenu,
-            ActionDef(_("&Overview"), lambda: self.openAnalysis(0)),
-            ActionDef(_("Developer &KPI"), lambda: self.openAnalysis(1)),
-            ActionDef(_("&Activity by Day"), lambda: self.openAnalysis(2)),
-            ActionDef(_("&AI / Manual"), lambda: self.openAnalysis(3)),
+            ActionDef(_("&Overview"), lambda: self.openAnalysis(AnalysisDialog.OVERVIEW_TAB)),
+            ActionDef(_("Developer &KPI"), lambda: self.openAnalysis(AnalysisDialog.DEVELOPER_TAB)),
+            ActionDef(_("Developer &Commits"), lambda: self.openAnalysis(AnalysisDialog.COMMITS_TAB)),
         )
 
         # -------------------------------------------------------------
@@ -829,7 +828,14 @@ class MainWindow(QMainWindow):
             except RuntimeError:
                 pass
 
-        dialog = AnalysisDialog(self, repoWidget.workdir)
+        def showCommit(oid: Oid):
+            # The dashboard stays open next to the repo, so you can go through
+            # a developer's commits one after the other
+            repoWidget.jump(NavLocator.inCommit(oid))
+            self.raise_()
+            self.activateWindow()
+
+        dialog = AnalysisDialog(self, repoWidget.workdir, showCommit=showCommit)
         dialog.tabs.setCurrentIndex(max(0, min(tabIndex, dialog.tabs.count() - 1)))
         self.analysisDialog = dialog
         dialog.show()

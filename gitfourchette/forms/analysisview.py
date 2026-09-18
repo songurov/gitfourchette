@@ -8,25 +8,26 @@
 
 import datetime
 import os
-import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from gitfourchette.localization import *
-from gitfourchette.porcelain import GitError, Repo, SortMode
+from gitfourchette.porcelain import GitError, Oid, Repo, SortMode
 from gitfourchette.qt import *
-from gitfourchette.toolbox import compactPath, escape
+from gitfourchette.toolbox import QSignalBlockerContext, compactPath, escape
 
 
 # Keep the dashboard responsive on very large repositories. Commit metadata is
 # cheap, while calculating a tree diff for every commit is comparatively costly.
 MAX_COMMITS = 1500
 MAX_DIFF_STATS = 250
-AI_HINTS = re.compile(
-    r"(?:chatgpt|github[ -]copilot|\bcopilot\b|claude|cursor|codeium|tabnine|aider|"
-    r"ai[ -]assisted|llm[ -]generated|generated[ -]by|co-authored-by:.*(?:copilot|bot))",
-    re.IGNORECASE)
-BOT_HINTS = re.compile(r"\b(bot|github-actions|dependabot|renovate)\b", re.IGNORECASE)
+
+# The Developer Commits page answers "what did this person do between these two
+# dates", so it can't stop at MAX_COMMITS: it reads the whole history of every
+# branch, and only computes diff stats for the commits it keeps.
+MAX_SCANNED_COMMITS = 100_000
+MAX_LISTED_COMMITS = 5000
 
 
 @dataclass
@@ -38,8 +39,6 @@ class CommitRecord:
     files: int = 0
     insertions: int = 0
     deletions: int = 0
-    aiEvidence: str = ""
-    automationEvidence: str = ""
 
 
 @dataclass
@@ -51,9 +50,40 @@ class DeveloperStats:
     files: int = 0
     insertions: int = 0
     deletions: int = 0
-    aiCommits: int = 0
-    automationCommits: int = 0
     records: list[CommitRecord] = field(default_factory=list)
+
+
+@dataclass
+class Author:
+    key: str
+    name: str
+    email: str
+    commits: int = 0
+
+    def label(self) -> str:
+        return f"{self.name} <{self.email}>" if self.email else self.name
+
+
+@dataclass
+class DeveloperCommit:
+    oid: Oid
+    timestamp: int
+    subject: str
+    isMerge: bool
+    files: int = 0
+    insertions: int = 0
+    deletions: int = 0
+
+
+@dataclass
+class DeveloperCommits:
+    commits: list[DeveloperCommit]
+    truncated: bool = False
+
+
+def authorKey(name: str, email: str) -> str:
+    """One developer = one email (or name, when there's no email), case-insensitive."""
+    return (email or name).casefold()
 
 
 class AnalysisTableItem(QTableWidgetItem):
@@ -73,19 +103,22 @@ class AnalysisTableItem(QTableWidgetItem):
 
 
 class AnalysisWorker(QObject):
-    finished = Signal(object)
-    failed = Signal(str)
+    """Runs one collector in a worker thread. `tag` tells stale results apart."""
+    finished = Signal(object, object)
+    failed = Signal(object, str)
     progress = Signal(int)
 
-    def __init__(self, path: str):
+    def __init__(self, tag, function: Callable, *args):
         super().__init__()
-        self.path = path
+        self.tag = tag
+        self.function = function
+        self.args = args
 
     def run(self):
         try:
-            self.finished.emit(collectAnalysis(self.path, self.progress.emit))
+            self.finished.emit(self.tag, self.function(*self.args, progress=self.progress.emit))
         except Exception as exc:  # pragma: no cover - depends on repository state
-            self.failed.emit(str(exc))
+            self.failed.emit(self.tag, str(exc))
 
 
 def collectAnalysis(path: str, progress=None) -> list[CommitRecord]:
@@ -101,27 +134,13 @@ def collectAnalysis(path: str, progress=None) -> list[CommitRecord]:
                 break
             author = commit.author
             subject = (commit.message or "").splitlines()[0] if commit.message else ""
-            evidence = ""
-            identity = f"{author.name} {author.email} {commit.message or ''}"
-            automation = ""
-            if BOT_HINTS.search(identity):
-                automation = _("automation metadata")
-            if AI_HINTS.search(identity):
-                evidence = _("AI-related metadata")
 
             files = insertions = deletions = 0
             if commit.parents and index < MAX_DIFF_STATS:
-                try:
-                    diff = repo.diff(commit.parents[0].tree, commit.tree)
-                    stats = diff.stats
-                    files = stats.files_changed
-                    insertions = stats.insertions
-                    deletions = stats.deletions
-                except (GitError, KeyError, TypeError, ValueError):
-                    pass
+                files, insertions, deletions = _diffStats(repo, commit)
             records.append(CommitRecord(
                 author.time, author.name or author.email, author.email, subject,
-                files, insertions, deletions, evidence, automation))
+                files, insertions, deletions))
             if progress and index % 25 == 0:
                 progress(index + 1)
                 time.sleep(0.002)  # release the GIL so Qt can repaint/respond
@@ -130,13 +149,127 @@ def collectAnalysis(path: str, progress=None) -> list[CommitRecord]:
     return records
 
 
+def _diffStats(repo: Repo, commit) -> tuple[int, int, int]:
+    """Files changed, lines added, lines deleted - against the first parent (or nothing)."""
+    try:
+        if commit.parents:
+            diff = repo.diff(commit.parents[0].tree, commit.tree)
+        else:
+            diff = commit.tree.diff_to_tree(swap=True)
+        stats = diff.stats
+        return stats.files_changed, stats.insertions, stats.deletions
+    except (GitError, KeyError, TypeError, ValueError):
+        return 0, 0, 0
+
+
+def _walkAllBranches(repo: Repo):
+    """Every commit reachable from HEAD or any local/remote branch, newest first."""
+    tips = []
+    if not repo.head_is_unborn:
+        tips.append(repo.head_commit_id)
+    for branches in (repo.branches.local, repo.branches.remote):
+        for name in branches:
+            try:
+                target = branches[name].resolve().target
+            except (GitError, KeyError, ValueError):
+                continue
+            if isinstance(target, Oid) and target not in tips:
+                tips.append(target)
+    if not tips:
+        return iter(())
+    walker = repo.walk(tips[0], SortMode.TIME)
+    for tip in tips[1:]:
+        walker.push(tip)
+    return walker
+
+
+def collectAuthors(path: str, progress=None) -> tuple[list[Author], str]:
+    """
+    Everyone who authored a commit on any branch, most commits first, and the
+    key of the repo's own git identity (so the page can start on "me").
+    """
+    repo = Repo(path)
+    authors: dict[str, Author] = {}
+    try:
+        for index, commit in enumerate(_walkAllBranches(repo)):
+            if index >= MAX_SCANNED_COMMITS:
+                break
+            name, email = commit.author.name, commit.author.email
+            author = authors.setdefault(authorKey(name, email), Author(authorKey(name, email), name or email, email))
+            author.commits += 1
+            if progress and index % 500 == 0:
+                progress(index + 1)
+        me = ""
+        if "user.email" in repo.config:
+            me = authorKey("", repo.config["user.email"])
+    finally:
+        repo.free()
+    return sorted(authors.values(), key=lambda a: (-a.commits, a.name.casefold())), me
+
+
+def collectDeveloperCommits(
+        path: str,
+        key: str,
+        start: int,
+        end: int,
+        includeMerges: bool,
+        progress=None,
+) -> DeveloperCommits:
+    """
+    Commits authored by `key` (every author if empty) with an author date in
+    [start, end], on any branch. Author date, not commit date: a rebase or a
+    cherry-pick doesn't move when the work was done.
+    """
+    repo = Repo(path)
+    kept = []
+    truncated = False
+    try:
+        for index, commit in enumerate(_walkAllBranches(repo)):
+            if index >= MAX_SCANNED_COMMITS:
+                truncated = True
+                break
+            author = commit.author
+            if key and authorKey(author.name, author.email) != key:
+                continue
+            if not start <= author.time <= end:
+                continue
+            isMerge = len(commit.parents) > 1
+            if isMerge and not includeMerges:
+                continue
+            kept.append(commit)
+            if len(kept) >= MAX_LISTED_COMMITS:
+                truncated = True
+                break
+
+        result = []
+        for index, commit in enumerate(kept):
+            subject = commit.message.splitlines()[0] if commit.message else ""
+            files, insertions, deletions = _diffStats(repo, commit)
+            result.append(DeveloperCommit(
+                commit.id, commit.author.time, subject, len(commit.parents) > 1,
+                files, insertions, deletions))
+            if progress and index % 25 == 0:
+                progress(index + 1)
+                time.sleep(0.002)  # release the GIL so Qt can repaint/respond
+    finally:
+        repo.free()
+    return DeveloperCommits(result, truncated)
+
+
 class AnalysisDialog(QDialog):
     """A first, explainable analysis dashboard for one local repository."""
 
-    def __init__(self, parent: QWidget, repoPath: str):
+    OVERVIEW_TAB, DEVELOPER_TAB, COMMITS_TAB = range(3)
+
+    def __init__(self, parent: QWidget, repoPath: str, showCommit: Callable[[Oid], None] | None = None):
         super().__init__(parent)
         self.repoPath = repoPath
+        self.showCommit = showCommit
         self.records = []
+        self.threads: list[QThread] = []
+        self.closing = False
+        self.commitsQuery = 0  # bumped on every query; older results are dropped
+        self.commitsShown = 0  # the query whose results are in the table
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(_("Analysis — {0}", compactPath(repoPath)))
         self.resize(1100, 760)
@@ -157,7 +290,8 @@ class AnalysisDialog(QDialog):
         title = QLabel(f"<h2>{escape(os.path.basename(repoPath))}</h2>", self)
         header.addWidget(title)
         header.addStretch(1)
-        header.addWidget(QLabel(_("Period:"), self))
+        self.periodLabel = QLabel(_("Period:"), self)
+        header.addWidget(self.periodLabel)
         self.period = QComboBox(self)
         self.period.addItem(_("Last 30 days"), 30)
         self.period.addItem(_("Last 90 days"), 90)
@@ -171,29 +305,89 @@ class AnalysisDialog(QDialog):
         root.addWidget(self.tabs)
         self.overviewPage = self._makeOverviewPage()
         self.developerPage = self._makeDeveloperPage()
-        self.activityPage = self._makeActivityPage()
-        self.aiPage = self._makeAiPage()
+        self.commitsPage = self._makeCommitsPage()
         self.tabs.addTab(self.overviewPage, _("Overview"))
         self.tabs.addTab(self.developerPage, _("Developer KPI"))
-        self.tabs.addTab(self.activityPage, _("Activity"))
-        self.tabs.addTab(self.aiPage, _("AI / Manual"))
+        self.tabs.addTab(self.commitsPage, _("Developer Commits"))
         self.tabs.setEnabled(False)
-        self._startAnalysisWorker()
+        # The commits page has its own date range; the Period box would only confuse it
+        self.tabs.currentChanged.connect(self._syncPeriodVisibility)
+        self._syncPeriodVisibility()
 
-    def _startAnalysisWorker(self):
-        self.analysisThread = QThread(self)
-        self.analysisWorker = AnalysisWorker(self.repoPath)
-        self.analysisWorker.moveToThread(self.analysisThread)
-        self.analysisThread.started.connect(self.analysisWorker.run)
-        self.analysisWorker.progress.connect(self._analysisProgress)
-        self.analysisWorker.finished.connect(self._analysisReady)
-        self.analysisWorker.failed.connect(self._analysisFailed)
-        self.analysisWorker.finished.connect(self.analysisThread.quit)
-        self.analysisWorker.failed.connect(self.analysisThread.quit)
-        self.analysisThread.finished.connect(self.analysisWorker.deleteLater)
-        self.analysisThread.finished.connect(lambda: setattr(self, "analysisThread", None))
-        self.analysisThread.finished.connect(self.analysisThread.deleteLater)
-        self.analysisThread.start()
+        self._startJob("history", collectAnalysis, self.repoPath)
+        self._startJob("authors", collectAuthors, self.repoPath)
+
+    # -------------------------------------------------------------------------
+    # Worker threads
+
+    def _startJob(self, tag, function: Callable, *args):
+        if self.closing:
+            # A result that lands after close must not start a thread that would
+            # outlive the dialog: Qt aborts on a QThread destroyed while running
+            return
+        thread = QThread(self)
+        worker = AnalysisWorker(tag, function, *args)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._jobProgress if tag == "history" else self._commitsProgress)
+        worker.finished.connect(self._jobFinished)
+        worker.failed.connect(self._jobFailed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.worker = worker  # keep the Python wrapper alive while it runs
+        self.threads.append(thread)
+        thread.start()
+
+    def _jobFinished(self, tag, result):
+        if self.closing:
+            return
+        if tag == "history":
+            self._analysisReady(result)
+        elif tag == "authors":
+            self._authorsReady(*result)
+        elif tag == self.commitsQuery:
+            self._fillCommits(result)
+            self.commitsShown = tag
+
+    def _jobFailed(self, tag, message):
+        if tag == "history":
+            self.loadingLabel.setText(_("Could not load analysis: {0}", message))
+        elif tag == self.commitsQuery:
+            self.commitsSummary.setText(_("Could not load commits: {0}", message))
+
+    def _jobProgress(self, count):
+        self.loadingLabel.setText(_("Loading repository history… {0} commits", count))
+
+    def _commitsProgress(self, count):
+        if self.commitsTable.rowCount() == 0:
+            self.commitsSummary.setText(_("Reading commits… {0}", count))
+
+    def isBusy(self) -> bool:
+        """True while a worker thread still runs (tests wait on this)."""
+        alive = []
+        for thread in self.threads:
+            try:
+                if thread.isRunning():
+                    alive.append(thread)
+            except RuntimeError:  # deleted after finishing
+                pass
+        self.threads = alive
+        return bool(alive)
+
+    def closeEvent(self, event):
+        self.closing = True
+        self.commitsTimer.stop()
+        # Do not destroy the dialog while a worker still owns a pygit2 Repo.
+        for thread in self.threads:
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    thread.wait()
+            except RuntimeError:
+                pass
+        super().closeEvent(event)
 
     def _analysisReady(self, records):
         self.records = records
@@ -201,22 +395,13 @@ class AnalysisDialog(QDialog):
         self.tabs.setEnabled(True)
         self.refresh()
 
-    def _analysisProgress(self, count):
-        self.loadingLabel.setText(_("Loading repository history… {0} commits", count))
+    def _syncPeriodVisibility(self):
+        visible = self.tabs.currentIndex() != self.COMMITS_TAB
+        self.periodLabel.setVisible(visible)
+        self.period.setVisible(visible)
 
-    def _analysisFailed(self, message):
-        self.loadingLabel.setText(_("Could not load analysis: {0}", message))
-
-    def closeEvent(self, event):
-        # Do not destroy the dialog while its worker still owns a pygit2 Repo.
-        thread = getattr(self, "analysisThread", None)
-        try:
-            if thread is not None and thread.isRunning():
-                thread.quit()
-                thread.wait()
-        except RuntimeError:
-            pass
-        super().closeEvent(event)
+    # -------------------------------------------------------------------------
+    # Pages
 
     def _makeOverviewPage(self):
         page = QWidget(self.tabs)
@@ -236,37 +421,66 @@ class AnalysisDialog(QDialog):
             _("A balanced score based on delivery, quality, collaboration and maintenance.")))
         self.developerTable = self._table([
             _('Developer'), _('KPI'), _('Commits'), _('Active days'), _('Files'),
-            _('Added'), _('Deleted'), _('AI signal')])
+            _('Added'), _('Deleted')])
         layout.addWidget(self.developerTable, 1)
         return page
 
-    def _makeActivityPage(self):
+    def _makeCommitsPage(self):
         page = QWidget(self.tabs)
         layout = QVBoxLayout(page)
+
         controls = QHBoxLayout()
         controls.addWidget(QLabel(_("Developer:"), page))
-        self.developerFilter = QComboBox(page)
-        self.developerFilter.addItem(_("Everyone"), "")
-        self.developerFilter.currentIndexChanged.connect(self.refreshActivity)
-        controls.addWidget(self.developerFilter)
-        controls.addStretch(1)
+        self.commitsDeveloper = QComboBox(page)
+        self.commitsDeveloper.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.commitsDeveloper.setMinimumContentsLength(24)
+        controls.addWidget(self.commitsDeveloper, 1)
+
+        today = QDate.currentDate()
+        self.commitsFrom = self._dateEdit(page, today.addDays(-30))
+        self.commitsTo = self._dateEdit(page, today)
+        controls.addWidget(QLabel(_("From:"), page))
+        controls.addWidget(self.commitsFrom)
+        controls.addWidget(QLabel(_("To:"), page))
+        controls.addWidget(self.commitsTo)
+
+        self.commitsMerges = QCheckBox(_("Include merge commits"), page)
+        self.commitsMerges.setToolTip(_("A merge's line count is the whole branch it brings in, "
+                                        "not work done in the merge itself"))
+        controls.addWidget(self.commitsMerges)
         layout.addLayout(controls)
-        self.activityTable = self._table([
-            _('Date'), _('Developer'), _('Commit'), _('Files'), _('Added'), _('Deleted')])
-        self.activityTable.setSortingEnabled(True)
-        self.activityTable.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.activityTable, 1)
+
+        self.commitsSummary = QLabel(_("Loading developers…"), page)
+        self.commitsSummary.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.commitsSummary)
+
+        self.commitsTable = self._table([
+            _('Date'), _('Commit'), _('Message'), _('Files'), _('Added'), _('Deleted')])
+        self.commitsTable.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.commitsTable.horizontalHeader().setStretchLastSection(False)
+        self.commitsTable.itemDoubleClicked.connect(self._openCommitItem)
+        layout.addWidget(self.commitsTable, 1)
+
+        hint = QLabel(_("All branches. Dates are author dates. Double-click a commit to show it in the repository."), page)
+        hint.setEnabled(False)  # dimmed
+        layout.addWidget(hint)
+
+        # Typing a date fires once per digit; wait until it settles
+        self.commitsTimer = QTimer(self)
+        self.commitsTimer.setSingleShot(True)
+        self.commitsTimer.setInterval(150)
+        self.commitsTimer.timeout.connect(self.queryCommits)
+        for signal in (self.commitsDeveloper.currentIndexChanged, self.commitsFrom.dateChanged,
+                       self.commitsTo.dateChanged, self.commitsMerges.toggled):
+            signal.connect(self.commitsTimer.start)
         return page
 
-    def _makeAiPage(self):
-        page = QWidget(self.tabs)
-        layout = QVBoxLayout(page)
-        layout.addWidget(QLabel(
-            _("AI origin cannot be proven from Git alone. Signals below are evidence, not verdicts.")))
-        self.aiTable = self._table([
-            _('Developer'), _('Commits'), _('AI signal'), _('Automation'), _('Unclassified'), _('Confidence')])
-        layout.addWidget(self.aiTable, 1)
-        return page
+    @staticmethod
+    def _dateEdit(parent: QWidget, date: QDate) -> QDateEdit:
+        edit = QDateEdit(date, parent)
+        edit.setCalendarPopup(True)
+        edit.setDisplayFormat("yyyy-MM-dd")
+        return edit
 
     @staticmethod
     def _table(headers: list[str]) -> QTableWidget:
@@ -282,6 +496,9 @@ class AnalysisDialog(QDialog):
         table.setSortingEnabled(True)
         table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         return table
+
+    # -------------------------------------------------------------------------
+    # Overview & KPI
 
     def _filteredRecords(self) -> list[CommitRecord]:
         days = self.period.currentData()
@@ -305,8 +522,6 @@ class AnalysisDialog(QDialog):
             developer.files += record.files
             developer.insertions += record.insertions
             developer.deletions += record.deletions
-            developer.aiCommits += bool(record.aiEvidence)
-            developer.automationCommits += bool(record.automationEvidence)
             developer.records.append(record)
         return sorted(stats.values(), key=lambda d: (-d.commits, d.name.casefold()))
 
@@ -336,17 +551,6 @@ class AnalysisDialog(QDialog):
             self.overviewCards.addWidget(self._card(label, value), 0, index)
         self._fillOverview(stats)
         self._fillDevelopers(stats)
-        self.developerFilter.blockSignals(True)
-        selected = self.developerFilter.currentData()
-        self.developerFilter.clear()
-        self.developerFilter.addItem(_("Everyone"), "")
-        for developer in stats:
-            self.developerFilter.addItem(developer.name, developer.email)
-        index = self.developerFilter.findData(selected)
-        self.developerFilter.setCurrentIndex(max(0, index))
-        self.developerFilter.blockSignals(False)
-        self._fillActivity(records)
-        self._fillAi(stats)
 
     def _fillOverview(self, stats: list[DeveloperStats]):
         self.overviewTable.setRowCount(len(stats))
@@ -364,31 +568,81 @@ class AnalysisDialog(QDialog):
                       + min(20, developer.files) + (10 if developer.insertions else 0))
             values = [developer.name, f"{kpi}/100", developer.commits,
                       len(developer.activeDays), developer.files, developer.insertions,
-                      developer.deletions, _("signal") if developer.aiCommits else _("none")]
+                      developer.deletions]
             for column, value in enumerate(values):
                 self.developerTable.setItem(row, column, AnalysisTableItem(value))
 
-    def refreshActivity(self):
-        self._fillActivity(self._filteredRecords())
+    # -------------------------------------------------------------------------
+    # Developer Commits
 
-    def _fillActivity(self, records: list[CommitRecord]):
-        email = self.developerFilter.currentData()
-        records = [r for r in records if not email or r.email == email]
-        self.activityTable.setRowCount(len(records))
-        for row, record in enumerate(sorted(records, key=lambda r: r.timestamp, reverse=True)):
-            date = datetime.datetime.fromtimestamp(record.timestamp, datetime.UTC).date().isoformat()
-            values = [date, record.author, record.subject, record.files,
-                      record.insertions, record.deletions]
-            for column, value in enumerate(values):
-                self.activityTable.setItem(row, column, AnalysisTableItem(value))
+    def _authorsReady(self, authors: list[Author], me: str):
+        combo = self.commitsDeveloper
+        with QSignalBlockerContext(combo):
+            combo.clear()
+            for author in authors:
+                combo.addItem(_n("{name} — {n} commit", "{name} — {n} commits", author.commits,
+                                 name=author.label()), author.key)
+            combo.addItem(_("Everyone"), "")
+            start = combo.findData(me) if me else -1
+            combo.setCurrentIndex(max(start, 0))
+        self.queryCommits()
 
-    def _fillAi(self, stats: list[DeveloperStats]):
-        self.aiTable.setRowCount(len(stats))
-        for row, developer in enumerate(stats):
-            unknown = developer.commits - developer.aiCommits
-            confidence = f"{round(100 * developer.aiCommits / developer.commits)}%" \
-                if developer.aiCommits else _("none")
-            values = [developer.name, developer.commits, developer.aiCommits,
-                      developer.automationCommits, unknown, confidence]
+    def commitsRange(self) -> tuple[int, int]:
+        """Local midnight of the first day to the last second of the last day."""
+        first, last = sorted(datetime.date(d.year(), d.month(), d.day())
+                             for d in (self.commitsFrom.date(), self.commitsTo.date()))
+        start = datetime.datetime.combine(first, datetime.time.min).astimezone()
+        end = datetime.datetime.combine(last, datetime.time.max).astimezone()
+        return int(start.timestamp()), int(end.timestamp())
+
+    def queryCommits(self):
+        self.commitsTimer.stop()
+        if self.commitsDeveloper.count() == 0:
+            return  # authors not loaded yet; they call back when they are
+        self.commitsQuery += 1
+        self.commitsTable.setRowCount(0)
+        self.commitsSummary.setText(_("Reading commits…"))
+        start, end = self.commitsRange()
+        self._startJob(self.commitsQuery, collectDeveloperCommits, self.repoPath,
+                       self.commitsDeveloper.currentData(), start, end, self.commitsMerges.isChecked())
+
+    def _fillCommits(self, result: DeveloperCommits):
+        commits = result.commits
+        table = self.commitsTable
+        table.setSortingEnabled(False)
+        table.setRowCount(len(commits))
+        activeDays = set()
+        for row, commit in enumerate(sorted(commits, key=lambda c: c.timestamp, reverse=True)):
+            when = datetime.datetime.fromtimestamp(commit.timestamp).astimezone()
+            activeDays.add(when.date())
+            subject = commit.subject + (" " + _("(merge)") if commit.isMerge else "")
+            values = [when.strftime("%Y-%m-%d %H:%M"), str(commit.oid)[:7], subject,
+                      commit.files, commit.insertions, commit.deletions]
             for column, value in enumerate(values):
-                self.aiTable.setItem(row, column, AnalysisTableItem(value))
+                item = AnalysisTableItem(value)
+                if column == 0:
+                    item.sortValue = commit.timestamp
+                item.setData(Qt.ItemDataRole.UserRole, commit.oid)
+                table.setItem(row, column, item)
+        table.setSortingEnabled(True)
+
+        name = self.commitsDeveloper.currentText().split(" — ")[0]
+        first, last = (d.toString("yyyy-MM-dd") for d in sorted(
+            [self.commitsFrom.date(), self.commitsTo.date()]))
+        if not commits:
+            summary = _("No commits by {0} between {1} and {2}.", name, first, last)
+        else:
+            summary = " · ".join([
+                _n("{n} commit", "{n} commits", len(commits)),
+                _n("{n} active day", "{n} active days", len(activeDays)),
+                _n("{n} file changed", "{n} files changed", sum(c.files for c in commits)),
+                f"+{sum(c.insertions for c in commits)} −{sum(c.deletions for c in commits)}",
+            ])
+        if result.truncated:
+            summary += " " + _("(stopped early: this repository is very large)")
+        self.commitsSummary.setText(summary)
+
+    def _openCommitItem(self, item: QTableWidgetItem):
+        oid = item.data(Qt.ItemDataRole.UserRole)
+        if oid is not None and self.showCommit is not None:
+            self.showCommit(oid)
