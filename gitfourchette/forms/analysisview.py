@@ -21,7 +21,10 @@ from gitfourchette.toolbox import compactPath, escape
 # cheap, while calculating a tree diff for every commit is comparatively costly.
 MAX_COMMITS = 1500
 MAX_DIFF_STATS = 250
-AI_HINTS = re.compile(r"\b(ai|chatgpt|copilot|claude|generated|generated-by)\b", re.IGNORECASE)
+AI_HINTS = re.compile(
+    r"(?:chatgpt|github[ -]copilot|\bcopilot\b|claude|cursor|codeium|tabnine|aider|"
+    r"ai[ -]assisted|llm[ -]generated|generated[ -]by|co-authored-by:.*(?:copilot|bot))",
+    re.IGNORECASE)
 BOT_HINTS = re.compile(r"\b(bot|github-actions|dependabot|renovate)\b", re.IGNORECASE)
 
 
@@ -35,6 +38,7 @@ class CommitRecord:
     insertions: int = 0
     deletions: int = 0
     aiEvidence: str = ""
+    automationEvidence: str = ""
 
 
 @dataclass
@@ -47,6 +51,7 @@ class DeveloperStats:
     insertions: int = 0
     deletions: int = 0
     aiCommits: int = 0
+    automationCommits: int = 0
     records: list[CommitRecord] = field(default_factory=list)
 
 
@@ -65,9 +70,10 @@ def collectAnalysis(path: str) -> list[CommitRecord]:
             subject = (commit.message or "").splitlines()[0] if commit.message else ""
             evidence = ""
             identity = f"{author.name} {author.email} {commit.message or ''}"
+            automation = ""
             if BOT_HINTS.search(identity):
-                evidence = _("bot metadata")
-            elif AI_HINTS.search(identity):
+                automation = _("automation metadata")
+            if AI_HINTS.search(identity):
                 evidence = _("AI-related metadata")
 
             files = insertions = deletions = 0
@@ -82,7 +88,7 @@ def collectAnalysis(path: str) -> list[CommitRecord]:
                     pass
             records.append(CommitRecord(
                 author.time, author.name or author.email, author.email, subject,
-                files, insertions, deletions, evidence))
+                files, insertions, deletions, evidence, automation))
     finally:
         repo.free()
     return records
@@ -172,7 +178,7 @@ class AnalysisDialog(QDialog):
         layout.addWidget(QLabel(
             _("AI origin cannot be proven from Git alone. Signals below are evidence, not verdicts.")))
         self.aiTable = self._table([
-            _('Developer'), _('Commits'), _('AI signal'), _('Unclassified'), _('Confidence')])
+            _('Developer'), _('Commits'), _('AI signal'), _('Automation'), _('Unclassified'), _('Confidence')])
         layout.addWidget(self.aiTable)
         layout.addStretch(1)
         return page
@@ -212,6 +218,7 @@ class AnalysisDialog(QDialog):
             developer.insertions += record.insertions
             developer.deletions += record.deletions
             developer.aiCommits += bool(record.aiEvidence)
+            developer.automationCommits += bool(record.automationEvidence)
             developer.records.append(record)
         return sorted(stats.values(), key=lambda d: (-d.commits, d.name.casefold()))
 
@@ -294,6 +301,6 @@ class AnalysisDialog(QDialog):
             confidence = f"{round(100 * developer.aiCommits / developer.commits)}%" \
                 if developer.aiCommits else _("none")
             values = [developer.name, developer.commits, developer.aiCommits,
-                      unknown, confidence]
+                      developer.automationCommits, unknown, confidence]
             for column, value in enumerate(values):
                 self.aiTable.setItem(row, column, QTableWidgetItem(str(value)))
