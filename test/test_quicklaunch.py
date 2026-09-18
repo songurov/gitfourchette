@@ -357,3 +357,28 @@ def testNewMenuItemsStayOffHomeUntilMarked():
     assert [e.title for e in menuBarEntries(bar)] == ["Needs a repo", "Works anywhere"]
     assert [e.title for e in menuBarEntries(bar, withoutRepo=True)] == ["Works anywhere"]
     bar.deleteLater()
+
+
+@pytest.mark.parametrize("withRepo", [False, True])
+def testSwitchTheThemeFromQuickLaunch(tempDir, mainWindow, withRepo):
+    from gitfourchette.themes import isDarkStyle
+    if withRepo:
+        mainWindow.openRepo(unpackRepo(tempDir))
+    previousStyle = settings.prefs.qtStyle
+    try:
+        for query_, wantDark in ("dark theme", True), ("light theme", False):
+            palette = openPalette(mainWindow)
+            query(palette, query_)
+            assert palette.currentEntry().title == ("Dark Theme" if wantDark else "Light Theme")
+            QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+            assert isDarkStyle(settings.prefs.qtStyle) == wantDark
+
+            # The palette knows which one is on now
+            palette = openPalette(mainWindow)
+            themes = {e.title: e.detail for e in section(palette, "Commands").entries if e.title.endswith("Theme")}
+            assert themes == {"Dark Theme": "current" if wantDark else "",
+                              "Light Theme": "" if wantDark else "current"}
+            palette.close()
+    finally:
+        from gitfourchette.application import GFApplication
+        GFApplication.applyPrefs(qtStyle=previousStyle)

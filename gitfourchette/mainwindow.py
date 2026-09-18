@@ -494,7 +494,17 @@ class MainWindow(QMainWindow):
                 QuickLaunchEntry(_("Rescan Repositories"), lambda: welcome.rescan(force=True),
                                  icon="SP_BrowserReload", keywords=_("home search folders")),
             ]
-            commands.sort(key=lambda e: e.title.casefold())
+
+        # Light or dark, from the keyboard - the same switch as the toolbar's Theme button
+        from gitfourchette.themes import isDarkStyle
+        dark = isDarkStyle(settings.prefs.qtStyle)
+        commands += [
+            QuickLaunchEntry(_("Dark Theme"), lambda: self.onSetDarkTheme(True), icon="theme-dark",
+                             detail=_("current") if dark else "", keywords=_("appearance mode")),
+            QuickLaunchEntry(_("Light Theme"), lambda: self.onSetDarkTheme(False), icon="theme-light",
+                             detail=_("current") if not dark else "", keywords=_("appearance mode")),
+        ]
+        commands.sort(key=lambda e: e.title.casefold())
 
         current = history.currentWorkspace
         home = QuickLaunchEntry(
