@@ -20,3 +20,15 @@ def testAnalysisMenuOpensDashboard(tempDir, mainWindow):
     assert dialog.tabs.currentIndex() == 1
     assert dialog.developerTable.rowCount() > 0
     dialog.close()
+
+
+def testAnalysisCanBeOpenedRepeatedly(tempDir, mainWindow):
+    workdir = unpackRepo(tempDir)
+    mainWindow.openRepo(workdir)
+    mainWindow.openAnalysis()
+    first = mainWindow.analysisDialog
+    mainWindow.openAnalysis(2)
+    second = mainWindow.analysisDialog
+    assert first is not second
+    assert second.tabs.currentIndex() == 2
+    second.close()

@@ -780,7 +780,14 @@ class MainWindow(QMainWindow):
 
         dialog = getattr(self, "analysisDialog", None)
         if dialog is not None:
-            dialog.close()
+            # WA_DeleteOnClose can leave a Python wrapper behind after Qt has
+            # destroyed the dialog. Clear the reference before closing so a
+            # second Analysis invocation never calls into a dead C++ object.
+            self.analysisDialog = None
+            try:
+                dialog.close()
+            except RuntimeError:
+                pass
 
         dialog = AnalysisDialog(self, repoWidget.workdir)
         dialog.tabs.setCurrentIndex(max(0, min(tabIndex, dialog.tabs.count() - 1)))
