@@ -331,6 +331,15 @@ class WelcomeWidget(QFrame):
         self.paneStatus.setObjectName("HomeRepoPaneStatus")
         tweakWidgetFont(self.paneStatus, 90)
 
+        # The same spinner as the status bar's, sized to the status text so the
+        # line doesn't grow when it appears. Hidden, it takes no room at all:
+        # an idle Home looks exactly as it did.
+        self.scanSpinner = QBusySpinner(pane)
+        self.scanSpinner.setObjectName("HomeScanSpinner")
+        lineHeight = self.paneStatus.fontMetrics().height()
+        self.scanSpinner.setFixedSize(lineHeight, lineHeight)
+        self.scanSpinner.setVisible(False)
+
         self.filterEdit = QLineEdit(pane)
         self.filterEdit.setObjectName("HomeRepoFilter")
         self.filterEdit.setPlaceholderText(_("Type a name to filter…"))
@@ -371,10 +380,15 @@ class WelcomeWidget(QFrame):
         buttons.addWidget(self.fetchAllButton)
         buttons.addWidget(self.rescanButton)
 
+        statusLine = QHBoxLayout()
+        statusLine.setContentsMargins(0, 0, 0, 0)
+        statusLine.addWidget(self.scanSpinner)
+        statusLine.addWidget(self.paneStatus, 1)
+
         layout.addWidget(self.paneTitle)
         layout.addWidget(self.filterEdit)
         layout.addWidget(self.repoTree)
-        layout.addWidget(self.paneStatus)
+        layout.addLayout(statusLine)
         layout.addLayout(buttons)
 
         # The pane sat flush against the splitter on the right: give it the
@@ -423,10 +437,16 @@ class WelcomeWidget(QFrame):
         self.rescan()
 
     def stopScan(self):
-        """Never let a running QThread outlive its widget: Qt aborts the process."""
+        """
+        Never let a running QThread outlive its widget: Qt aborts the process.
+
+        The wait is short: the scanner stops even in the middle of a repo
+        (unless it's fetching one on Windows: see reposcan.fetchRepo).
+        """
         if self.scanner is not None and self.scanner.isRunning():
             self.scanner.cancel()
             self.scanner.wait()
+        self.scanSpinner.setVisible(False)
         self.fetchAllButton.setEnabled(True)
 
     def closeEvent(self, event: QCloseEvent):
@@ -458,7 +478,15 @@ class WelcomeWidget(QFrame):
         self.scanner.progress.connect(self.onScanProgress)
         self.scanner.activity.connect(self.onScanActivity)
         self.scanner.resultsReady.connect(self.onScanFinished)
+        self.scanner.finished.connect(self.onScannerStopped)
         self.scanner.start()
+        self.scanSpinner.setVisible(True)
+
+    def onScannerStopped(self):
+        """The thread is done, however it ended: finished, cancelled or failed."""
+        # A cancelled scan's thread may report in after a new one has started
+        if self.scanner is None or not self.scanner.isRunning():
+            self.scanSpinner.setVisible(False)
 
     def onScanActivity(self, message: str):
         """A fetch takes long enough that silence looks like a hang."""
@@ -532,6 +560,14 @@ class WelcomeWidget(QFrame):
         paths = list(byPath)
         self.repoInfos = byPath
 
+        # A running scan rebuilds the tree every few repos. Whatever you were
+        # looking at must survive that, or Home is unusable until the scan ends.
+        selected = self.repoTree.currentItem()
+        selectedPath = selected.data(0, WelcomeWidget.PathRole) if selected is not None else ""
+        selectedParent = selected.parent().text(0) if selectedPath and selected.parent() else ""
+        scrollPosition = self.repoTree.verticalScrollBar().value()
+        signalBlocker = QSignalBlocker(self.repoTree)  # no bouncing through the splash
+
         self.repoTree.clear()
         noReadme = 0
         folders: dict[str, QTreeWidgetItem] = {}
@@ -577,8 +613,15 @@ class WelcomeWidget(QFrame):
                 parent.addChild(leaf)
 
         self.repoTree.expandAll()
-        if self.repoTree.currentItem() is None:
+        reselected = self._reselect(selectedPath, selectedParent)
+        signalBlocker.unblock()
+        self.repoTree.doItemsLayout()  # so the scroll bar knows its new range
+        self.repoTree.verticalScrollBar().setValue(scrollPosition)
+        if not reselected:
             self.showSplash()
+        elif selectedPath in self.detailCache:
+            # Keep the header in step with what the scan just learned
+            self.repoFacts.setText(self._repoFactsHtml(byPath[selectedPath], self.detailCache[selectedPath]))
         roots = self.scanRoots()
         where = ", ".join(compactPath(r) for r in roots) if roots else ""
         count = _n("{n} repository", "{n} repositories", len(paths))
@@ -589,6 +632,21 @@ class WelcomeWidget(QFrame):
         self.paneStatus.setText(count + (f" · {elide(where, ems=40)}" if where else ""))
         self.paneStatus.setToolTip("\n".join(roots))
         self.applyFilter(self.filterEdit.text())
+
+    def _reselect(self, path: str, parentLabel: str) -> bool:
+        """
+        Make the item for `path` current again. A repo can be listed twice
+        (Recent, and where it lives): prefer the one under the same parent.
+        """
+        if not path:
+            return False
+        items = self.repoTree.findItems("*", Qt.MatchFlag.MatchWildcard | Qt.MatchFlag.MatchRecursive)
+        items = [item for item in items if item.data(0, WelcomeWidget.PathRole) == path]
+        if not items:
+            return False
+        sameParent = [item for item in items if item.parent() is not None and item.parent().text(0) == parentLabel]
+        self.repoTree.setCurrentItem((sameParent or items)[0])
+        return True
 
     def _repoTreeItem(self, info: RepoInfo) -> QTreeWidgetItem:
         path = os.path.normpath(info.path)

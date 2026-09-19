@@ -12,6 +12,7 @@ import logging
 import re
 import shlex
 import signal
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
@@ -65,9 +66,11 @@ class GitDriver(QProcess):
             strict: bool = False,
             env: dict[str, str] | None = None,
             timeoutMsec: int = -1,
+            isCancelled: Callable[[], bool] | None = None,
     ):
         return ToolCommands.runSync(*cls._commandStem, *args, directory=directory,
-                                    strict=strict, env=env, timeoutMsec=timeoutMsec)
+                                    strict=strict, env=env, timeoutMsec=timeoutMsec,
+                                    isCancelled=isCancelled)
 
     @classmethod
     def setGitPath(cls, gitPath: str):

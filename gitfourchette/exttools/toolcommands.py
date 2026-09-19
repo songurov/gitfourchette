@@ -12,7 +12,8 @@ import shlex
 import shutil
 import sys
 import textwrap
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from pathlib import Path
 
@@ -246,9 +247,22 @@ class ToolCommands:
         process.setProgram(tokens[0])
         process.setArguments(tokens[1:])
 
+    CancelPollMsec = 50
+    "How often a cancellable runSync looks up from its process to see if it's still wanted."
+
     @classmethod
     def runSync(cls, *args: str, directory: str = "", strict=False,
-                env: dict[str, str] | None = None, timeoutMsec: int = -1) -> str:
+                env: dict[str, str] | None = None, timeoutMsec: int = -1,
+                isCancelled: Callable[[], bool] | None = None) -> str:
+        """
+        Run a command to completion and return its stdout.
+
+        `isCancelled` is for background threads that may be asked to stop: it's
+        polled while the command runs, and the command is stopped as soon as
+        it returns True (which counts as not finishing). On Windows that means
+        killing it without a chance to clean up: don't pass `isCancelled` for
+        a command that must not be cut short there (see below).
+        """
         process = QProcess(None)
         process.setProgram(args[0])
         process.setArguments(args[1:])
@@ -259,7 +273,10 @@ class ToolCommands:
         _logger.info(f"runSync: {shlex.join([process.program()] + process.arguments())}")
         process.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedErrorChannel)
         process.start()
-        didFinish = process.waitForFinished(timeoutMsec)
+        if isCancelled is None:
+            didFinish = process.waitForFinished(timeoutMsec)
+        else:
+            didFinish = cls._waitForFinishedUnlessCancelled(process, timeoutMsec, isCancelled)
 
         if not didFinish:
             # Don't leave an orphan behind when we gave up waiting on it
@@ -276,6 +293,45 @@ class ToolCommands:
             return ""
 
         return process.readAll().data().decode(errors="replace")
+
+    @classmethod
+    def _waitForFinishedUnlessCancelled(cls, process: QProcess, timeoutMsec: int,
+                                        isCancelled: Callable[[], bool]) -> bool:
+        """
+        waitForFinished in short slices, so that whoever wants the calling
+        thread back doesn't have to sit out the whole command.
+
+        How a cancelled command is stopped depends on the platform:
+        - Elsewhere than Windows, it gets SIGTERM, which lets git delete its
+          lock files on the way out.
+        - On Windows, it is killed (TerminateProcess): console programs ignore
+          terminate() there, and a killed git gets no chance to delete the
+          lock files it holds. That's harmless for a read-only command (such
+          as 'git --no-optional-locks status'), but a command that writes
+          refs or the index could leave a stale .lock behind that makes later
+          commands in that repo fail, so don't make such a command
+          cancellable on Windows.
+        """
+        started = time.monotonic()
+        while True:
+            sliceMsec = cls.CancelPollMsec
+            if timeoutMsec >= 0:
+                remainingMsec = timeoutMsec - int(1000 * (time.monotonic() - started))
+                if remainingMsec <= 0:
+                    return False
+                sliceMsec = min(sliceMsec, remainingMsec)
+
+            if process.waitForFinished(sliceMsec):
+                return True
+            if process.state() == QProcess.ProcessState.NotRunning:
+                return False  # it never got going
+            if isCancelled():
+                if WINDOWS:
+                    process.kill()  # console programs ignore terminate() on Windows
+                else:
+                    process.terminate()  # unlike SIGKILL, this lets git delete its lock files
+                process.waitForFinished(1000)
+                return False
 
     @classmethod
     def which(cls, name: str):

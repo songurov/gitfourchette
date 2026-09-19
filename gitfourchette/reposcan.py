@@ -16,9 +16,9 @@ import dataclasses
 import datetime
 import os
 from collections import Counter, defaultdict
+from collections.abc import Callable
 
 from gitfourchette.localization import *
-from gitfourchette.porcelain import GitError, Repo
 from gitfourchette.qt import *
 
 DEFAULT_MAX_DEPTH = 6
@@ -124,43 +124,77 @@ class RepoInfo:
         return self.dirty or self.ahead > 0 or self.behind > 0
 
 
-def inspectRepo(path: str) -> RepoInfo:
+def inspectRepo(path: str, isCancelled: Callable[[], bool] | None = None) -> RepoInfo:
     """
     Report what's outstanding in a repo: uncommitted work, unpushed commits.
 
     Never raises: a repo that can't be read is reported as unreadable rather
     than taking the whole scan down with it.
+
+    This asks a git process rather than libgit2. pygit2 holds Python's global
+    lock for the whole of a status call - seconds, on a big checkout - and the
+    UI thread can't run a line of Python until it lets go, so the whole window
+    froze while Home was scanning. A child process holds no lock of ours, can
+    be stopped halfway through (`isCancelled`), and is quicker besides.
     """
+    from gitfourchette.gitdriver import GitDriver
+
     info = RepoInfo(path=path)
     try:
-        repo = Repo(path)
-    except (GitError, OSError, ValueError):
-        info.unreadable = True
-        return info
-
-    try:
-        status = repo.status(untracked_files="normal", ignored=False)
-        info.changedFiles = len(status)
-        info.dirty = bool(status)
-
-        if repo.head_is_unborn:
-            info.noUpstream = True
-            return info
-
-        info.branch = repo.head_branch_shorthand if not repo.head_is_detached else ""
-        if info.branch:
-            branch = repo.branches.local[info.branch]
-            upstream = branch.upstream
-            if upstream is None:
-                info.noUpstream = True
-            else:
-                info.ahead, info.behind = repo.ahead_behind(branch.target, upstream.target)
-    except (GitError, OSError, KeyError, ValueError):
-        info.unreadable = True
-    finally:
-        repo.free()
+        stdout = GitDriver.runSync(
+            # A repo set up with core.fsmonitor=true (Scalar does it, so do
+            # some monorepo setups) would have 'git status' start a file-watching
+            # daemon that stays up for good: one per repo on the machine.
+            # (Before git 2.36 the value names a hook: 'false' then runs and
+            # fails, which git takes as "no idea what changed". Same result.)
+            "-c", "core.fsmonitor=false",
+            # Never write to the index behind the owner's back, as a plain
+            # 'git status' would to refresh it
+            "--no-optional-locks",
+            "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal",
+            directory=path, strict=True, isCancelled=isCancelled)
+        _readStatus(info, stdout)
+    except (ChildProcessError, OSError, ValueError):
+        info = RepoInfo(path=path, unreadable=True)
 
     return info
+
+
+def _readStatus(info: RepoInfo, stdout: str):
+    """Fill in `info` from the output of 'git status --porcelain=v2 --branch -z'."""
+    unborn = False
+    detached = False
+    comparedWithUpstream = False
+
+    records = iter(stdout.split("\0"))
+    for record in records:
+        if not record:
+            continue
+
+        if record.startswith("# "):
+            key, _sep, value = record[2:].partition(" ")
+            if key == "branch.oid":
+                unborn = value == "(initial)"
+            elif key == "branch.head":
+                detached = value == "(detached)"
+                info.branch = "" if detached else value
+            elif key == "branch.ab":
+                # Missing when there's no upstream, or when it's gone from the remote
+                ahead, behind = value.split()
+                info.ahead, info.behind = int(ahead), -int(behind)
+                comparedWithUpstream = True
+            continue
+
+        info.changedFiles += 1
+        if record.startswith("2 "):
+            next(records, None)  # a rename's original path comes as a record of its own
+
+    info.dirty = info.changedFiles > 0
+    if unborn:
+        info.branch = ""
+        info.noUpstream = True
+    elif not detached:
+        info.noUpstream = not comparedWithUpstream
 
 
 @dataclasses.dataclass
@@ -248,22 +282,32 @@ FETCH_TIMEOUT_MSEC = 60_000
 """A repo that can't be reached in a minute shouldn't hold up the other thirteen."""
 
 
-def fetchRepo(path: str) -> bool:
+def fetchRepo(path: str, isCancelled: Callable[[], bool] | None = None) -> bool:
     """
     Bring a repo's remote-tracking branches up to date, without asking anything.
 
     This runs unattended over every repo on the machine, so it must never stop
     to ask for a passphrase or a password: one that would ask is skipped (and
     reported as not fetched) rather than left hanging with nobody watching.
+
+    `isCancelled` stops the fetch halfway, except on Windows (see below).
     """
     from gitfourchette.gitdriver import GitDriver
+
+    if WINDOWS:
+        # A fetch writes refs under lock files. Elsewhere, git is stopped with
+        # SIGTERM and deletes them on its way out; on Windows it is killed
+        # outright, and a lock file left behind makes every later fetch of
+        # this repo fail until someone deletes it by hand. So there, a
+        # cancelled scan waits for the fetch in flight to finish instead.
+        isCancelled = None
 
     try:
         GitDriver.runSync(
             # Keep credential prompts of every kind out of an unattended run
             "-c", "core.askPass=", "-c", "credential.helper=",
             "fetch", "--all", "--prune", "--quiet",
-            directory=path, strict=True, timeoutMsec=FETCH_TIMEOUT_MSEC,
+            directory=path, strict=True, timeoutMsec=FETCH_TIMEOUT_MSEC, isCancelled=isCancelled,
             env={"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": "",
                  "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"})
     except (ChildProcessError, OSError):
@@ -278,7 +322,7 @@ class RepoScanner(QThread):
     Reports as it goes rather than at the end: on a big home folder the walk
     can take a while, and a list that stays empty until it finishes looks
     broken. Paths show up first because finding them is cheap; what each repo
-    has outstanding costs a repo open apiece, so it fills in afterwards.
+    has outstanding costs a 'git status' apiece, so it fills in afterwards.
     """
 
     progress = Signal(list)
@@ -301,7 +345,15 @@ class RepoScanner(QThread):
         self._cancelled = False
 
     def cancel(self):
+        """
+        Ask the scan to stop. It does so within a fraction of a second, even
+        in the middle of a repo, so waiting for the thread afterwards is cheap.
+        (Except for a fetch on Windows, which runs to its end: see fetchRepo.)
+        """
         self._cancelled = True
+
+    def isCancelled(self) -> bool:
+        return self._cancelled
 
     def run(self):
         infos: list[RepoInfo] = []
@@ -324,7 +376,7 @@ class RepoScanner(QThread):
         for i, info in enumerate(infos):
             if self._cancelled:
                 return
-            infos[i] = inspectRepo(info.path)
+            infos[i] = inspectRepo(info.path, self.isCancelled)
             if (i + 1) % RepoScanner.BatchSize == 0:
                 self.progress.emit(list(infos))
 
@@ -339,7 +391,7 @@ class RepoScanner(QThread):
                 return
             self.activity.emit(_("Fetching {0} ({1} of {2})…", os.path.basename(info.path),
                                  i + 1, len(infos)))
-            if not fetchRepo(info.path):
+            if not fetchRepo(info.path, self.isCancelled):
                 self.fetchFailures.append(info.path)
 
 

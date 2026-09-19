@@ -7,6 +7,9 @@
 import itertools
 import os
 import pathlib
+import sys
+import threading
+import time
 
 from gitfourchette import settings
 from gitfourchette.forms.welcomewidget import WelcomeWidget
@@ -629,6 +632,106 @@ def testInspectSurvivesACorruptIndex(tempDir, mainWindow):
     assert not info.needsAttention
 
 
+def testInspectCountsARenameAsOneChange(tempDir, mainWindow):
+    # What Home counts must be what 'git status' - and the repo's own tab - shows
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/before.txt", "moving house")
+    shell("git add before.txt && git commit -q -m before && git mv before.txt after.txt", wd)
+
+    info = inspectRepo(wd)
+    assert 1 == info.changedFiles
+    assert info.dirty
+
+
+def testInspectTreatsAnUpstreamThatIsGoneAsNone(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("git switch -q -c doomed", wd)
+    # Tracks a remote branch that was never fetched, or was deleted since
+    shell("git config branch.doomed.remote origin && git config branch.doomed.merge refs/heads/doomed", wd)
+
+    info = inspectRepo(wd)
+    assert "doomed" == info.branch
+    assert info.noUpstream
+    assert 0 == info.ahead
+    assert not info.unreadable
+
+
+def testInspectNeverLeavesAFileWatcherRunning(tempDir, mainWindow):
+    """
+    A repo can ask for core.fsmonitor=true (Scalar sets repos up that way).
+    There, a plain 'git status' starts a daemon that keeps watching the repo
+    for good: a scan of the home folder must not leave one behind per repo.
+    """
+    from gitfourchette.gitdriver import GitDriver
+
+    wd = unpackRepo(tempDir)
+    shell("git config core.fsmonitor true", wd)
+
+    def watched() -> bool:
+        # Exits with an error, so prints nothing here, unless it is watching
+        return "is watching" in GitDriver.runSync("fsmonitor--daemon", "status", directory=wd)
+
+    try:
+        # Make sure this git would start one here, or the test proves nothing
+        GitDriver.runSync("status", directory=wd)
+        if not watched():
+            pytest.skip("this git doesn't run fsmonitor--daemon here")
+        GitDriver.runSync("fsmonitor--daemon", "stop", directory=wd)
+        assert not watched()
+
+        info = inspectRepo(wd)
+        assert not info.unreadable
+        assert not watched(), "reading the repo left a file watcher running"
+    finally:
+        GitDriver.runSync("fsmonitor--daemon", "stop", directory=wd)
+
+
+def testReadingARepoStopsHalfwayWhenCancelled(tempDir, mainWindow, monkeypatch):
+    """
+    A repo that takes ages to read must not hold up whoever cancels the scan:
+    closing Home waits for the scanner, so this is how long a click takes.
+    """
+    from gitfourchette.gitdriver import GitDriver
+
+    wd = unpackRepo(tempDir)
+    # A git that never gets anywhere, like 'git status' on a huge checkout
+    monkeypatch.setattr(GitDriver, "_commandStem", [sys.executable, "-c", "import time; time.sleep(60)"])
+
+    start = time.perf_counter()
+    info = inspectRepo(wd, lambda: time.perf_counter() - start > .2)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2, f"took {elapsed:.1f} s to give up after being cancelled"
+    assert info.unreadable, "a cancelled read reports nothing it didn't find out"
+
+
+@pytest.mark.parametrize("onWindows", [False, True])
+def testFetchingARepoStopsHalfwayWhenCancelledExceptOnWindows(tempDir, mainWindow, monkeypatch, onWindows):
+    """
+    Elsewhere, a cancelled fetch gets SIGTERM and git deletes its lock files on
+    the way out. On Windows it could only be killed, which can leave a ref
+    lock behind that breaks every later fetch of the repo: there, the fetch in
+    flight must be allowed to finish.
+    """
+    from gitfourchette import reposcan
+    from gitfourchette.gitdriver import GitDriver
+
+    wd = unpackRepo(tempDir)
+    monkeypatch.setattr(reposcan, "WINDOWS", onWindows)
+    # A fetch that takes a while, then succeeds
+    monkeypatch.setattr(GitDriver, "_commandStem", [sys.executable, "-c", "import time; time.sleep(2)"])
+
+    start = time.perf_counter()
+    fetched = fetchRepo(wd, lambda: time.perf_counter() - start > .2)
+    elapsed = time.perf_counter() - start
+
+    if onWindows:
+        assert fetched, "the fetch must run to its end"
+        assert elapsed >= 2
+    else:
+        assert not fetched, "a fetch that was stopped hasn't fetched"
+        assert elapsed < 1.5, f"took {elapsed:.1f} s to give up after being cancelled"
+
+
 def testScannerReportsAsItGoes(tempDir, mainWindow):
     from gitfourchette.reposcan import RepoScanner
 
@@ -712,6 +815,105 @@ def testCancellingBetweenFindingAndReadingStopsEverything(tempDir, mainWindow):
     scanner.run()
 
     assert 1 == len(emitted), "nothing more must be reported after a cancel"
+
+
+class SlowInspection:
+    """Stands in for inspectRepo on a repo that takes a long time to read."""
+
+    def __init__(self, seconds: float = 5):
+        self.seconds = seconds
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def __call__(self, path: str, isCancelled=lambda: False) -> RepoInfo:
+        self.started.set()
+        deadline = time.monotonic() + self.seconds
+        while time.monotonic() < deadline and not self.release.is_set() and not isCancelled():
+            time.sleep(.005)
+        return RepoInfo(path=path, branch="slow")
+
+
+def testLeavingHomeMidScanIsImmediate(tempDir, mainWindow, monkeypatch):
+    from gitfourchette import reposcan
+
+    root = tempDir.name
+    makeRepoAt(root, "big/monorepo")
+    slow = SlowInspection()
+    monkeypatch.setattr(reposcan, "inspectRepo", slow)
+    settings.history.scanRoots = [root]
+
+    welcome = mainWindow.welcomeWidget
+    welcome.rescan(force=True)
+    assert slow.started.wait(5), "the scan never got to reading a repo"
+
+    # Opening a repo hides Home, which stops the scan and waits for its thread
+    start = time.perf_counter()
+    welcome.hide()
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < .2, f"leaving Home took {elapsed:.2f} s mid-scan"
+    assert not welcome.scanner.isRunning(), "no thread left behind"
+
+
+def testSpinnerTurnsOnlyWhileScanning(tempDir, mainWindow, monkeypatch):
+    from gitfourchette import reposcan
+
+    root = tempDir.name
+    makeRepoAt(root, "some/repo")
+    welcome = mainWindow.welcomeWidget
+    waitForScan(welcome)  # the one the window started with
+    waitUntilTrue(welcome.scanSpinner.isHidden)
+    assert welcome.scanSpinner.isHidden(), "nothing moves on an idle Home"
+
+    slow = SlowInspection()
+    monkeypatch.setattr(reposcan, "inspectRepo", slow)
+    settings.history.scanRoots = [root]
+    welcome.rescan(force=True)
+    assert slow.started.wait(5)
+    assert welcome.scanSpinner.isVisible(), "a scan in progress shows it"
+
+    slow.release.set()
+    waitForScan(welcome)
+    waitUntilTrue(welcome.scanSpinner.isHidden)  # the thread's end is reported through the event loop
+
+    # Stopping a scan halfway stops the spinner too
+    slow.started.clear()
+    slow.release.clear()
+    welcome.rescan(force=True)
+    assert slow.started.wait(5)
+    assert welcome.scanSpinner.isVisible()
+    welcome.stopScan()
+    assert welcome.scanSpinner.isHidden()
+
+
+def testScanProgressKeepsYourPlaceInTheTree(tempDir, mainWindow):
+    root = tempDir.name
+    picked = makeRepoAt(root, "zz/picked")
+    writeFile(f"{picked}/README.md", "# Picked\n\nStill here.\n")
+    # Plenty of rows, so the tree has to scroll
+    others = [RepoInfo(path=os.path.join(root, f"g{i:02}", "repo")) for i in range(60)]
+
+    welcome = mainWindow.welcomeWidget
+    waitForScan(welcome)  # the one the window started with
+    welcome.onScanProgress(others + [RepoInfo(path=picked)])
+    welcome.repoTree.setCurrentItem(findItem(welcome, picked))
+    assert welcome.ui.leftStack.currentWidget() is welcome.ui.readmePage
+
+    scrollBar = welcome.repoTree.verticalScrollBar()
+    assert scrollBar.maximum() > 0, "this test needs a tree tall enough to scroll"
+    scrollBar.setValue(scrollBar.maximum() // 2)
+    position = scrollBar.value()
+
+    # A running scan reports in again, and now knows what's going on in that repo
+    writeFile(f"{picked}/wip.txt", "uncommitted")
+    fresh = inspectRepo(picked)
+    welcome.onScanProgress(others + [fresh])
+
+    assert picked == welcome.repoTree.currentItem().data(0, WelcomeWidget.PathRole)
+    assert welcome.ui.leftStack.currentWidget() is welcome.ui.readmePage, "what you were reading stays up"
+    assert "Still here." in welcome.readmeView.toPlainText()
+    assert position == scrollBar.value()
+    assert welcome.repoFacts.text() == welcome._repoFactsHtml(fresh, welcome.detailCache[picked])
 
 
 def repoScopedToolbarTexts(mainWindow) -> list[str]:
