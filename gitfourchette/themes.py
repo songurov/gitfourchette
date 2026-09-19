@@ -217,6 +217,12 @@ class ThemeColors:
     "How many points smaller than the rest of the text the repo tabs' names are."
     sidebarRowHeight: str = "1.25em"
     fileRowHeight: str = "1.15em"
+    fileIconSize: int = 0
+    "Status tiles and folders in the file lists; 0 makes them as tall as a line of text."
+    fileTreeIndent: int = 0
+    "How far each folder level of a file tree steps in; 0 leaves it to the style."
+    fileListInset: int = 0
+    "Room between a file list's edges and its rows, around Neutral's rounded selection."
     scrollHandleMargin: str = "3px"
     "Room on each side of a scroll bar's handle, across the bar."
 
@@ -248,6 +254,10 @@ class ThemeColors:
     "Subfolder of assets:icons whose redraws replace the icons of the same name."
     toolbarIconColor: str = ""
     "Main toolbar icons, if not the usual icon color. The labels under them use textDim."
+    folderColor: str = ""
+    "Filled folders in the file trees; \"\" keeps the style's folder outline."
+    fileGlyphColor: str = ""
+    "The page that Neutral draws after a file's status tile."
 
     # Code and diffs, with the automatic syntax scheme only: a Pygments preset
     # picked in Settings keeps its own colors. "" keeps the preset's background
@@ -532,6 +542,9 @@ NEUTRAL_DARK = ThemeColors(
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
     fileRowHeight      = "1.4em",
+    fileIconSize       = 14,
+    fileTreeIndent     = 16,
+    fileListInset      = 10,
     scrollHandleMargin = "2px",
     fieldBg            = "#242424",
     fieldBorder        = "#4a4a4a",
@@ -549,6 +562,8 @@ NEUTRAL_DARK = ThemeColors(
     newTabButtonShade  = "#1a1a1a",
     iconSet            = "neutral",
     toolbarIconColor   = "#e9e9e9",
+    folderColor        = "#3bb7e6",
+    fileGlyphColor     = "#dcdcdc",
     codeBg             = "#242424",
     diffAdd            = "#2f5138",
     diffDel            = "#5b3737",
@@ -587,6 +602,9 @@ NEUTRAL_LIGHT = ThemeColors(
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
     fileRowHeight      = "1.4em",
+    fileIconSize       = 14,
+    fileTreeIndent     = 16,
+    fileListInset      = 10,
     scrollHandleMargin = "2px",
     fieldBorder        = "#c8c8c8",
     splitterHandle     = "#dcdcdc",
@@ -598,6 +616,8 @@ NEUTRAL_LIGHT = ThemeColors(
     tabActiveText      = "#1f1f1f",
     iconSet            = "neutral",
     toolbarIconColor   = "#3a3a3a",
+    folderColor        = "#1f9fd6",
+    fileGlyphColor     = "#b4b4b4",
     codeBg             = "#f5f5f5",
     diffAdd            = "#dcf2e0",
     diffDel            = "#fbe1e1",

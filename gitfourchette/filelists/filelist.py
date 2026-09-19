@@ -28,6 +28,7 @@ from gitfourchette.repomodel import RepoModel
 from gitfourchette.search.itemviewsearchprovider import ItemViewSearchProvider
 from gitfourchette.settings import FileListClick, getDiffToolName, getExternalEditorName
 from gitfourchette.tasks import *
+from gitfourchette.themes import ThemeVariant, activeTheme
 from gitfourchette.toolbox import *
 
 
@@ -36,11 +37,21 @@ class FileListDelegate(QStyledItemDelegate):
     Item delegate for FileList that supports highlighting search terms from a SearchBar
     """
 
+    NeutralIconLead = 5
+    "Neutral: room before a row's first icon."
+    NeutralIconGap = 5
+    "Neutral: room after each icon but the last."
+    NeutralTextLead = 7
+    "Neutral: room between the last icon and the name."
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
         widget = option.widget
         assert isinstance(widget, FileList)
+        neutral = widget.neutralRows
 
         isActive = bool(option.state & QStyle.StateFlag.State_Active)
+        if neutral:
+            isActive = widget.selectionIsEmphasized()
         isSelected = bool(option.state & QStyle.StateFlag.State_Selected)
         colorGroup = QPalette.ColorGroup.Active if isActive else QPalette.ColorGroup.Inactive
 
@@ -52,12 +63,18 @@ class FileListDelegate(QStyledItemDelegate):
         searchTerm: str = widget.searchBar.provider.term()
 
         if index.data(FileListModel.Role.Delta) is None:
-            super().paint(painter, option, index)
+            if neutral:
+                self.paintNeutralFolder(painter, option, icon, fullText)
+            else:
+                super().paint(painter, option, index)
             return
 
         # Prepare icon and text rects
         rect = QRect(option.rect)
-        rect.adjust(2, 0, -2, 0)
+        if neutral:
+            rect.adjust(self.NeutralIconLead, 0, -2 - widget.rowRightInset(), 0)
+        else:
+            rect.adjust(2, 0, -2, 0)
 
         # Begin painting
         painter.save()
@@ -65,17 +82,22 @@ class FileListDelegate(QStyledItemDelegate):
             painter.setFont(font)
         fontMetrics = painter.fontMetrics()
 
-        # Draw default background
-        widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, widget)
+        # Draw default background (Neutral: FileList.drawRow has drawn the whole row's)
+        if not neutral:
+            widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, widget)
 
-        # Draw icon
-        for i in [icon, emblem]:
-            if i is None:
-                continue
+        # Draw icons. Neutral follows the status tile with a page, as Fork does.
+        icons = [icon, widget.fileGlyph(isSelected and isActive), emblem] if neutral else [icon, emblem]
+        icons = [i for i in icons if i is not None]
+        for i in icons:
             iconRect = QRect(rect)
             iconRect.setWidth(option.decorationSize.width())
             i.paint(painter, iconRect, option.decorationAlignment)
-            rect.setLeft(iconRect.right() + 4)
+            if neutral:
+                gap = self.NeutralTextLead if i is icons[-1] else self.NeutralIconGap
+                rect.setLeft(iconRect.right() + 1 + gap)
+            else:
+                rect.setLeft(iconRect.right() + 4)
 
         # Prepare elided text
         text = fontMetrics.elidedText(fullText, option.textElideMode, rect.width())
@@ -127,6 +149,25 @@ class FileListDelegate(QStyledItemDelegate):
             SearchBar.highlightNeedle(painter, rect, text, needlePos, needleLen)
 
         # Finish painting
+        painter.restore()
+
+    def paintNeutralFolder(self, painter: QPainter, option: QStyleOptionViewItem, icon: QIcon, text: str):
+        """A folder row, lined up with the file rows: its icon where their status tiles are."""
+        widget = option.widget
+        assert isinstance(widget, FileList)
+        rect = QRect(option.rect)
+        rect.adjust(self.NeutralIconLead, 0, -2 - widget.rowRightInset(), 0)
+        iconRect = QRect(rect)
+        iconRect.setWidth(option.decorationSize.width())
+        # A folder drawn in the tiles' 14 px comes out squat next to them: give it 2 px more
+        folderRect = iconRect.adjusted(-1, 0, 1, 0)
+        icon.paint(painter, folderRect, option.decorationAlignment)
+        rect.setLeft(iconRect.right() + 1 + self.NeutralIconGap)
+
+        painter.save()
+        painter.setPen(option.palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.WindowText))
+        text = painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideMiddle, rect.width())
+        painter.drawText(rect, option.displayAlignment, text)
         painter.restore()
 
 
@@ -190,6 +231,8 @@ class FileList(QTreeView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         iconSize = self.fontMetrics().height()
         self.setIconSize(QSize(iconSize, iconSize))
+        self.defaultIconSize = iconSize
+        self.neutralRows = False
         self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)  # prevent editing text after double-clicking
         self.setUniformRowHeights(True)  # potential perf boost with many files
@@ -207,6 +250,7 @@ class FileList(QTreeView):
         self.setItemDelegate(FileListDelegate(self))
 
         GFApplication.instance().prefsChanged.connect(self.refreshPrefs)
+        GFApplication.instance().restyle.connect(self.refreshTheme)
         self.refreshPrefs()
 
         makeWidgetShortcut(self, self.searchBar.hideOrBeep, "Escape")
@@ -217,6 +261,84 @@ class FileList(QTreeView):
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         nameFirst = settings.prefs.pathDisplayStyle == PathDisplayStyle.FileNameFirst
         self.setTextElideMode(Qt.TextElideMode.ElideRight if nameFirst else Qt.TextElideMode.ElideMiddle)
+        self.refreshTheme()
+
+    def refreshTheme(self):
+        """
+        Neutral lays the rows out like Fork's: inset from the edges, a folder
+        level every 16 px under a thin chevron, 14 px icons, and a rounded pill
+        across the whole row for the selection. Other themes keep Qt's rows.
+        """
+        theme = activeTheme()
+        self.neutralRows = theme is not None and theme.variant == ThemeVariant.Neutral
+
+        if theme is not None and theme.fileTreeIndent:
+            self.setIndentation(theme.fileTreeIndent)
+        else:
+            self.resetIndentation()
+
+        iconSize = (theme.fileIconSize if theme is not None else 0) or self.defaultIconSize
+        self.setIconSize(QSize(iconSize, iconSize))
+        self.viewport().update()
+
+    def rowRightInset(self) -> int:
+        """
+        Neutral: room between the rows and the list's right edge. The theme's
+        padding leaves it out so the scroll bar can sit at the edge; when the
+        scroll bar shows, the rows stop at it instead.
+        """
+        theme = activeTheme()
+        if not self.neutralRows or theme is None or self.verticalScrollBar().isVisible():
+            return 0
+        return theme.fileListInset
+
+    def selectionIsEmphasized(self) -> bool:
+        """Neutral: the selection takes the accent color while the list has the focus, as on the Mac."""
+        return self.hasFocus() and self.isActiveWindow()
+
+    def fileGlyph(self, onAccent: bool = False) -> QIcon:
+        """Neutral: the page drawn after a file's status tile, in the selected text's color on the accent."""
+        theme = activeTheme()
+        if theme is None:
+            return stockIcon("doc-filled")
+        color = self.palette().color(QPalette.ColorRole.HighlightedText).name() if onAccent else theme.fileGlyphColor
+        return stockIcon("doc-filled", f"gray={color}")
+
+    def drawRow(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        if self.neutralRows and self.selectionModel().isSelected(index):
+            group = QPalette.ColorGroup.Active if self.selectionIsEmphasized() else QPalette.ColorGroup.Inactive
+            radius = activeTheme().outerRadius
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(self.palette().color(group, QPalette.ColorRole.Highlight))
+            pill = QRectF(option.rect).adjusted(0, 0, -self.rowRightInset(), 0)
+            painter.drawRoundedRect(pill, radius, radius)
+            painter.restore()
+        super().drawRow(painter, option, index)
+
+    def drawBranches(self, painter: QPainter, rect: QRect, index: QModelIndex):
+        if not self.neutralRows:
+            super().drawBranches(painter, rect, index)
+            return
+        if not self.treeMode or self.treeModel.rowCount(index) == 0:
+            return  # no folder, no chevron
+        # A thin chevron, centered in the last step of the indentation
+        indent = self.indentation()
+        slot = QRect(rect.right() + 1 - indent, rect.top(), indent, rect.height())
+        iconRect = QRect(0, 0, 16, 16)
+        iconRect.moveCenter(slot.center())
+        stockIcon("chevron-down" if self.isExpanded(index) else "chevron-right").paint(painter, iconRect)
+
+    def focusInEvent(self, event: QFocusEvent):
+        super().focusInEvent(event)
+        if self.neutralRows:
+            self.viewport().update()  # the selection's color follows the focus
+
+    def focusOutEvent(self, event: QFocusEvent):
+        super().focusOutEvent(event)
+        if self.neutralRows:
+            self.viewport().update()
 
     @property
     def repo(self) -> Repo:

@@ -5,8 +5,18 @@
 
 from gitfourchette.filelists.filelistmodel import FileListModel
 from gitfourchette.qt import *
+from gitfourchette.themes import activeTheme
+from gitfourchette.toolbox import stockIcon
 
 _EMPTY_INDEX = QModelIndex()
+
+
+def folderIcon() -> QIcon:
+    """A folder in the file tree: filled in the theme's folder color, if it has one."""
+    theme = activeTheme()
+    if theme is not None and theme.folderColor:
+        return stockIcon("folder-filled", f"gray={theme.folderColor}")
+    return QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
 
 
 class _Node:
@@ -97,7 +107,7 @@ class FileTreeModel(QAbstractItemModel):
             if role == Qt.ItemDataRole.DisplayRole:
                 return node.name
             if role == Qt.ItemDataRole.DecorationRole:
-                return QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+                return folderIcon()
             return None
         if role == Qt.ItemDataRole.DisplayRole:
             return node.name

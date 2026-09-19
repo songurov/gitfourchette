@@ -764,3 +764,17 @@ ${neutralOnly}#GFToolbar QToolButton:disabled {
 ${neutralOnly}#GFToolbar QToolButton#GFToolbarRepoButton {
     color: ${text};
 }
+
+/* File lists: rows inset from the edges (FileList.rowRightInset keeps the
+   right edge's room clear of the scroll bar). FileList paints the selection
+   itself, as a rounded pill across the whole row; Fork shows no hover. */
+${neutralOnly}RepoWidget FileList {
+    padding: ${fileListInset}px 0px 0px ${fileListInset}px;
+    show-decoration-selected: 0;
+}
+
+${neutralOnly}FileList::item:hover,
+${neutralOnly}FileList::item:selected,
+${neutralOnly}FileList::item:selected:active {
+    background: transparent;
+}
