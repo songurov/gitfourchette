@@ -8,6 +8,7 @@ import ast
 import os
 import re
 import shlex
+import shutil
 from pathlib import Path
 
 import pytest
@@ -1475,6 +1476,86 @@ def testFinishReleaseStartedFromOtherBase(tempDir, mainWindow):
     triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
     acceptQMessageBox(rw, r"release/1\.0. was started from .support/1\.x., not from .develop.+git-flow command line tools")
     assert refsSnapshot(rw.repo) == refsBefore
+
+
+# -----------------------------------------------------------------------------
+# Working with the git-flow command line tools
+
+requiresGitFlowCli = pytest.mark.skipif(
+    not shutil.which("git-flow"),
+    reason="Requires the git-flow command line tools (AVH edition)")
+
+
+@requiresGitFlowCli
+def testCliFinishesWhatWeStarted(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    clickOk(openInitDialog(mainWindow, rw), findQDialog(rw, "initialize git flow", GitFlowInitDialog).ui.buttonBox)
+    for kind, name in [("feature", "login"), ("release", "2.0")]:
+        triggerMenuAction(flowMenu(mainWindow), f"start {kind}")
+        dlg = startDialog(rw, kind)
+        dlg.lineEdit.setText(name)
+        clickOk(dlg, dlg.buttonBox)
+
+    shell("""
+        export GIT_MERGE_AUTOEDIT=no
+        git checkout -q feature/login
+        echo login > login.txt
+        git add login.txt
+        git commit -q -m 'Log in'
+        git flow feature finish login
+        git checkout -q release/2.0
+        echo 2.0 > VERSION
+        git add VERSION
+        git commit -q -m 'Bump version to 2.0'
+        git flow release finish -m 'Release 2.0' 2.0
+    """, wd)
+
+    with RepoContext(wd) as repo:
+        assert not any(b.startswith(("feature/", "release/")) for b in repo.branches.local)
+        develop = repo.branches.local["develop"].target
+        assert repo.is_ancestor(repo.commit_id_from_tag_name("2.0"), develop)
+        assert repo.get_tag_message("2.0") == "Release 2.0"
+        assert repo.gitflow_tag_merges("2.0", repo.peel_commit(repo.commit_id_from_tag_name("2.0")).parent_ids[1])
+        assert "login.txt" in repo.peel_tree(develop)
+        assert "VERSION" in repo.peel_tree(repo.branches.local["master"].target)
+
+
+@requiresGitFlowCli
+def testWeFinishWhatCliStarted(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("""
+        git branch develop  # in a repo with branches, 'git flow init -d' won't create it
+        git flow init -d
+        git flow feature start search
+        echo search > search.txt
+        git add search.txt
+        git commit -q -m 'Search'
+        git checkout -q develop
+        git flow release start 1.0
+        echo 1.0 > VERSION
+        git add VERSION
+        git commit -q -m 'Bump version to 1.0'
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    assert flowMenuTitles(mainWindow) == ["Start Feature…", "Start Release…", "Start Hotfix…", "Finish Release “1.0”…"]
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+    finishFromSidebar(rw, "feature/search", "finish feature .search.")
+    confirmFinish(rw, "merge .feature/search. into .develop.")
+
+    assert not any(b.startswith(("feature/", "release/")) for b in repo.branches.local)
+    assert repo.gitflow_tag_merges("1.0", repo.peel_commit(repo.commit_id_from_tag_name("1.0")).parent_ids[1])
+    assert repo.is_ancestor(repo.commit_id_from_tag_name("1.0"), repo.branches.local["develop"].target)
+    assert "search.txt" in repo.peel_tree(repo.branches.local["develop"].target)
+    # What git-flow recorded is gone along with the branches
+    assert not any(e.name.startswith("gitflow.branch.") and e.name.endswith(".base")
+                   for e in GitConfig(f"{wd}.git/config"))
+
+    # And git-flow still sees a repo it can work with
+    shell("git flow feature start next && git flow feature list", wd)
 
 
 # -----------------------------------------------------------------------------
