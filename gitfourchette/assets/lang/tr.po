@@ -8693,3 +8693,123 @@ msgid ""
 "In the file tree, a folder that holds nothing but one other folder shares "
 "its line, as in “src/ui”."
 msgstr "Dosya ağacında, içinde yalnızca başka bir klasör bulunan bir klasör onunla aynı satırda gösterilir; örneğin “src/ui”."
+#: diffarea.py:398 diffarea.py:399 diffarea.py:834 diffarea.py:943
+#: diffarea.py:950
+msgid "Commit subject"
+msgstr "İşleme başlığı"
+
+#: diffarea.py:404 diffarea.py:405
+msgid "Description"
+msgstr "Açıklama"
+
+#: diffarea.py:411
+msgid "Write the commit message with AI"
+msgstr "İşleme iletisini yapay zekâyla yaz"
+
+#: diffarea.py:453 diffarea.py:661
+msgid "Amend"
+msgstr "Düzelt"
+
+#: diffarea.py:458
+msgid "Sign Off"
+msgstr "İmzala (Sign-off)"
+
+#: diffarea.py:461
+msgid "Add a “Signed-off-by” line to the message (git commit --signoff)"
+msgstr "İletiye bir “Signed-off-by” satırı ekle (git commit --signoff)"
+
+#: diffarea.py:462
+msgid "No-Verify"
+msgstr "Doğrulamasız (No-Verify)"
+
+#: diffarea.py:465
+msgid "Skip the pre-commit and commit-msg hooks (git commit --no-verify)"
+msgstr "pre-commit ve commit-msg kancalarını atla (git commit --no-verify)"
+
+#: diffarea.py:470 diffarea.py:700
+msgid "More commit options"
+msgstr "Diğer işleme seçenekleri"
+
+#: diffarea.py:485
+#, python-brace-format
+msgid "Characters in the subject. Up to {0} reads well everywhere; some tools cut longer subjects short."
+msgstr "Başlıktaki karakter sayısı. {0} karaktere kadar her yerde iyi okunur; bazı araçlar daha uzun başlıkları kısaltır."
+
+#: diffarea.py:493 diffarea.py:666
+msgid "Commit && Push"
+msgstr "İşle && Gönder"
+
+#: diffarea.py:662
+msgid "Amend && Push"
+msgstr "Düzelt && Gönder"
+
+#: diffarea.py:668
+#, python-brace-format
+msgid "Commit {n} staged file"
+msgid_plural "Commit {n} staged files"
+msgstr[0] "Hazırlanan {n} dosyayı işle"
+msgstr[1] "Hazırlanan {n} dosyayı işle"
+
+#: diffarea.py:672
+msgid "Nothing is staged. Stage files first, or tick Amend to change the last commit."
+msgstr "Hazırlanan bir şey yok. Önce dosyaları hazırlayın ya da son işlemeyi değiştirmek için “Düzelt” kutusunu işaretleyin."
+
+#: diffarea.py:702
+#, python-brace-format
+msgid "On: {0}"
+msgstr "Açık: {0}"
+
+#: diffarea.py:715
+msgid "No recent messages"
+msgstr "Son ileti yok"
+
+#: diffarea.py:748
+msgid "Concise"
+msgstr "Kısa"
+
+#: diffarea.py:748
+msgid "Detailed"
+msgstr "Ayrıntılı"
+
+#: diffarea.py:748
+msgid "Deep"
+msgstr "Derinlemesine"
+
+#: diffarea.py:804
+msgid "Generating a commit message… Click to stop."
+msgstr "İşleme iletisi oluşturuluyor… Durdurmak için tıklayın."
+
+#: diffarea.py:806
+msgid "Install and configure Codex CLI or Claude Code to generate a commit message."
+msgstr "İşleme iletisi oluşturmak için Codex CLI veya Claude Code'u kurup yapılandırın."
+
+#: diffarea.py:808
+msgid "Stage files to generate a commit message with AI."
+msgstr "Yapay zekâyla işleme iletisi oluşturmak için dosyaları hazırlayın."
+
+#: diffarea.py:813
+#, python-brace-format
+msgid "Generate a commit message from staged changes with {0}."
+msgstr "Hazırlanan değişikliklerden {0} ile işleme iletisi oluştur."
+
+#: diffarea.py:850
+#, python-brace-format
+msgid "Writing a message with {0}…"
+msgstr "{0} iletiyi yazıyor…"
+
+#: diffarea.py:952
+msgid "AI commit message"
+msgstr "Yapay zekâ işleme iletisi"
+
+#: diffarea.py:888
+#, python-brace-format
+msgid "CLI exited with code {0}."
+msgstr "CLI {0} koduyla çıktı."
+
+#: diffarea.py:893
+msgid "There are no staged changes to describe."
+msgstr "Açıklanacak hazırlanmış değişiklik yok."
+
+#: diffarea.py:939
+msgid "The CLI returned no commit message."
+msgstr "CLI bir işleme iletisi döndürmedi."

@@ -5,6 +5,7 @@
 # -----------------------------------------------------------------------------
 
 import os.path
+import sys
 
 import pytest
 
@@ -17,50 +18,83 @@ from gitfourchette.forms.newtagdialog import NewTagDialog
 from gitfourchette.forms.signatureform import SignatureOverride
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
 from gitfourchette.nav import NavLocator
+from gitfourchette.repowidget import RepoWidget
 from gitfourchette.sidebar.sidebarmodel import SidebarItem
 from gitfourchette.tasks import AmendCommit, NewCommit, TaskBook
 from gitfourchette.tasks.committasks import recentCommitSummaries
+from gitfourchette.themes import ThemeName, ThemeVariant, activeTheme, formatStyle
 from . import reposcenario
+from .test_diff import accessibleNameOf, tabStops
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
 QDateTime19991231 = QDateTime.fromString("1999-12-31 23:59:00", "yyyy-MM-dd HH:mm:ss")
+
+
+def commitFromCommitArea(rw):
+    """With nothing staged, the Commit button is dead, but its menu isn't: an empty commit starts from New Commit…."""
+    triggerMenuAction(rw.diffArea.commitButton.menu(), "new commit")
+
+
+def fakeCommitAi(monkeypatch, code: str):
+    """Pretend Codex is installed, and have it run this Python code instead."""
+    from gitfourchette import diffarea
+    # Non-ASCII literals would be mangled on their way through argv (see test_aichat.fakeCli)
+    code = code.encode("ascii", "backslashreplace").decode("ascii")
+    monkeypatch.setattr(diffarea, "availableProviders", lambda: {"codex": sys.executable})
+    monkeypatch.setattr(diffarea, "configuredModel", lambda provider: "")
+    monkeypatch.setattr(diffarea, "cliArguments", lambda *args: ["-c", code])
+
+
+def buttonFill(button: QAbstractButton) -> QColor:
+    """The color a button is filled with, just inside its left edge."""
+    image = button.grab().toImage()
+    return image.pixelColor(4, image.height() // 2)
 
 
 def testCommitFormPlacementPreservesMessage(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     rw = mainWindow.openRepo(wd)
     form = rw.diffArea.commitForm
-    editor = rw.diffArea.commitMessageEditor
-    editor.setPlainText("Keep this message")
+    rw.diffArea.setCommitMessage("Keep this message\n\nAnd its description")
 
-    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    # Along the bottom, under the diff, out of the box
+    assert settings.prefs.commitFormPlacement == settings.CommitFormPlacement.BottomBar
     assert form.parentWidget() is rw.diffArea.bottomCommitFormHost
-    assert editor.toPlainText() == "Keep this message"
 
     GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.FilesPanel)
     assert form.parentWidget() is rw.diffArea.stageCommitFormHost
-    assert editor.toPlainText() == "Keep this message"
+    assert rw.diffArea.commitMessage() == "Keep this message\n\nAnd its description"
+
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    assert form.parentWidget() is rw.diffArea.bottomCommitFormHost
+    assert rw.diffArea.commitMessage() == "Keep this message\n\nAnd its description"
 
 
 def testBottomBarCommitFormOnlyUnderWorkdirDiffs(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     reposcenario.stagedNewEmptyFile(wd)
     mainWindow.resize(1400, 1000)
+    # A height saved for the old, taller commit form doesn't carry over
+    RepoWidget.sharedSplitterSizes["Split_BottomCommitForm"] = [300, 400]
     rw = mainWindow.openRepo(wd)
     host = rw.diffArea.bottomCommitFormHost
     splitter = rw.diffArea.bottomCommitSplitter
     oid = Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664")
 
-    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    assert settings.prefs.commitFormPlacement == settings.CommitFormPlacement.BottomBar
     assert rw.navLocator.context.isWorkdir()
     assert host.isVisibleTo(rw)
+    QTest.qWait(0)
+    startHeight = splitter.sizes()[1]
+    assert 90 <= startHeight <= 140, "about as tall as its box and its row of buttons"
 
     # Make the form taller than it starts out
     total = sum(splitter.sizes())
     splitter.setSizes([total - 300, 300])
     QTest.qWait(0)
     formHeight = splitter.sizes()[1]
-    assert formHeight > 260, "should be clearly taller than the 220px it starts out at"
+    assert formHeight > startHeight + 100, "should be clearly taller than it starts out"
 
     # A past commit's diff runs to the bottom: nothing to commit there
     rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
@@ -98,6 +132,7 @@ def testCommitAiButtonRequiresCliAndStagedChanges(tempDir, mainWindow, monkeypat
 
     assert button.isEnabled()
     assert "Codex" in button.toolTip()
+    assert button.accessibleName() == "Write the commit message with AI"
 
 
 def testCommitAiButtonDisabledWithoutCli(tempDir, mainWindow, monkeypatch):
@@ -114,20 +149,397 @@ def testCommitAiButtonDisabledWithoutCli(tempDir, mainWindow, monkeypatch):
     assert "Install" in rw.diffArea.commitAiButton.toolTip()
 
 
+def testCommitAiWritesMessageInChosenLanguageAndDetail(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    fakeCommitAi(monkeypatch, """
+import json, sys
+prompt = sys.stdin.read()
+assert 'Use this language: Français.' in prompt, prompt[:400]
+assert '3-6 informative lines' in prompt, prompt[:400]
+message = 'Ajoute un fichier vide\\n\\nPour la démonstration.'
+print(json.dumps({'type': 'item.completed', 'item': {'id': '1', 'type': 'agent_message', 'text': message}}))
+""")
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+
+    # The language and the detail are in the ✦ button's menu
+    menu = area.commitAiButton.menu()
+    menu.aboutToShow.emit()
+    triggerMenuAction(menu, "^Français$")
+    menu.aboutToShow.emit()
+    triggerMenuAction(menu, "^Concise$")
+    assert settings.history.aiLanguage == "Français"
+    assert settings.history.aiCommitDetail == "concise"
+    menu.aboutToShow.emit()
+    assert findMenuAction(menu, "^Français$").isChecked()
+    assert not findMenuAction(menu, "^English$").isChecked()
+    assert findMenuAction(menu, "^Concise$").isChecked()
+    assert "Français · Concise" in area.commitAiButton.toolTip()
+
+    # A click writes the message: its first line is the subject, the rest the description
+    area.commitAiButton.click()
+    assert area.commitAiSpinner.isVisibleTo(area)
+    waitUntilTrue(lambda: area.commitAiProcess is None)
+    assert area.commitSubjectEditor.text() == "Ajoute un fichier vide"
+    assert area.commitDescriptionEditor.toPlainText() == "Pour la démonstration."
+    assert not area.commitAiSpinner.isVisibleTo(area)
+
+    # A language typed into the AI chat is offered too
+    settings.history.aiLanguage = "Italiano"
+    menu.aboutToShow.emit()
+    assert findMenuAction(menu, "^Italiano$").isChecked()
+
+
+def testCommitAiStopsWhenClickedAgain(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    fakeCommitAi(monkeypatch, "import time; time.sleep(60)")
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+
+    area.commitAiButton.click()
+    waitUntilTrue(lambda: area.commitAiPhase == "assistant" and area.commitAiProcess is not None
+                  and area.commitAiProcess.state() == QProcess.ProcessState.Running)
+    process = area.commitAiProcess
+    assert area.commitAiButton.isEnabled(), "a click stops it"
+    assert "Click to stop" in area.commitAiButton.toolTip()
+    assert "Writing a message" in area.commitSubjectEditor.placeholderText()
+
+    finished = []
+    process.finished.connect(lambda code, status: finished.append(status))
+    area.commitAiButton.click()
+    assert area.commitAiProcess is None
+    waitUntilTrue(lambda: finished)
+    assert finished == [QProcess.ExitStatus.CrashExit], "killed"
+    assert not [box for box in rw.findChildren(QMessageBox) if box.isVisible()], "stopping isn't an error"
+    assert area.commitSubjectEditor.placeholderText() == "Commit subject"
+    assert not area.commitAiSpinner.isVisibleTo(area)
+    assert area.commitAiButton.isEnabled(), "ready to write again"
+
+
 def testInlineCommitSkipsDialog(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     reposcenario.stagedNewEmptyFile(wd)
     rw = mainWindow.openRepo(wd)
-    rw.diffArea.commitMessageEditor.setPlainText("Inline summary\n\nInline description")
+    rw.diffArea.commitSubjectEditor.setText("Inline summary")
+    rw.diffArea.commitDescriptionEditor.setPlainText("Inline description")
 
     rw.diffArea.commitButton.click()
 
     assert not [dialog for dialog in rw.findChildren(CommitDialog) if dialog.isVisible()]
     assert rw.repo.head_commit.message == "Inline summary\n\nInline description\n"
-    assert rw.diffArea.commitMessageEditor.toPlainText() == ""
-    assert not rw.diffArea.signoffCommitCheckBox.isChecked()
-    assert not rw.diffArea.noVerifyCommitCheckBox.isChecked()
+    assert rw.diffArea.commitMessage() == ""
+    assert not rw.diffArea.commitSignoffAction.isChecked()
+    assert not rw.diffArea.commitNoVerifyAction.isChecked()
     assert not rw.diffArea.amendCommitCheckBox.isChecked()
+
+
+def testCommitButtonNeedsSomethingToCommit(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "changed\n")
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark", variant=ThemeVariant.Neutral))
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    accent = QColor(activeTheme().accent)
+
+    # Nothing staged: Commit is off, says so plainly, and says why
+    assert area.commitButton.text() == "Commit"
+    assert not area.commitAction.isEnabled()
+    assert "Nothing is staged" in area.commitButton.toolTip()
+    assert buttonFill(area.commitButton) != accent
+
+    # ...but its menu still works: the dialogs and Commit & Push stay within reach
+    assert area.commitButton.isEnabled(), "a dead Commit keeps its menu: only its default action is off"
+    menu = area.commitButton.menu()
+    assert findMenuAction(menu, "new commit").isEnabled()
+    assert findMenuAction(menu, "amend last commit").isEnabled()
+    headBefore = rw.repo.head_commit.id
+    area.setCommitMessage("Not going anywhere")
+    area.commitButton.click()
+    assert rw.repo.head_commit.id == headBefore, "a dead Commit button commits nothing"
+    assert not [dialog for dialog in rw.findChildren(CommitDialog) if dialog.isVisible()]
+    area.setCommitMessage("")
+
+    # Something staged: Commit is on, and it's the one button filled with the accent
+    rw.dirtyFiles.selectAll()
+    rw.dirtyFiles.stage()
+    assert area.commitAction.isEnabled()
+    assert area.commitButton.text() == "Commit"
+    assert "Commit 1 staged file" in area.commitButton.toolTip()
+    assert buttonFill(area.commitButton) == accent
+    otherButtons = [button for button in area.findChildren(QAbstractButton)
+                    if button.isVisible() and button is not area.commitButton]
+    assert len(otherButtons) >= 10
+    assert [button.objectName() for button in otherButtons if buttonFill(button) == accent] == []
+
+    # Its menu commits and pushes, and still opens the full commit dialogs
+    menu = area.commitButton.menu()
+    assert [stripAccelerators(action.text()) for action in menu.actions() if not action.isSeparator()] == [
+        "Commit & Push", "New Commit…", "Amend Last Commit…"]
+
+
+def testAmendLoadsLastCommitMessage(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    oldHead = rw.repo.head_commit
+    assert not area.commitAction.isEnabled(), "nothing staged"
+
+    # Ticking Amend with nothing written brings the last commit's message in
+    area.amendCommitCheckBox.click()
+    assert area.commitMessage() == oldHead.message.strip()
+    assert area.commitAction.isEnabled(), "rewording the last commit needs nothing staged"
+    assert area.commitButton.text() == "Amend"
+    assert findMenuAction(area.commitButton.menu(), "amend & push").isEnabled()
+
+    # Unticking it untouched takes the message back out
+    area.amendCommitCheckBox.click()
+    assert area.commitMessage() == ""
+    assert area.commitButton.text() == "Commit"
+    assert not area.commitAction.isEnabled()
+
+    # What the user wrote stays, ticked or not
+    area.setCommitMessage("Reworded")
+    area.amendCommitCheckBox.click()
+    assert area.commitMessage() == "Reworded"
+
+    # Amend from the commit area
+    area.commitButton.click()
+    newHead = rw.repo.head_commit
+    assert newHead.id != oldHead.id
+    assert newHead.message == "Reworded\n"
+    assert newHead.parent_ids == oldHead.parent_ids
+    assert area.commitMessage() == ""
+    assert not area.amendCommitCheckBox.isChecked()
+
+
+def testAmendKeepsAnUntouchedMessageWordForWord(tempDir, mainWindow):
+    """Amending someone else's commit mustn't quietly reflow their message."""
+    wd = unpackRepo(tempDir)
+    with RepoContext(wd) as repo:
+        repo.amend_commit_on_head("Subject with no blank line\nStraight into the body\nAnd another line")
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    oldHead = rw.repo.head_commit
+
+    # The subject and the body are edited apart, but an untouched message goes back out as it came in
+    area.amendCommitCheckBox.click()
+    assert area.commitSubjectEditor.text() == "Subject with no blank line"
+    assert area.commitDescriptionEditor.toPlainText() == "Straight into the body\nAnd another line"
+    assert area.commitMessage() == oldHead.message.strip()
+
+    area.commitButton.click()
+    assert rw.repo.head_commit.message.strip() == oldHead.message.strip()
+
+    # Once the message is edited, the subject and the body are separated as usual
+    area.amendCommitCheckBox.click()
+    area.setCommitMessage("Subject with no blank line\nStraight into the body")
+    area.commitDescriptionEditor.setPlainText("Rewritten body")
+    area.commitButton.click()
+    assert rw.repo.head_commit.message.strip() == "Subject with no blank line\n\nRewritten body"
+
+
+def testCommitAreaOptionsMenu(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    writeFile(f"{wd}/a/a1.txt", "an unstaged change\n")
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    button = area.commitOptionsButton
+    menu = button.menu()
+
+    assert button.accessibleName() == "More commit options"
+    assert [stripAccelerators(action.text()) for action in menu.actions() if not action.isSeparator()] == [
+        "Sign Off", "No-Verify", "Stash Changes…"]
+
+    # A dot on ⋯ while an option is on
+    assert not button.badge
+    triggerMenuAction(menu, "sign off")
+    assert button.badge
+    assert "Sign Off" in button.toolTip()
+
+    area.setCommitMessage("Signed off inline")
+    area.commitButton.click()
+    assert "Signed-off-by:" in rw.repo.head_commit.message
+
+    # The options go back to off once committed
+    assert not area.commitSignoffAction.isChecked()
+    assert not button.badge
+
+    # Stash… is there too
+    triggerMenuAction(menu, "stash")
+    findQDialog(rw, "stash").reject()
+
+
+def testCommitAreaNoVerifyBypassesHooks(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("""
+        echo "#!/usr/bin/env bash\necho 'hello from hook'\nexit 1" > .git/hooks/pre-commit
+        chmod +x .git/hooks/pre-commit
+        echo whatever >> master.txt
+        git add master.txt
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+
+    area.setCommitMessage("past the hook")
+    area.commitButton.click()
+    acceptQMessageBox(rw, "git.+exited with code 1.+hello from hook")
+    assert area.commitMessage() == "past the hook", "kept for another try"
+
+    triggerMenuAction(area.commitOptionsButton.menu(), "no-verify")
+    area.commitButton.click()
+    assert rw.repo.head_commit.message == "past the hook\n"
+
+
+def testCommitAndPushFromCommitArea(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    menu = area.commitButton.menu()
+
+    # It goes straight through, so it waits for a message
+    assert not findMenuAction(menu, "commit & push").isEnabled()
+    area.setCommitMessage("Commit, then push")
+    assert findMenuAction(menu, "commit & push").isEnabled()
+    assert findMenuAction(menu, "commit & push").shortcut().matches(QKeySequence("Ctrl+Alt+Return")) \
+        == QKeySequence.SequenceMatch.ExactMatch
+
+    triggerMenuAction(menu, "commit & push")
+    assert rw.repo.head_commit.message == "Commit, then push\n"
+    findQDialog(rw, "push").reject()
+
+
+def testCommitAreaRecentSubjects(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    area.commitDescriptionEditor.setPlainText("Keep this description")
+
+    menu = area.commitRecentButton.menu()
+    menu.aboutToShow.emit()
+    summaries = recentCommitSummaries(rw.repo, settings.prefs.recentCommitMessages)
+    assert len(summaries) >= 2
+    assert [action.text().replace("&&", "&") for action in menu.actions()] == summaries
+
+    menu.actions()[1].trigger()
+    assert area.commitSubjectEditor.text() == summaries[1]
+    assert area.commitDescriptionEditor.toPlainText() == "Keep this description"
+
+
+def testCommitSubjectCounter(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    counter = area.commitSubjectCounter
+
+    assert not counter.isVisibleTo(area), "nothing to count yet"
+    area.commitSubjectEditor.setText("x" * 12)
+    assert counter.isVisibleTo(area)
+    assert counter.text() == "12/50"
+    assert not counter.property("state")
+    area.commitSubjectEditor.setText("x" * 51)
+    assert counter.text() == "51/50"
+    assert counter.property("state") == "long"
+
+
+def testCommitDescriptionGrowsWithItsText(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1400, 1000)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    editor = area.commitDescriptionEditor
+
+    def settle():
+        for _i in range(5):
+            QTest.qWait(0)
+
+    settle()
+    lineHeight = editor.fontMetrics().lineSpacing()
+    startHeight = area.bottomCommitFormHost.height()
+    assert editor.height() < 3 * lineHeight + 8, "a couple of lines to start with"
+
+    editor.setPlainText("\n".join(f"line {i}" for i in range(5)))
+    settle()
+    assert editor.height() >= 5 * lineHeight
+    assert area.bottomCommitFormHost.height() > startHeight, "the commit area makes room"
+    assert not editor.verticalScrollBar().isVisible()
+
+    editor.setPlainText("\n".join(f"line {i}" for i in range(30)))
+    settle()
+    assert editor.height() < 9 * lineHeight + 8, "past 8 lines, it scrolls"
+    assert editor.verticalScrollBar().isVisible()
+
+
+def testPasteMessageIntoCommitSubject(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+
+    QApplication.clipboard().setText("summary\n\ndetails1\ndetails2")
+    area.commitSubjectEditor.setFocus()
+    QTest.keySequence(area.commitSubjectEditor, "Ctrl+V")
+    assert area.commitSubjectEditor.text() == "summary"
+    assert area.commitDescriptionEditor.toPlainText() == "details1\ndetails2"
+    assert area.commitSubjectCounter.text() == "7/50"
+
+    # A description that's already written isn't thrown away: the pasted lines follow it
+    area.commitSubjectEditor.clear()
+    QApplication.clipboard().setText("another summary\nmore details")
+    QTest.keySequence(area.commitSubjectEditor, "Ctrl+V")
+    assert area.commitSubjectEditor.text() == "another summary"
+    assert area.commitDescriptionEditor.toPlainText() == "details1\ndetails2\n\nmore details"
+
+
+def testCommitAreaKeyboard(tempDir, mainWindow, monkeypatch):
+    from gitfourchette import diffarea
+
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    monkeypatch.setattr(diffarea, "availableProviders", lambda: {"codex": "/usr/bin/codex"})
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+
+    # Tab: the subject, the description, then the buttons from left to right, Commit last
+    order = [area.commitSubjectEditor, area.commitDescriptionEditor, area.commitAiButton, area.commitRecentButton,
+             area.amendCommitCheckBox, area.commitOptionsButton, area.commitButton]
+    stops = tabStops(area.commitSubjectEditor)
+    stops = [area.commitSubjectEditor, *stops[:stops.index(area.commitButton) + 1]]
+    assert stops == order
+
+    # Every control has a name worth reading out
+    for control in order:
+        assert re.search(r"\w\w", accessibleNameOf(control)), control.objectName()
+
+    # Return in the subject goes on to the description; Ctrl+Return commits
+    area.commitSubjectEditor.setFocus()
+    QTest.keyClicks(area.commitSubjectEditor, "From the keyboard")
+    QTest.keyClick(area.commitSubjectEditor, Qt.Key.Key_Return)
+    assert area.commitDescriptionEditor.hasFocus()
+    assert area.commitMessageBox.property("focused")
+    QTest.keyClicks(area.commitDescriptionEditor, "No mouse needed")
+    QTest.keySequence(area.commitDescriptionEditor, "Ctrl+Return")
+    assert rw.repo.head_commit.message == "From the keyboard\n\nNo mouse needed\n"
+
+
+def testCommitAreaIsTranslated():
+    assertTranslatedInForkLanguages(
+        "Commit subject", "Description", "Write the commit message with AI", "Amend", "Sign Off", "No-Verify",
+        "Add a “Signed-off-by” line to the message (git commit --signoff)",
+        "Skip the pre-commit and commit-msg hooks (git commit --no-verify)",
+        "More commit options", "On: {0}", "No recent messages", "Commit && Push", "Amend && Push",
+        "Characters in the subject. Up to {0} reads well everywhere; some tools cut longer subjects short.",
+        "Nothing is staged. Stage files first, or tick Amend to change the last commit.",
+        "Concise", "Detailed", "Deep", "Writing a message with {0}…", "Generating a commit message… Click to stop.",
+        "Install and configure Codex CLI or Claude Code to generate a commit message.",
+        "Stage files to generate a commit message with AI.",
+        "Generate a commit message from staged changes with {0}.",
+        "AI commit message", "CLI exited with code {0}.", "There are no staged changes to describe.",
+        "The CLI returned no commit message.")
+    assertTranslatedInForkLanguages("Commit {n} staged file", plural="Commit {n} staged files")
 
 
 def testCommit(tempDir, mainWindow):
@@ -252,7 +664,7 @@ def testCommitMessageDraftSavedOnCancel(tempDir, mainWindow):
     dialog.accept()  # Go through with the commit this time
 
     # Ensure nothing remains of the draft after a successful commit
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "empty commit")
     dialog: CommitDialog = findQDialog(rw, "commit")
     assert not rw.repoModel.prefs.hasDraftCommit()
@@ -265,7 +677,7 @@ def testClearCommitMessageDraft(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     rw = mainWindow.openRepo(wd)
 
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "empty commit")
     dialog: CommitDialog = findQDialog(rw, "commit")
     assert dialog.ui.summaryEditor.text() == ""
@@ -396,7 +808,7 @@ def testEmptyCommitRaisesWarning(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     rw = mainWindow.openRepo(wd)
 
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "create.+empty commit")
 
     commitDialog = findQDialog(rw, "commit", t=CommitDialog)
@@ -414,7 +826,7 @@ def testEmptyCommitRaisesWarning(tempDir, mainWindow):
     writeFile(f"{wd}/toto.txt", "toto")
     writeFile(f"{wd}/titi.txt", "titi")
     rw.refreshRepo()
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     qmb = findQMessageBox(rw, "create.+empty commit")
     assert re.search("2 unstaged files.+you should.+stage.+them first", qmb.text(), re.I)
     qmb.reject()
@@ -429,7 +841,7 @@ def testCommitWithoutUserIdentity(tempDir, mainWindow):
     assert "user.name" not in rw.repo.config
     assert "user.email" not in rw.repo.config
 
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "create.+empty commit")
 
     identityDialog = findQDialog(rw, "identity", t=IdentityDialog)
@@ -455,7 +867,7 @@ def testCommitStableDate(tempDir, mainWindow):
     writeFile(F"{wd}/a/a1.txt", "a1\nPENDING CHANGE\n")  # unstaged change
     rw = mainWindow.openRepo(wd)
 
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "empty commit")
 
     dialog = findQDialog(rw, "commit", t=CommitDialog)
@@ -628,7 +1040,7 @@ def testCommitOnDetachedHead(tempDir, mainWindow):
     displayedCommits = qlvGetRowData(rw.graphView, Qt.ItemDataRole.UserRole)
     assert rw.repo.head_commit in displayedCommits
 
-    rw.diffArea.commitButton.click()
+    commitFromCommitArea(rw)
     acceptQMessageBox(rw, "create.+empty commit")
     commitDialog: CommitDialog = findQDialog(rw, "commit")
     commitDialog.ui.summaryEditor.setText("hello from detached HEAD")

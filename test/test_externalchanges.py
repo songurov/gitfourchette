@@ -132,7 +132,7 @@ def testExternalChangeWhileTaskIsBusyThenAborts(tempDir, mainWindow):
 
     rw = mainWindow.openRepo(wd)
 
-    rw.diffArea.commitButton.click()
+    triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
     assert findQMessageBox(rw, r"empty commit")
 
     writeFile(f"{wd}/sneaky.txt", "tee hee")

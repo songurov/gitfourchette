@@ -8821,3 +8821,124 @@ msgid ""
 "In the file tree, a folder that holds nothing but one other folder shares "
 "its line, as in “src/ui”."
 msgstr "В дереве файлов папка, в которой есть только одна другая папка, показывается с ней на одной строке, как «src/ui»."
+#: diffarea.py:398 diffarea.py:399 diffarea.py:834 diffarea.py:943
+#: diffarea.py:950
+msgid "Commit subject"
+msgstr "Заголовок коммита"
+
+#: diffarea.py:404 diffarea.py:405
+msgid "Description"
+msgstr "Описание"
+
+#: diffarea.py:411
+msgid "Write the commit message with AI"
+msgstr "Написать сообщение коммита с помощью ИИ"
+
+#: diffarea.py:453 diffarea.py:661
+msgid "Amend"
+msgstr "Изменить коммит"
+
+#: diffarea.py:458
+msgid "Sign Off"
+msgstr "Подписать (Sign-off)"
+
+#: diffarea.py:461
+msgid "Add a “Signed-off-by” line to the message (git commit --signoff)"
+msgstr "Добавить в сообщение строку «Signed-off-by» (git commit --signoff)"
+
+#: diffarea.py:462
+msgid "No-Verify"
+msgstr "Без проверок (No-Verify)"
+
+#: diffarea.py:465
+msgid "Skip the pre-commit and commit-msg hooks (git commit --no-verify)"
+msgstr "Пропустить хуки pre-commit и commit-msg (git commit --no-verify)"
+
+#: diffarea.py:470 diffarea.py:700
+msgid "More commit options"
+msgstr "Другие параметры коммита"
+
+#: diffarea.py:485
+#, python-brace-format
+msgid "Characters in the subject. Up to {0} reads well everywhere; some tools cut longer subjects short."
+msgstr "Символов в заголовке. До {0} читается везде; некоторые программы обрезают более длинные заголовки."
+
+#: diffarea.py:493 diffarea.py:666
+msgid "Commit && Push"
+msgstr "Закоммитить и отправить"
+
+#: diffarea.py:662
+msgid "Amend && Push"
+msgstr "Изменить и отправить"
+
+#: diffarea.py:668
+#, python-brace-format
+msgid "Commit {n} staged file"
+msgid_plural "Commit {n} staged files"
+msgstr[0] "Закоммитить {n} подготовленный файл"
+msgstr[1] "Закоммитить {n} подготовленных файла"
+msgstr[2] "Закоммитить {n} подготовленных файлов"
+
+#: diffarea.py:672
+msgid "Nothing is staged. Stage files first, or tick Amend to change the last commit."
+msgstr "Ничего не подготовлено. Сначала подготовьте файлы или отметьте «Изменить коммит», чтобы изменить последний коммит."
+
+#: diffarea.py:702
+#, python-brace-format
+msgid "On: {0}"
+msgstr "Включено: {0}"
+
+#: diffarea.py:715
+msgid "No recent messages"
+msgstr "Нет недавних сообщений"
+
+#: diffarea.py:748
+msgid "Concise"
+msgstr "Кратко"
+
+#: diffarea.py:748
+msgid "Detailed"
+msgstr "Подробно"
+
+#: diffarea.py:748
+msgid "Deep"
+msgstr "Глубоко"
+
+#: diffarea.py:804
+msgid "Generating a commit message… Click to stop."
+msgstr "Создаётся сообщение коммита… Нажмите, чтобы остановить."
+
+#: diffarea.py:806
+msgid "Install and configure Codex CLI or Claude Code to generate a commit message."
+msgstr "Установите и настройте Codex CLI или Claude Code, чтобы создавать сообщения коммитов."
+
+#: diffarea.py:808
+msgid "Stage files to generate a commit message with AI."
+msgstr "Подготовьте файлы, чтобы создать сообщение коммита с помощью ИИ."
+
+#: diffarea.py:813
+#, python-brace-format
+msgid "Generate a commit message from staged changes with {0}."
+msgstr "Создать сообщение коммита из подготовленных изменений с помощью {0}."
+
+#: diffarea.py:850
+#, python-brace-format
+msgid "Writing a message with {0}…"
+msgstr "{0} пишет сообщение…"
+
+#: diffarea.py:952
+msgid "AI commit message"
+msgstr "Сообщение коммита от ИИ"
+
+#: diffarea.py:888
+#, python-brace-format
+msgid "CLI exited with code {0}."
+msgstr "CLI завершился с кодом {0}."
+
+#: diffarea.py:893
+msgid "There are no staged changes to describe."
+msgstr "Нет подготовленных изменений для описания."
+
+#: diffarea.py:939
+msgid "The CLI returned no commit message."
+msgstr "CLI не вернул сообщение коммита."

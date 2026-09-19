@@ -309,14 +309,6 @@ class Jump(RepoTask):
             nStaged = rw.stagedFiles.fileCount()
             rw.diffArea.dirtyHeader.setText(_n("Unstaged ({n})", "Unstaged ({n})", nDirty))
             rw.diffArea.stagedHeader.setText(_n("Staged ({n})", "Staged ({n})", nStaged))
-            rw.diffArea.commitButton.setText(_n("Commit {n} file", "Commit {n} files", nStaged))
-
-            # Make Commit button bold if anything is staged
-            commitButtonFont = rw.diffArea.commitButton.font()
-            commitButtonBold = nStaged != 0
-            if commitButtonFont.bold() != commitButtonBold:
-                commitButtonFont.setBold(commitButtonBold)
-                rw.diffArea.commitButton.setFont(commitButtonFont)
 
             # Flip workdir freshness
             repoModel.workdirStale = False

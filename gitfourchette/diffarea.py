@@ -24,14 +24,18 @@ from gitfourchette.filelists.filelistheader import FileListHeader, FileListTitle
 from gitfourchette.filelists.stagedfiles import StagedFiles
 from gitfourchette.exttools.aichat import availableProviders, cliArguments, configuredModel, ResponseStream
 from gitfourchette.forms.banner import Banner
+from gitfourchette.forms.commitarea import (
+    BadgeToolButton, CommitDescriptionEdit, CommitMessageBox, MenuToolButton, PrimaryMenuButton, setStyleProperty)
 from gitfourchette.forms.conflictview import ConflictView
 from gitfourchette.forms.commitdetailview import CommitDetailView
 from gitfourchette.forms.contextheader import ContextHeader
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.nav import NavContext, NavLocator, NavFlags
+from gitfourchette.porcelain import RepositoryState
 from gitfourchette.qt import *
 from gitfourchette.tasks import TaskBook, AmendCommit, NewCommit, NewStash
+from gitfourchette.tasks.committasks import recentCommitSummaries
 from gitfourchette.themes import ThemeVariant, activeTheme
 from gitfourchette.toolbox import *
 
@@ -39,6 +43,12 @@ FileStackPage = Literal["workdir", "commit"]
 DiffStackPage = Literal["text", "special", "conflict"]
 
 FILEHEADER_HEIGHT = 24
+
+AI_LANGUAGES = ["Română", "English", "Русский", "Українська", "Deutsch", "Français", "Español"]
+"Languages offered for AI-written commit messages (the AI chat also takes any other one typed in)."
+
+SUBJECT_SOFT_LIMIT = 50
+"A commit subject longer than this gets cut short in some tools."
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +225,11 @@ class DiffArea(QWidget):
         targetLayout = self.bottomCommitFormLayout if bottom else self.stageCommitFormLayout
         targetLayout.addWidget(self.commitForm)
         self.stageCommitFormHost.setVisible(not bottom)
-        if self.refreshBottomCommitFormVisibility() and self.bottomCommitSplitter.sizes()[1] < 120:
-            self.bottomCommitSplitter.setSizes([max(300, self.height() - 220), 220])
+        # Under the diff, the commit area starts out as tall as it needs to be
+        formHeight = self.commitForm.sizeHint().height()
+        if (self.refreshBottomCommitFormVisibility()
+                and self.bottomCommitSplitter.sizes()[1] < self.commitForm.minimumSizeHint().height()):
+            self.bottomCommitSplitter.setSizes([max(300, self.height() - formHeight), formHeight])
 
     def refreshBottomCommitFormVisibility(self) -> bool:
         """
@@ -352,77 +365,7 @@ class DiffArea(QWidget):
         unstageButton.setAccessibleName(unstageButton.toolTip())
         appendShortcutToToolTip(unstageButton, GlobalShortcuts.discardHotkeys[0])
 
-        messageEditor = QPlainTextEdit(self)
-        messageEditor.setObjectName("commitMessageEditor")
-        messageEditor.setPlaceholderText(
-            _("Enter commit message. Use an empty line to separate subject and description."))
-        messageEditor.setTabChangesFocus(True)
-        messageEditor.setMinimumHeight(105)
-        messageEditor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        subjectCounter = QLabel(self)
-        subjectCounter.setObjectName("commitSubjectCounter")
-        subjectCounter.setEnabled(False)
-        subjectCounter.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-        signoffCheckBox = QCheckBox(_("Sign Off"), self)
-        signoffCheckBox.setObjectName("signoffCommitCheckBox")
-        noVerifyCheckBox = QCheckBox(_("No-Verify"), self)
-        noVerifyCheckBox.setObjectName("noVerifyCommitCheckBox")
-
-        amendCheckBox = QCheckBox(_("Amend"), self)
-        amendCheckBox.setObjectName("amendCommitCheckBox")
-        amendCheckBox.setToolTip(TaskBook.tips[AmendCommit])
-
-        stashButton = QToolButton(self)
-        stashButton.setObjectName("stashButton")
-        stashButton.setText(_("Stash…"))
-        stashButton.setIcon(stockIcon("git-stash"))
-        stashButton.setToolTip(TaskBook.tips[NewStash])
-        stashButton.setAutoRaise(True)
-        stashButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-
-        aiButton = QToolButton(self)
-        aiButton.setObjectName("commitAiButton")
-        aiButton.setText(_("AI"))
-        aiButton.setIcon(stockIcon("hint"))
-        aiButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        aiButton.setAutoRaise(True)
-
-        aiLanguageCombo = QComboBox(self)
-        aiLanguageCombo.setObjectName("commitAiLanguageCombo")
-        aiLanguageCombo.addItems([
-            "Română", "English", "Русский", "Українська", "Deutsch", "Français", "Español"])
-        aiLanguageCombo.setCurrentText(settings.history.aiLanguage)
-        aiLanguageCombo.setToolTip(_("Language for the AI-generated commit message"))
-        aiLanguageCombo.setAccessibleName(_("AI message language"))
-        aiLanguageCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        aiLanguageCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-
-        aiDetailCombo = QComboBox(self)
-        aiDetailCombo.setObjectName("commitAiDetailCombo")
-        aiDetailCombo.addItem(_("Concise"), "concise")
-        aiDetailCombo.addItem(_("Detailed"), "detailed")
-        aiDetailCombo.addItem(_("Deep"), "deep")
-        detailIndex = aiDetailCombo.findData(settings.history.aiCommitDetail)
-        aiDetailCombo.setCurrentIndex(max(0, detailIndex))
-        aiDetailCombo.setToolTip(_("Level of detail and structure for the AI-generated commit message"))
-        aiDetailCombo.setAccessibleName(_("AI message detail"))
-        aiDetailCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        aiDetailCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-
-        commitButton = QToolButton(self)
-        commitButton.setObjectName("commitButton")
-        commitButton.setText(_p("verb", "Commit"))
-        commitButton.setIcon(stockIcon("git-commit", "gray=#599E5E"))
-        commitButton.setToolTip(appendShortcutToToolTipText(TaskBook.tips[NewCommit], TaskBook.shortcuts[NewCommit][0]))
-        commitButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        commitButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        commitButton.setAutoRaise(True)
-        commitButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-
-        commitPushButton = QPushButton(_("Commit && Push"), self)
-        commitPushButton.setObjectName("commitPushButton")
+        stageCommitFormHost = self._makeCommitForm(stagedFiles)
 
         # Connect signals
         unstageButton.clicked.connect(stagedFiles.unstage)
@@ -431,89 +374,6 @@ class DiffArea(QWidget):
         stagedFiles.selectedCountChanged.connect(self.refreshWorktreeAiButton)
         stagedFiles.flModel.modelReset.connect(
             lambda: unstageAllButton.setEnabled(not stagedFiles.isEmpty()))
-        stagedFiles.flModel.modelReset.connect(self.refreshCommitAiButton)
-        stagedFiles.flModel.modelReset.connect(self.resetCompletedInlineCommit)
-
-        def fullMessage():
-            return messageEditor.toPlainText().strip()
-
-        def beginCommit(pushAfter=False):
-            message = fullMessage()
-            task = AmendCommit if amendCheckBox.isChecked() else NewCommit
-            if message:
-                self.inlineCommitPending = True
-                task.invoke(
-                    self,
-                    message,
-                    signoffCheckBox.isChecked(),
-                    noVerifyCheckBox.isChecked(),
-                    pushAfter)
-            else:
-                # Preserve the keyboard shortcut/button workflow: an empty
-                # inline form opens the full commit dialog as before.
-                task.invoke(self)
-
-        def updateSubjectCounter():
-            text = messageEditor.toPlainText()
-            subjectLength = len(text.split("\n", 1)[0])
-            subjectCounter.setText(_("SUBJECT {0}/50").format(subjectLength))
-            commitPushButton.setEnabled(bool(text.strip()))
-
-        commitButton.clicked.connect(lambda: beginCommit(False))
-        commitButtonMenu = ActionDef.makeQMenu(
-            commitButton,
-            [
-                TaskBook.action(self, NewCommit),
-                TaskBook.action(self, AmendCommit),
-                TaskBook.action(self, NewStash),
-            ])
-        # Prevent shortcuts from taking over
-        for action in commitButtonMenu.actions():
-            action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
-        commitButton.setMenu(commitButtonMenu)
-        commitPushButton.clicked.connect(lambda: beginCommit(True))
-        stashButton.clicked.connect(lambda: NewStash.invoke(self))
-        aiButton.clicked.connect(self.generateCommitMessage)
-        def saveAiCommitOptions():
-            settings.history.aiLanguage = aiLanguageCombo.currentText()
-            settings.history.aiCommitDetail = aiDetailCombo.currentData()
-            settings.history.setDirty()
-        aiLanguageCombo.currentTextChanged.connect(saveAiCommitOptions)
-        aiDetailCombo.currentIndexChanged.connect(saveAiCommitOptions)
-        messageEditor.textChanged.connect(updateSubjectCounter)
-        updateSubjectCounter()
-
-        # The controls wrap onto more lines in a narrow panel,
-        # instead of forcing the whole window to be wider.
-        optionsRow = QFlowLayout()
-        optionsRow.setSpacing(4)
-        for widget in stashButton, aiButton, aiLanguageCombo, aiDetailCombo, subjectCounter:
-            optionsRow.addWidget(widget)
-        optionsRow.setAlignment(subjectCounter, Qt.AlignmentFlag.AlignRight)
-
-        actionsRow = QFlowLayout()
-        actionsRow.setSpacing(4)
-        for widget in signoffCheckBox, noVerifyCheckBox, amendCheckBox, commitButton, commitPushButton:
-            actionsRow.addWidget(widget)
-        for widget in commitButton, commitPushButton:
-            actionsRow.setAlignment(widget, Qt.AlignmentFlag.AlignRight)
-
-        commitForm = QWidget(self)
-        commitForm.setObjectName("commitForm")
-        commitFormLayout = QVBoxLayout(commitForm)
-        commitFormLayout.setContentsMargins(QMargins())
-        commitFormLayout.setSpacing(4)
-        commitFormLayout.addWidget(messageEditor, 1)
-        commitFormLayout.addLayout(optionsRow)
-        commitFormLayout.addLayout(actionsRow)
-        commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-
-        stageCommitFormHost = QWidget(self)
-        stageCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        stageCommitFormLayout = QVBoxLayout(stageCommitFormHost)
-        stageCommitFormLayout.setContentsMargins(QMargins())
-        stageCommitFormLayout.setSpacing(0)
-        stageCommitFormLayout.addWidget(commitForm)
 
         headerBar = FileListHeader(self, header, [unstageAllButton, unstageButton, fileViewButton], pill=unstageButton)
         headerBar.setNeutralIcon(fileViewButton, "view-list-tree")
@@ -536,31 +396,404 @@ class DiffArea(QWidget):
         self.stagedFiles = stagedFiles
         self.unstageButton = unstageButton
         self.unstageAllButton = unstageAllButton
-        self.commitButton = commitButton
-        self.commitPushButton = commitPushButton
-        self.commitAiButton = aiButton
-        self.commitAiLanguageCombo = aiLanguageCombo
-        self.commitAiDetailCombo = aiDetailCombo
-        self.commitMessageEditor = messageEditor
-        self.commitSubjectCounter = subjectCounter
-        self.signoffCommitCheckBox = signoffCheckBox
-        self.noVerifyCommitCheckBox = noVerifyCheckBox
-        self.amendCommitCheckBox = amendCheckBox
-        self.commitForm = commitForm
-        self.stageCommitFormHost = stageCommitFormHost
-        self.stageCommitFormLayout = stageCommitFormLayout
         self.refreshCommitAiButton()
+        self.refreshCommitButton()
         self.refreshWorktreeAiButton()
 
         return container
+
+    # -------------------------------------------------------------------------
+    # Commit area
+
+    def _makeCommitForm(self, stagedFiles: StagedFiles) -> QWidget:
+        """
+        The commit area: one box with the subject over the description, then
+        one row with Amend, the other options (⋯), the subject's length and
+        Commit, the one accented button. Returns the host that places it under
+        the staged files; refreshCommitFormPlacement moves it under the diff.
+        """
+
+        subjectEditor = QLineEdit(self)
+        subjectEditor.setObjectName("commitSubjectEditor")
+        subjectEditor.setPlaceholderText(_("Commit subject"))
+        subjectEditor.setAccessibleName(_("Commit subject"))
+        subjectEditor.setFrame(False)
+
+        descriptionEditor = CommitDescriptionEdit(self)
+        descriptionEditor.setObjectName("commitDescriptionEditor")
+        descriptionEditor.setPlaceholderText(_("Description"))
+        descriptionEditor.setAccessibleName(_("Description"))
+
+        # ✦: a click writes the message, the arrow picks its language and detail
+        aiButton = MenuToolButton(self)
+        aiButton.setObjectName("commitAiButton")
+        aiButton.setIcon(stockIcon("ai-sparkle"))
+        aiButton.setAccessibleName(_("Write the commit message with AI"))
+        aiButton.setAutoRaise(True)
+        aiButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        aiMenu = QMenu(aiButton)
+        aiMenu.setObjectName("commitAiMenu")
+        aiMenu.aboutToShow.connect(self.fillCommitAiMenu)
+        aiButton.setMenu(aiMenu)
+
+        aiSpinner = QBusySpinner(self)
+        aiSpinner.setVisible(False)
+
+        # ⏱: pick the subject of a recent commit, as in the commit dialog
+        recentButton = MenuToolButton(self)
+        recentButton.setObjectName("commitRecentButton")
+        recentButton.setIcon(stockIcon("commit-history"))
+        recentButton.setAccessibleName(_("Recent messages"))
+        recentButton.setToolTip(_("Recent messages"))
+        recentButton.setAutoRaise(True)
+        recentButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        recentMenu = QMenu(recentButton)
+        recentMenu.setObjectName("commitRecentMenu")
+        recentMenu.aboutToShow.connect(self.fillRecentSummariesMenu)
+        recentButton.setMenu(recentMenu)
+
+        subjectRow = QHBoxLayout()
+        subjectRow.setContentsMargins(0, 0, 2, 0)
+        subjectRow.setSpacing(0)
+        subjectRow.addWidget(subjectEditor, 1)
+        subjectRow.addWidget(aiSpinner)
+        subjectRow.addWidget(aiButton)
+        subjectRow.addWidget(recentButton)
+
+        messageBox = CommitMessageBox(self)
+        messageBox.setObjectName("commitMessageBox")
+        messageBox.watchFocus(subjectEditor, descriptionEditor)
+        boxLayout = QVBoxLayout(messageBox)
+        boxLayout.setContentsMargins(1, 1, 1, 1)
+        boxLayout.setSpacing(0)
+        boxLayout.addLayout(subjectRow)
+        boxLayout.addWidget(QFaintSeparator(messageBox))
+        boxLayout.addWidget(descriptionEditor, 1)
+
+        amendCheckBox = QCheckBox(_("Amend"), self)
+        amendCheckBox.setObjectName("amendCommitCheckBox")
+        amendCheckBox.setToolTip(TaskBook.tips[AmendCommit])
+
+        # ⋯: the options that are usually off, with a dot on it while one is on
+        signoffAction = QAction(_("Sign Off"), self)
+        signoffAction.setObjectName("commitSignoffAction")
+        signoffAction.setCheckable(True)
+        signoffAction.setToolTip(_("Add a “Signed-off-by” line to the message (git commit --signoff)"))
+        noVerifyAction = QAction(_("No-Verify"), self)
+        noVerifyAction.setObjectName("commitNoVerifyAction")
+        noVerifyAction.setCheckable(True)
+        noVerifyAction.setToolTip(_("Skip the pre-commit and commit-msg hooks (git commit --no-verify)"))
+
+        optionsButton = BadgeToolButton(self)
+        optionsButton.setObjectName("commitOptionsButton")
+        optionsButton.setIcon(stockIcon("more-circle"))
+        optionsButton.setAccessibleName(_("More commit options"))
+        optionsButton.setAutoRaise(True)
+        optionsButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        optionsMenu = ActionDef.makeQMenu(optionsButton, [
+            signoffAction,
+            noVerifyAction,
+            ActionDef.SEPARATOR,
+            TaskBook.action(self, NewStash),
+        ])
+        optionsMenu.setToolTipsVisible(True)
+        optionsButton.setMenu(optionsMenu)
+
+        subjectCounter = QLabel(self)
+        subjectCounter.setObjectName("commitSubjectCounter")
+        subjectCounter.setProperty("class", "secondary")
+        subjectCounter.setToolTip(_("Characters in the subject. Up to {0} reads well everywhere; "
+                                    "some tools cut longer subjects short.", SUBJECT_SOFT_LIMIT))
+
+        # Commit and Commit & Push work from the keyboard anywhere in the commit area
+        commitAction = QAction(_p("verb", "Commit"), self)
+        commitAction.setShortcuts(makeMultiShortcut("Ctrl+Return", "Ctrl+Enter"))
+        commitAction.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        commitAction.triggered.connect(lambda: self.beginInlineCommit(pushAfter=False))
+        commitPushAction = QAction(_("Commit && Push"), self)
+        commitPushAction.setObjectName("commitPushAction")
+        commitPushAction.setShortcuts(makeMultiShortcut("Ctrl+Alt+Return", "Ctrl+Alt+Enter"))
+        commitPushAction.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        commitPushAction.triggered.connect(lambda: self.beginInlineCommit(pushAfter=True))
+
+        commitButton = PrimaryMenuButton(self)
+        commitButton.setObjectName("commitButton")
+        commitButton.setText(_p("verb", "Commit"))
+        commitButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        commitButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        commitButton.clicked.connect(lambda: self.beginInlineCommit(pushAfter=False))
+        commitButtonMenu = ActionDef.makeQMenu(commitButton, [
+            commitPushAction,
+            ActionDef.SEPARATOR,
+            TaskBook.action(self, NewCommit),
+            TaskBook.action(self, AmendCommit),
+        ])
+        commitButton.setMenu(commitButtonMenu)
+
+        # The menus' task actions have the same shortcuts as the Repo menu:
+        # leave those to the main window, or Qt would find them ambiguous.
+        for menu in commitButtonMenu, optionsMenu:
+            for action in menu.actions():
+                if action is not commitPushAction:
+                    action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+
+        # Buttons and the check box keep the focus in the message when clicked
+        for widget in aiButton, recentButton, amendCheckBox, optionsButton, commitButton:
+            widget.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+
+        # The row's controls wrap onto more lines in a narrow panel,
+        # instead of forcing the whole window to be wider.
+        actionsRow = QFlowLayout()
+        actionsRow.setSpacing(8)
+        for widget in amendCheckBox, optionsButton, subjectCounter, commitButton:
+            actionsRow.addWidget(widget)
+        for widget in subjectCounter, commitButton:
+            actionsRow.setAlignment(widget, Qt.AlignmentFlag.AlignRight)
+
+        commitForm = QWidget(self)
+        commitForm.setObjectName("commitForm")
+        commitForm.addActions([commitAction, commitPushAction])
+        commitFormLayout = QVBoxLayout(commitForm)
+        commitFormLayout.setContentsMargins(8, 8, 8, 8)
+        commitFormLayout.setSpacing(6)
+        commitFormLayout.addWidget(messageBox, 1)
+        commitFormLayout.addLayout(actionsRow)
+        commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+        setTabOrder(subjectEditor, descriptionEditor, aiButton, recentButton, amendCheckBox, optionsButton, commitButton)
+
+        stageCommitFormHost = QWidget(self)
+        stageCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        stageCommitFormLayout = QVBoxLayout(stageCommitFormHost)
+        stageCommitFormLayout.setContentsMargins(QMargins())
+        stageCommitFormLayout.setSpacing(0)
+        stageCommitFormLayout.addWidget(commitForm)
+
+        # Connect signals
+        aiButton.clicked.connect(self.onCommitAiButtonClicked)
+        subjectEditor.textEdited.connect(self.moveExtraLinesToDescription)
+        subjectEditor.returnPressed.connect(descriptionEditor.setFocus)
+        subjectEditor.textChanged.connect(self.refreshCommitSubjectCounter)
+        subjectEditor.textChanged.connect(self.refreshCommitPushAction)
+        descriptionEditor.textChanged.connect(self.refreshCommitPushAction)
+        amendCheckBox.toggled.connect(self.onAmendToggled)
+        signoffAction.toggled.connect(self.refreshCommitOptionsButton)
+        noVerifyAction.toggled.connect(self.refreshCommitOptionsButton)
+        stagedFiles.flModel.modelReset.connect(self.refreshCommitAiButton)
+        stagedFiles.flModel.modelReset.connect(self.refreshCommitButton)
+        stagedFiles.flModel.modelReset.connect(self.resetCompletedInlineCommit)
+
+        # Save references
+        self.commitForm = commitForm
+        self.commitMessageBox = messageBox
+        self.commitSubjectEditor = subjectEditor
+        self.commitDescriptionEditor = descriptionEditor
+        self.commitAiButton = aiButton
+        self.commitAiSpinner = aiSpinner
+        self.commitRecentButton = recentButton
+        self.amendCommitCheckBox = amendCheckBox
+        self.commitOptionsButton = optionsButton
+        self.commitSignoffAction = signoffAction
+        self.commitNoVerifyAction = noVerifyAction
+        self.commitSubjectCounter = subjectCounter
+        self.commitButton = commitButton
+        self.commitAction = commitAction
+        self.commitPushAction = commitPushAction
+        self.stageCommitFormHost = stageCommitFormHost
+        self.stageCommitFormLayout = stageCommitFormLayout
+        self.amendPrefill: str | None = None
+        self.loadedMessage = ""
+        self.loadedMessageSplit = ("", "")
+
+        self.refreshCommitSubjectCounter()
+        self.refreshCommitOptionsButton()
+
+        return stageCommitFormHost
+
+    def commitMessage(self) -> str:
+        """The message in the commit area: the subject, then a blank line and the description if there's one."""
+        subject = self.commitSubjectEditor.text().strip()
+        description = self.commitDescriptionEditor.toPlainText().strip()
+        if (subject, description) == self.loadedMessageSplit:
+            # A message that came in and wasn't touched goes back out word for
+            # word: amending mustn't reflow a body that had no blank line
+            # after its subject.
+            return self.loadedMessage
+        return "\n\n".join(part for part in (subject, description) if part)
+
+    def setCommitMessage(self, message: str):
+        """Put a message in the commit area: its first line in the subject, the rest in the description."""
+        message = message.strip()
+        subject, _newline, description = message.partition("\n")
+        subject = subject.strip()
+        description = description.strip("\n")
+        self.commitSubjectEditor.setText(subject)
+        self.commitDescriptionEditor.setPlainText(description)
+        self.loadedMessage = message
+        self.loadedMessageSplit = (subject, description.strip())
+
+    def moveExtraLinesToDescription(self, text: str):
+        """A message pasted into the subject: its first line stays there, the other lines join the description."""
+        if "\n" not in text:
+            return
+        subject, _newline, extra = text.partition("\n")
+        with QSignalBlockerContext(self.commitSubjectEditor):
+            self.commitSubjectEditor.setText(subject.rstrip())
+        self.commitSubjectEditor.textChanged.emit(self.commitSubjectEditor.text())
+        extra = extra.strip("\n")
+        if not extra:
+            return
+        # Whatever was already written in the description stays: the pasted lines come after it
+        description = self.commitDescriptionEditor.toPlainText().rstrip()
+        self.commitDescriptionEditor.setPlainText(f"{description}\n\n{extra}" if description else extra)
+
+    def beginInlineCommit(self, pushAfter=False):
+        if not self.commitAction.isEnabled():
+            QApplication.beep()
+            return
+        message = self.commitMessage()
+        task = AmendCommit if self.amendCommitCheckBox.isChecked() else NewCommit
+        if message:
+            self.inlineCommitPending = True
+            task.invoke(
+                self,
+                message,
+                self.commitSignoffAction.isChecked(),
+                self.commitNoVerifyAction.isChecked(),
+                pushAfter)
+        else:
+            # Preserve the keyboard shortcut/button workflow: an empty
+            # inline form opens the full commit dialog as before.
+            task.invoke(self)
+
+    def onAmendToggled(self, amend: bool):
+        """
+        Ticking Amend with nothing written loads the last commit's message, to
+        edit. Unticking it straight away takes that message back out.
+        """
+        repo = self.repoModel.repo
+        if amend and not self.commitMessage() and not repo.head_is_unborn:
+            self.setCommitMessage(repo.head_commit.message)
+            self.amendPrefill = self.commitMessage()
+        elif not amend:
+            if self.amendPrefill is not None and self.commitMessage() == self.amendPrefill:
+                self.setCommitMessage("")
+            self.amendPrefill = None
+        self.refreshCommitButton()
+
+    def refreshCommitButton(self):
+        """
+        Commit is the one accented button, and it's ready to go only when
+        there's something to commit: staged files, Amend ticked (which may only
+        reword), or a merge, cherry-pick or revert to conclude. Otherwise it
+        looks and acts dead, but its menu stays open for business.
+        """
+        if not hasattr(self, "stagedFiles"):
+            return
+        numStaged = self.stagedFiles.fileCount()
+        amend = self.amendCommitCheckBox.isChecked()
+        concluding = self.repoModel.repo.state() != RepositoryState.NONE
+        ready = amend or numStaged > 0 or concluding
+
+        if amend:
+            self.commitButton.setText(_("Amend"))
+            self.commitPushAction.setText(_("Amend && Push"))
+            tip = TaskBook.tips[AmendCommit]
+        else:
+            self.commitButton.setText(_p("verb", "Commit"))
+            self.commitPushAction.setText(_("Commit && Push"))
+            if numStaged:
+                tip = _n("Commit {n} staged file", "Commit {n} staged files", numStaged)
+            elif concluding:
+                tip = TaskBook.tips[NewCommit]
+            else:
+                tip = _("Nothing is staged. Stage files first, or tick Amend to change the last commit.")
+
+        # The button itself stays enabled even when it's not ready, so that New
+        # Commit…, Amend Last Commit… and Commit & Push keep their way in
+        self.commitButton.setReady(ready)
+        self.commitAction.setEnabled(ready)
+        self.refreshCommitPushAction()
+        self.commitButton.setAccessibleDescription(tip)
+        if ready:
+            tip = appendShortcutToToolTipText(tip, self.commitAction.shortcut())
+        self.commitButton.setToolTip(tip)
+
+    def refreshCommitPushAction(self):
+        # Commit & Push goes straight through, so it needs a message (an empty one opens the dialog)
+        self.commitPushAction.setEnabled(self.commitAction.isEnabled() and bool(self.commitMessage()))
+
+    def refreshCommitSubjectCounter(self):
+        length = len(self.commitSubjectEditor.text())
+        counter = self.commitSubjectCounter
+        counter.setText(f"{length}/{SUBJECT_SOFT_LIMIT}")
+        counter.setVisible(length > 0)
+        setStyleProperty(counter, "state", "long" if length > SUBJECT_SOFT_LIMIT else "")
+
+    def refreshCommitOptionsButton(self):
+        onNames = [stripAccelerators(action.text())
+                   for action in (self.commitSignoffAction, self.commitNoVerifyAction) if action.isChecked()]
+        tip = _("More commit options")
+        if onNames:
+            tip += "\n" + _("On: {0}", ", ".join(onNames))
+        self.commitOptionsButton.setBadge(bool(onNames))
+        self.commitOptionsButton.setToolTip(tip)
+        self.commitOptionsButton.setAccessibleDescription(tip)
+
+    def fillRecentSummariesMenu(self):
+        menu = self.commitRecentButton.menu()
+        menu.clear()
+        summaries = recentCommitSummaries(self.repoModel.repo, settings.prefs.recentCommitMessages)
+        for summary in summaries:
+            action = menu.addAction(escamp(summary))
+            action.triggered.connect(lambda _checked=False, s=summary: self.commitSubjectEditor.setText(s))
+        if not summaries:
+            menu.addAction(_("No recent messages")).setEnabled(False)
+
+    def fillCommitAiMenu(self):
+        menu = self.commitAiButton.menu()
+        menu.clear()
+
+        language = settings.history.aiLanguage
+        languages = AI_LANGUAGES if not language or language in AI_LANGUAGES else [language, *AI_LANGUAGES]
+
+        def setLanguage(value):
+            settings.history.aiLanguage = value
+            settings.history.setDirty()
+            self.refreshCommitAiButton()
+
+        def setDetail(value):
+            settings.history.aiCommitDetail = value
+            settings.history.setDirty()
+            self.refreshCommitAiButton()
+
+        ActionDef.addToQMenu(
+            menu,
+            ActionDef(_("AI message language"), kind=ActionDef.Kind.Section),
+            *(ActionDef(name, lambda v=name: setLanguage(v), radioGroup="language",
+                        checkState=1 if name == language else -1)
+              for name in languages),
+            ActionDef(_("AI message detail"), kind=ActionDef.Kind.Section),
+            *(ActionDef(caption, lambda v=value: setDetail(v), radioGroup="detail",
+                        checkState=1 if value == self.commitAiDetail() else -1)
+              for value, caption in self.commitAiDetailNames().items()),
+        )
+
+    @staticmethod
+    def commitAiDetailNames() -> dict[str, str]:
+        return {"concise": _("Concise"), "detailed": _("Detailed"), "deep": _("Deep")}
+
+    def commitAiDetail(self) -> str:
+        detail = settings.history.aiCommitDetail
+        return detail if detail in self.commitAiDetailNames() else "deep"
 
     def resetCompletedInlineCommit(self):
         if not self.inlineCommitPending or not self.stagedFiles.isEmpty():
             return
         self.inlineCommitPending = False
-        self.commitMessageEditor.clear()
-        self.signoffCommitCheckBox.setChecked(False)
-        self.noVerifyCommitCheckBox.setChecked(False)
+        self.setCommitMessage("")
+        self.commitSignoffAction.setChecked(False)
+        self.commitNoVerifyAction.setChecked(False)
         self.amendCommitCheckBox.setChecked(False)
 
     def selectedWorktreePaths(self):
@@ -600,9 +833,11 @@ class DiffArea(QWidget):
         hasProvider = bool(self.commitAiProviders)
         hasStagedChanges = hasattr(self, "stagedFiles") and not self.stagedFiles.isEmpty()
         busy = self.commitAiProcess is not None
-        self.commitAiButton.setEnabled(hasProvider and hasStagedChanges and not busy)
+        # While it writes, the button stays enabled to stop it
+        self.commitAiButton.setEnabled(hasProvider and (hasStagedChanges or busy))
+        self.commitAiSpinner.setVisible(busy)
         if busy:
-            tip = _("Generating a commit message…")
+            tip = _("Generating a commit message… Click to stop.")
         elif not hasProvider:
             tip = _("Install and configure Codex CLI or Claude Code to generate a commit message.")
         elif not hasStagedChanges:
@@ -612,7 +847,28 @@ class DiffArea(QWidget):
             if provider not in self.commitAiProviders:
                 provider = next(iter(self.commitAiProviders))
             tip = _("Generate a commit message from staged changes with {0}.", provider.capitalize())
+            detail = self.commitAiDetailNames()[self.commitAiDetail()]
+            tip += "\n" + f"{settings.history.aiLanguage} · {detail}"
         self.commitAiButton.setToolTip(tip)
+
+    def onCommitAiButtonClicked(self):
+        if self.commitAiProcess is not None:
+            self.stopCommitAi()
+        else:
+            self.generateCommitMessage()
+
+    def stopCommitAi(self):
+        process = self.commitAiProcess
+        if process is None:
+            return
+        self.commitAiProcess = None
+        # Stopped on purpose: its end is no error to report
+        process.finished.disconnect(self._commitAiFinished)
+        process.errorOccurred.disconnect(self._commitAiProcessError)
+        process.finished.connect(process.deleteLater)
+        process.kill()
+        self.commitSubjectEditor.setPlaceholderText(_("Commit subject"))
+        self.refreshCommitAiButton()
 
     def generateCommitMessage(self):
         if self.commitAiProcess is not None or self.stagedFiles.isEmpty():
@@ -627,7 +883,7 @@ class DiffArea(QWidget):
         self.commitAiPhase = "diff"
         self.commitAiOutput = b""
         self.commitAiError = b""
-        self.commitAiButton.setText(_("AI…"))
+        self.commitSubjectEditor.setPlaceholderText(_("Writing a message with {0}…", provider.capitalize()))
         self._startCommitAiProcess(
             "git",
             ["--no-pager", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--stat", "--patch", "--"],
@@ -674,8 +930,8 @@ class DiffArea(QWidget):
                 return
             provider = self.commitAiProvider
             model = settings.history.aiModels.get(provider, "") or configuredModel(provider)
-            language = self.commitAiLanguageCombo.currentText() or "the user's language"
-            detail = self.commitAiDetailCombo.currentData()
+            language = settings.history.aiLanguage or "the user's language"
+            detail = self.commitAiDetail()
             if detail == "concise":
                 formatInstructions = (
                     "After the subject, add a blank line and a compact body of 3-6 informative lines. "
@@ -718,16 +974,16 @@ class DiffArea(QWidget):
             self._finishCommitAiWithError(
                 self.commitAiStream.error or _("The CLI returned no commit message."))
             return
-        self.commitMessageEditor.setPlainText(message)
-        self.commitMessageEditor.setFocus()
-        self.commitAiButton.setText(_("AI"))
+        self.setCommitMessage(message)
+        self.commitSubjectEditor.setFocus()
+        self.commitSubjectEditor.setPlaceholderText(_("Commit subject"))
         self.refreshCommitAiButton()
 
     def _finishCommitAiWithError(self, message):
         if self.commitAiProcess:
             self.commitAiProcess.deleteLater()
             self.commitAiProcess = None
-        self.commitAiButton.setText(_("AI"))
+        self.commitSubjectEditor.setPlaceholderText(_("Commit subject"))
         self.refreshCommitAiButton()
         showWarning(self, _("AI commit message"), message)
 
@@ -841,7 +1097,9 @@ class DiffArea(QWidget):
         bottomCommitFormLayout.setSpacing(0)
 
         bottomCommitSplitter = QSplitter(Qt.Orientation.Vertical, self)
-        bottomCommitSplitter.setObjectName("Split_BottomCommitForm")
+        # Not "Split_BottomCommitForm" any more: heights saved for the old,
+        # taller form would dwarf the commit area it has become.
+        bottomCommitSplitter.setObjectName("Split_CommitArea")
         bottomCommitSplitter.setChildrenCollapsible(False)
         bottomCommitSplitter.addWidget(stackContainer)
         bottomCommitSplitter.addWidget(bottomCommitFormHost)

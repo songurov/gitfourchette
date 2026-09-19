@@ -906,7 +906,8 @@ def testDiffViewMouseWheelZoom(tempDir, mainWindow):
 
 def testToggleWordWrap(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
-    mainWindow.resize(999, 400)
+    # Narrow enough for long lines to scroll, tall enough for a few lines of diff above the commit area
+    mainWindow.resize(999, 600)
 
     writeLongFile(f"{wd}/longfile.txt", 50, 200)
 
@@ -1598,7 +1599,9 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
     # Named, so a screen reader has more to say than "button"; not a lone
     # symbol either, which VoiceOver reads out as the character's name
     controls = [w for w in area.findChildren(QToolButton) + area.findChildren(QComboBox) if w.isVisible()]
-    assert len(controls) >= 20
+    assert len(controls) >= 18
+    commitAreaControls = [area.commitAiButton, area.commitRecentButton, area.commitOptionsButton, area.commitButton]
+    assert all(control in controls for control in commitAreaControls)
     for control in controls:
         name = accessibleNameOf(control)
         assert re.search(r"\w\w", name), f"{control.objectName() or control.toolTip()!r} is named {name!r}"
@@ -1607,8 +1610,8 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
     assert [accessibleNameOf(b) for b in buttons] == [
         "Context lines", "Show whole file", "Side-by-side diff", "Wrap long lines", "Show whitespace characters",
         "Whitespace changes"]
-    assert area.commitAiLanguageCombo.accessibleName() == "AI message language"
-    assert area.commitAiDetailCombo.accessibleName() == "AI message detail"
+    assert [accessibleNameOf(control) for control in commitAreaControls] == [
+        "Write the commit message with AI", "Recent messages", "More commit options", "Commit"]
 
     # A toggle's tooltip says whether it's on
     assert area.diffButtons.wordWrapButton.toolTip() == "Wrap long lines: off"
@@ -1619,7 +1622,7 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
 
     # Each icon is drawn at its full 16px: the stylesheet's padding used to
     # squeeze it into the 8px left inside a 24px button
-    for button in buttons:
+    for button in buttons + commitAreaControls[:3]:
         assert paintedGlyphSize(button) >= 12, accessibleNameOf(button)
 
     # Tab reaches the diff's options, right after the diff
@@ -1631,7 +1634,8 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
     assertTranslatedInForkLanguages(
         "{0}: on", "{0}: off", "Side-by-side diff", "File display", "Show as list or folder tree",
         "Stage all files", "Unstage all files", "Ask AI about the selected files",
-        "AI message language", "AI message detail")
+        "AI message language", "AI message detail", "Write the commit message with AI", "Recent messages",
+        "More commit options", "Commit subject", "Description")
 
 
 # -----------------------------------------------------------------------------

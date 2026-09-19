@@ -130,7 +130,7 @@ def testNewRepo(tempDir, mainWindow):
     unbornIndex = rw.sidebar.nodeToFilterIndex(unbornNode)
     assert re.search(r"branch.+will be created", unbornIndex.data(Qt.ItemDataRole.ToolTipRole), re.I)
 
-    rw.diffArea.commitButton.click()
+    triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
     acceptQMessageBox(rw, "empty commit")
     commitDialog: CommitDialog = findQDialog(rw, "commit")
     commitDialog.ui.summaryEditor.setText("initial commit")
@@ -450,7 +450,7 @@ def testCustomRepoIdentity(tempDir, mainWindow, name, email):
 
     dlg.accept()
 
-    rw.diffArea.commitButton.click()
+    triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
     acceptQMessageBox(rw, "empty commit")
     commitDialog: CommitDialog = rw.findChild(CommitDialog)
     commitDialog.ui.summaryEditor.setText("hello")
@@ -1106,7 +1106,7 @@ def testWindowSizeUnaffectedByLongRepoNames(tempDir, mainWindow):
 def _commitFormControls(rw: RepoWidget) -> list[QWidget]:
     form = rw.diffArea.commitForm
     return [widget for widget in form.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly)
-            if widget.isVisibleTo(form) and widget is not rw.diffArea.commitMessageEditor]
+            if widget.isVisibleTo(form)]
 
 
 def _settleLayouts():
@@ -1120,53 +1120,61 @@ def _onSameLine(a: QWidget, b: QWidget) -> bool:
     return a.geometry().top() <= b.geometry().bottom() and b.geometry().top() <= a.geometry().bottom()
 
 
-def testCommitFormWrapsInNarrowWindow(tempDir, mainWindow):
+@pytest.mark.parametrize("placement", [settings.CommitFormPlacement.BottomBar, settings.CommitFormPlacement.FilesPanel])
+def testCommitFormWrapsInNarrowWindow(tempDir, mainWindow, placement):
     wd = unpackRepo(tempDir)
     writeFile(f"{wd}/a/a1.txt", "changed\n")
+    GFApplication.applyPrefs(commitFormPlacement=placement)
     rw = mainWindow.openRepo(wd)
     rw.diffArea.dirtyFiles.selectAll()
     rw.diffArea.dirtyFiles.stage()
-    form = rw.diffArea.commitForm
+    rw.diffArea.setCommitMessage("Counted")
+    area = rw.diffArea
+    form = area.commitForm
     controls = _commitFormControls(rw)
-    assert rw.diffArea.commitPushButton in controls
+    assert area.commitButton in controls
+    assert area.commitSubjectCounter in controls
 
     # The commit form doesn't force the window to be wide enough for all of its
     # controls side by side: it only needs room for its widest control.
-    assert form.minimumSizeHint().width() <= max(control.sizeHint().width() for control in controls)
+    assert form.minimumSizeHint().width() <= max(control.minimumSizeHint().width() for control in controls) + 16
 
     # In a narrow window, the controls wrap onto more lines, without any of
     # them overlapping or sticking out of the form.
     mainWindow.resize(1, 1200)  # as narrow as it gets, but tall enough for all the lines
     _settleLayouts()
     assert form.height() >= form.minimumSizeHint().height()
-    assert form.width() < rw.diffArea.signoffCommitCheckBox.width() + rw.diffArea.commitPushButton.width() + rw.diffArea.commitButton.width()
-    assert not _onSameLine(rw.diffArea.signoffCommitCheckBox, rw.diffArea.commitPushButton)
+    assert not _onSameLine(area.amendCommitCheckBox, area.commitButton)
     for i, control in enumerate(controls):
         assert form.rect().contains(control.geometry()), f"{control.objectName()} sticks out of the commit form"
         for other in controls[i + 1:]:
             assert not control.geometry().intersects(other.geometry()), f"{control.objectName()} overlaps {other.objectName()}"
 
 
-def testCommitFormFitsOnTwoLinesByDefault(tempDir, mainWindow):
-    # Out of the box, the file lists are wide enough for each row of the commit
-    # form's controls to fit on a single line - even once the commit button
-    # counts the staged files.
+@pytest.mark.parametrize("placement", [settings.CommitFormPlacement.BottomBar, settings.CommitFormPlacement.FilesPanel])
+def testCommitFormIsOneBoxAndOneRow(tempDir, mainWindow, placement):
+    # Out of the box, the message box sits over one row of controls: Amend and
+    # ⋯ at the left, the subject's length and Commit at the right.
     wd = unpackRepo(tempDir)
     writeFile(f"{wd}/a/a1.txt", "changed\n")
     writeFile(f"{wd}/b/b1.txt", "changed\n")
+    GFApplication.applyPrefs(commitFormPlacement=placement)
     rw = mainWindow.openRepo(wd)
     rw.diffArea.dirtyFiles.selectAll()
     rw.diffArea.dirtyFiles.stage()
-    assert rw.diffArea.commitButton.text() == "Commit 2 files"
+    area = rw.diffArea
+    area.setCommitMessage("A subject")
+    assert area.commitButton.text() == "Commit"
+    assert "Commit 2 staged files" in area.commitButton.toolTip()
 
     mainWindow.resize(1400, 950)
     _settleLayouts()
-    diffArea = rw.diffArea
-    firstRow = [diffArea.commitAiButton, diffArea.commitAiLanguageCombo, diffArea.commitAiDetailCombo, diffArea.commitSubjectCounter]
-    secondRow = [diffArea.noVerifyCommitCheckBox, diffArea.amendCommitCheckBox, diffArea.commitButton, diffArea.commitPushButton]
-    assert all(_onSameLine(diffArea.commitAiButton, widget) for widget in firstRow)
-    assert all(_onSameLine(diffArea.signoffCommitCheckBox, widget) for widget in secondRow)
-    assert not _onSameLine(diffArea.commitAiButton, diffArea.signoffCommitCheckBox)
+    row = [area.amendCommitCheckBox, area.commitOptionsButton, area.commitSubjectCounter, area.commitButton]
+    assert all(_onSameLine(area.amendCommitCheckBox, widget) for widget in row)
+    assert [widget.x() for widget in row] == sorted(widget.x() for widget in row)
+    assert area.commitMessageBox.geometry().bottom() < area.amendCommitCheckBox.geometry().top()
+    assert area.commitButton.geometry().right() == area.commitMessageBox.geometry().right()
+    assert 90 <= area.commitForm.height() <= 140, "no more room than a box and a row of buttons need"
 
 
 def testSshAgentSandboxingMatchesGit(tempDir, mainWindow):

@@ -673,6 +673,87 @@ SearchBar[red] QLineEdit {
     border-color: ${danger};
 }
 
+/* Commit area: the subject and the description are one field, the box around
+   them; they have no border of their own, so the box shows the focus. */
+DiffArea CommitMessageBox {
+    background: ${fieldBg};
+    border: 1px solid ${fieldBorder};
+    border-radius: ${outerRadius};
+}
+
+DiffArea CommitMessageBox[focused="true"] {
+    border-color: ${accent};
+}
+
+DiffArea CommitMessageBox QLineEdit,
+DiffArea CommitMessageBox QPlainTextEdit {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+DiffArea CommitMessageBox QPlainTextEdit {
+    padding: 0px 6px;  /* its text lines up with the subject's */
+}
+
+/* Icon buttons (✦, recent messages, ⋯): the full 16px icon, no arrow drawn over it */
+DiffArea CommitMessageBox QToolButton,
+DiffArea QToolButton#commitOptionsButton,
+DiffArea QToolButton#commitRecentButton {
+    padding: 0px 3px;
+}
+
+DiffArea QToolButton#commitOptionsButton::menu-indicator,
+DiffArea QToolButton#commitRecentButton::menu-indicator {
+    image: none;
+}
+
+/* Commit: the one accented button, when there's something to commit */
+DiffArea QToolButton#commitButton[ready="true"] {
+    background: ${accent};
+    color: ${onAccent};
+    border-color: ${accent};
+}
+
+DiffArea QToolButton#commitButton[ready="true"]:focus {
+    border-color: ${text};
+}
+
+DiffArea QToolButton#commitButton[ready="true"]:pressed {
+    background: ${buttonPressed};
+}
+
+/* Nothing to commit: the button looks dead (and stays dead under the mouse),
+   but it isn't disabled, so its menu still opens. */
+DiffArea QToolButton#commitButton[ready="false"],
+DiffArea QToolButton#commitButton[ready="false"]:hover,
+DiffArea QToolButton#commitButton[ready="false"]:pressed {
+    background: ${inputDisabled};
+    color: ${textFaint};
+    border-color: ${border};
+}
+
+DiffArea QToolButton#commitButton[ready="false"]:focus {
+    border-color: ${accent};
+}
+
+DiffArea QToolButton#commitButton[ready="false"]::menu-button:hover {
+    background: ${buttonHover};
+}
+
+DiffArea QToolButton#commitButton[ready="true"]::menu-button {
+    border-left-color: ${bg};
+}
+
+/* The button draws its arrow itself, in its text color: this gray picture would vanish on the accent */
+DiffArea QToolButton#commitButton::menu-arrow {
+    image: none;
+}
+
+DiffArea QLabel#commitSubjectCounter[state="long"] {
+    color: ${danger};
+}
+
 /* Fusion quirk: QComboBox's list view always inherits QComboBox's top-padding.
 https://web.archive.org/web/qtcentre.org/threads/69272-QComboBox-padding-bug */
 ${fusionOnly}QComboBox { combobox-popup: 0; }

@@ -8781,3 +8781,124 @@ msgid ""
 "In the file tree, a folder that holds nothing but one other folder shares "
 "its line, as in “src/ui”."
 msgstr "În arborele de fișiere, un dosar care conține doar un alt dosar împarte rândul cu acesta, ca în „src/ui”."
+#: diffarea.py:398 diffarea.py:399 diffarea.py:834 diffarea.py:943
+#: diffarea.py:950
+msgid "Commit subject"
+msgstr "Subiectul commit-ului"
+
+#: diffarea.py:404 diffarea.py:405
+msgid "Description"
+msgstr "Descriere"
+
+#: diffarea.py:411
+msgid "Write the commit message with AI"
+msgstr "Scrie mesajul commit-ului cu AI"
+
+#: diffarea.py:453 diffarea.py:661
+msgid "Amend"
+msgstr "Modifică commit-ul"
+
+#: diffarea.py:458
+msgid "Sign Off"
+msgstr "Semnează (Sign-off)"
+
+#: diffarea.py:461
+msgid "Add a “Signed-off-by” line to the message (git commit --signoff)"
+msgstr "Adaugă la mesaj o linie „Signed-off-by” (git commit --signoff)"
+
+#: diffarea.py:462
+msgid "No-Verify"
+msgstr "Fără verificări (No-Verify)"
+
+#: diffarea.py:465
+msgid "Skip the pre-commit and commit-msg hooks (git commit --no-verify)"
+msgstr "Sari peste hook-urile pre-commit și commit-msg (git commit --no-verify)"
+
+#: diffarea.py:470 diffarea.py:700
+msgid "More commit options"
+msgstr "Mai multe opțiuni de commit"
+
+#: diffarea.py:485
+#, python-brace-format
+msgid "Characters in the subject. Up to {0} reads well everywhere; some tools cut longer subjects short."
+msgstr "Caractere în subiect. Până la {0} se citește bine peste tot; unele unelte scurtează subiectele mai lungi."
+
+#: diffarea.py:493 diffarea.py:666
+msgid "Commit && Push"
+msgstr "Fă commit && push"
+
+#: diffarea.py:662
+msgid "Amend && Push"
+msgstr "Modifică && fă push"
+
+#: diffarea.py:668
+#, python-brace-format
+msgid "Commit {n} staged file"
+msgid_plural "Commit {n} staged files"
+msgstr[0] "Fă commit cu {n} fișier pregătit"
+msgstr[1] "Fă commit cu {n} fișiere pregătite"
+msgstr[2] "Fă commit cu {n} de fișiere pregătite"
+
+#: diffarea.py:672
+msgid "Nothing is staged. Stage files first, or tick Amend to change the last commit."
+msgstr "Nimic nu e pregătit. Pregătește întâi fișiere sau bifează „Modifică commit-ul” ca să schimbi ultimul commit."
+
+#: diffarea.py:702
+#, python-brace-format
+msgid "On: {0}"
+msgstr "Activat: {0}"
+
+#: diffarea.py:715
+msgid "No recent messages"
+msgstr "Niciun mesaj recent"
+
+#: diffarea.py:748
+msgid "Concise"
+msgstr "Concis"
+
+#: diffarea.py:748
+msgid "Detailed"
+msgstr "Detaliat"
+
+#: diffarea.py:748
+msgid "Deep"
+msgstr "Amănunțit"
+
+#: diffarea.py:804
+msgid "Generating a commit message… Click to stop."
+msgstr "Se generează mesajul commit-ului… Clic pentru a opri."
+
+#: diffarea.py:806
+msgid "Install and configure Codex CLI or Claude Code to generate a commit message."
+msgstr "Instalează și configurează Codex CLI sau Claude Code ca să generezi un mesaj de commit."
+
+#: diffarea.py:808
+msgid "Stage files to generate a commit message with AI."
+msgstr "Pregătește fișiere ca să generezi mesajul commit-ului cu AI."
+
+#: diffarea.py:813
+#, python-brace-format
+msgid "Generate a commit message from staged changes with {0}."
+msgstr "Generează cu {0} mesajul commit-ului din modificările pregătite."
+
+#: diffarea.py:850
+#, python-brace-format
+msgid "Writing a message with {0}…"
+msgstr "{0} scrie mesajul…"
+
+#: diffarea.py:952
+msgid "AI commit message"
+msgstr "Mesaj de commit cu AI"
+
+#: diffarea.py:888
+#, python-brace-format
+msgid "CLI exited with code {0}."
+msgstr "CLI s-a încheiat cu codul {0}."
+
+#: diffarea.py:893
+msgid "There are no staged changes to describe."
+msgstr "Nu există modificări pregătite de descris."
+
+#: diffarea.py:939
+msgid "The CLI returned no commit message."
+msgstr "CLI nu a întors niciun mesaj de commit."

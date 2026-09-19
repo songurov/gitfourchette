@@ -132,7 +132,7 @@ def testCommitWithPgpSignature(tempDir, mainWindow, tempGpgHome, amend):
     rw = mainWindow.openRepo(wd)
 
     if not amend:
-        rw.diffArea.commitButton.click()
+        triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
         acceptQMessageBox(rw, "empty commit")
     else:
         triggerMenuAction(mainWindow.menuBar(), "repo/amend last commit")
@@ -187,7 +187,7 @@ def testCommitWithSshSignature(tempDir, mainWindow, tempGpgHome, amend, passphra
     rw = mainWindow.openRepo(wd)
 
     if not amend:
-        rw.diffArea.commitButton.click()
+        triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
         acceptQMessageBox(rw, "empty commit")
     else:
         triggerMenuAction(mainWindow.menuBar(), "repo/amend last commit")
@@ -429,7 +429,7 @@ def testInterruptGpgQueue(tempDir, mainWindow, tempGpgHome, taskThread):
 
     # Start NewCommit.
     # This should kill VerifyGpgQueue immediately.
-    rw.diffArea.commitButton.click()
+    triggerMenuAction(mainWindow.menuBar(), r"repo/commit")
     qmb = waitForQMessageBox(rw, "create an empty commit anyway")
     assert not isinstance(rw.taskRunner.currentTask, VerifyGpgQueue)
     frozenQueue = gpgVerifyQueue.copy()
