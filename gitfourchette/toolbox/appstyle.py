@@ -23,6 +23,10 @@ _ourStandardIcons: dict[QStyle.StandardPixmap, str] = {
     _SP.SP_DirIcon: "git-folder",
 }
 
+# No Qt style draws a Retry icon of its own. (Qt 5 doesn't have the name.)
+if hasattr(_SP, "SP_DialogRetryButton"):
+    _ourStandardIcons[_SP.SP_DialogRetryButton] = "retry"
+
 if not (MACOS or WINDOWS):
     # Mac and Windows draw good-looking message box icons of their own.
     # Elsewhere, they come from whichever icon theme the desktop happens to

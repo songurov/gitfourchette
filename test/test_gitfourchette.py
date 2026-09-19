@@ -1217,5 +1217,8 @@ def testDialogButtonsUseOurOwnIcons(mainWindow):
     assert rendered(style.standardIcon(standardPixmap.SP_DialogOkButton)) == rendered(stockIcon("check"))
     assert rendered(style.standardIcon(standardPixmap.SP_DialogDiscardButton)) == rendered(stockIcon("trash"))
 
+    # The conflict view's Rework button; no Qt style draws a Retry icon of its own
+    assert rendered(style.standardIcon(standardPixmap.SP_DialogRetryButton)) == rendered(stockIcon("retry"))
+
     # Anything we have no icon for is still up to the underlying style
     assert rendered(style.standardIcon(standardPixmap.SP_ComputerIcon)) != rendered(stockIcon("close"))
