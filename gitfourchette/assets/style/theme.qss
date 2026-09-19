@@ -682,28 +682,49 @@ ${fusionOnly}QComboBox QAbstractItemView::item { padding: 4px 2px; }
  * Neutral variant only
  * ------------------------------------------------------------------------ */
 
-/* Repo tabs: pills on a rounded track, instead of folder tabs */
+/* Repo tabs: pills on a rounded track, instead of folder tabs. The track is
+   28px tall, the pills 24px, with a pixel of track showing around them. */
 ${neutralOnly}QTabWidget2 QTabBar {
     background: ${tabTrack};
     border: 1px solid ${tabTrackEdge};
-    border-radius: ${pillRadius};
+    border-radius: ${tabTrackRadius};
 }
 
 ${neutralOnly}QTabWidget2 QTabBar::tab,
 ${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:first,
 ${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:last {
-    margin: 1px;
+    height: 22px;
+    margin: 2px;
+    padding: 0px 6px;
     border: 1px solid transparent;
     border-radius: ${pillRadius};
+}
+
+/* Under the pointer, a tab gets the pill's fill, but not its rim */
+${neutralOnly}QTabWidget2 QTabBar::tab:hover:!selected {
+    background: ${tabPill};
 }
 
 ${neutralOnly}QTabWidget2 QTabBar::tab:selected,
 ${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:first:selected,
 ${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:last:selected {
     background: ${tabPill};
-    border-color: ${tabPillEdge};
+    /* Lit along the top and bottom, in shadow at the rounded ends */
+    border-color: ${tabPillEdge} ${tabPillShade};
     color: ${tabActiveText};
     font-weight: normal;
+}
+
+/* Each tab's close button, at its left end while the pointer is over it */
+${neutralOnly}QTabWidget2 QToolButton#QTW2CloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 0px;
+}
+
+${neutralOnly}QTabWidget2 QToolButton#QTW2CloseButton:hover {
+    background: ${hover};
 }
 
 /* Check boxes a little larger, as on the Mac. Only the size: the drawing stays the style's own. */

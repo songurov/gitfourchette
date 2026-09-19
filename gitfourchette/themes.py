@@ -205,6 +205,15 @@ class ThemeColors:
     "How many points smaller than the rest of the text the main toolbar's labels are."
     pillRadius: int = 7
     "Roundness of the tabs' pills (Neutral only)."
+    pillTabs: bool = False
+    """
+    Repo tabs as pills on a track: each tab shows its close button at its left
+    end while the pointer is over it, and its status at its right end.
+    """
+    tabTrackRadius: int = 7
+    "Roundness of the track under the tabs (with pillTabs)."
+    tabLabelDrop: float = 0
+    "How many points smaller than the rest of the text the repo tabs' names are."
     sidebarRowHeight: str = "1.25em"
     fileRowHeight: str = "1.15em"
     scrollHandleMargin: str = "3px"
@@ -225,6 +234,10 @@ class ThemeColors:
     "The current tab's pill (Neutral only)."
     tabPillEdge: str = ""
     tabActiveText: str = ""
+    tabPillShade: str = ""
+    "The rounded ends of the current tab's pill, which are its edge's shadow side (with pillTabs)."
+    tabSeparator: str = ""
+    "Short lines between two tabs that are neither current nor under the pointer (with pillTabs)."
 
     iconSet: str = ""
     "Subfolder of assets:icons whose redraws replace the icons of the same name."
@@ -327,6 +340,8 @@ class ThemeColors:
         self.tabPill            = self.tabPill or self.button
         self.tabPillEdge        = self.tabPillEdge or self.border
         self.tabActiveText      = self.tabActiveText or self.text
+        self.tabPillShade       = self.tabPillShade or self.tabPillEdge
+        self.tabSeparator       = self.tabSeparator or self.tabTrackEdge
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
@@ -496,6 +511,9 @@ NEUTRAL_DARK = ThemeColors(
     outerRadius        = 5,
     innerRadius        = 5,
     pillRadius         = 12,
+    pillTabs           = True,
+    tabTrackRadius     = 14,
+    tabLabelDrop       = 2,
     buttonPadding      = "3px 12px",
     toolButtonPadding  = "2px 6px",
     fieldPadding       = "2px 6px",
@@ -516,6 +534,8 @@ NEUTRAL_DARK = ThemeColors(
     tabPill            = "#3e3e3e",
     tabPillEdge        = "#646464",
     tabActiveText      = "#ebebeb",
+    tabPillShade       = "#303030",
+    tabSeparator       = "#4e4e4e",
     iconSet            = "neutral",
     toolbarIconColor   = "#e9e9e9",
     codeBg             = "#242424",
@@ -543,6 +563,9 @@ NEUTRAL_LIGHT = ThemeColors(
     outerRadius        = 5,
     innerRadius        = 5,
     pillRadius         = 12,
+    pillTabs           = True,
+    tabTrackRadius     = 14,
+    tabLabelDrop       = 2,
     buttonPadding      = "3px 12px",
     toolButtonPadding  = "2px 6px",
     fieldPadding       = "2px 6px",

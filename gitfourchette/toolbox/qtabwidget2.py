@@ -14,6 +14,54 @@ from gitfourchette.toolbox import stockIcon
 from gitfourchette.toolbox.qtutils import CallbackAccumulator, reevaluateStyleSheet
 
 
+class QTabBar2Badge(QWidget):
+    """What a tab has outstanding, at the right end of a pill tab (see QTabBar2.pillMode)."""
+
+    Size = 16
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("QTW2Badge")
+        self.setFixedSize(QTabBar2Badge.Size, QTabBar2Badge.Size)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.iconKey = ""
+
+    def setIconKey(self, iconKey: str):
+        if iconKey != self.iconKey:
+            self.iconKey = iconKey
+            self.update()
+
+    def paintEvent(self, event: QPaintEvent):
+        # Look the icon up at paint time, so it's always drawn in the current theme's colors
+        if self.iconKey:
+            painter = QPainter(self)
+            stockIcon(self.iconKey).paint(painter, self.rect())
+
+
+class QTabBar2CloseButton(QToolButton):
+    """Closes a pill tab, from its left end, while the pointer is over the tab (see QTabBar2.pillMode)."""
+
+    def __init__(self, parent: "QTabBar2"):
+        super().__init__(parent)
+        self.setObjectName("QTW2CloseButton")
+        self.setFixedSize(QTabBar2Badge.Size, QTabBar2Badge.Size)
+        self.setIconSize(QSize(QTabBar2Badge.Size, QTabBar2Badge.Size))
+        self.setIcon(stockIcon("close-small"))
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setToolTip(_("Close tab"))
+        self.clicked.connect(self.onClicked)
+
+    def onClicked(self):
+        tabBar = self.parentWidget()
+        assert isinstance(tabBar, QTabBar2)
+        # Tabs move around; find out which one we're on now
+        for i in range(tabBar.count()):
+            if tabBar.tabButton(i, QTabBar.ButtonPosition.LeftSide) is self:
+                tabBar.tabCloseRequested.emit(i)
+                return
+
+
 class QTabBar2(QTabBar):
     tabMiddleClicked = Signal(int)
     tabDoubleClicked = Signal(int)
@@ -26,12 +74,38 @@ class QTabBar2(QTabBar):
     doubleClickedIndex: int
     shadowText: list[str]
 
+    pillMode: bool
+    """
+    Tabs are pills on a track (the Neutral theme). Qt's own close buttons are
+    off: each tab carries a close button at its left end, shown only while the
+    pointer is over the tab, and a badge at its right end that shows what the
+    tab has outstanding instead of the tab's icon.
+    """
+
+    pillCloseButtons: bool
+    "In pill mode, whether the pointer brings up a tab's close button (the tabCloseButton pref)."
+
+    hoveredIndex: int
+    "The tab under the pointer, or -1."
+
+    separatorColor: QColor
+    "In pill mode, the short lines between two tabs that are neither current nor hovered."
+
+    labelPointDrop: float
+    "How many points smaller than the app's font the tab names are."
+
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.middleClickedIndex = -1
         self.doubleClickedIndex = -1
         self.setObjectName("QTabBar2")
         self.shadowText = []
+        self.pillMode = False
+        self.pillCloseButtons = True
+        self.hoveredIndex = -1
+        self.separatorColor = QColor()
+        self.labelPointDrop = 0
+        self._trackedMouseBefore = False
 
         self.tabMoved.connect(self._onTabMoved)
 
@@ -54,7 +128,10 @@ class QTabBar2(QTabBar):
 
         w = 32 + self.fontMetrics().horizontalAdvance(text)
 
-        if self.tabsClosable():
+        if self.pillMode:
+            # Room for the close button on the left and the badge on the right
+            w += 2 * QTabBar2Badge.Size
+        elif self.tabsClosable():
             closeWidth = self.style().pixelMetric(QStyle.PixelMetric.PM_TabCloseIndicatorWidth)
             w += 2 * closeWidth
 
@@ -65,6 +142,132 @@ class QTabBar2(QTabBar):
 
     def tabLayoutChange(self):
         self.layoutChanged.emit()
+        # A tab may have slid under the pointer (e.g. after closing the one that was there)
+        self._updateHoveredIndex()
+
+    # -------------------------------------------------------------------------
+    # Pill mode
+
+    def setPillMode(self, pill: bool, closeButtons: bool):
+        """
+        Switch between pill tabs and Qt's usual tabs (see pillMode).
+        The caller sets tabsClosable for the usual tabs; pill tabs are never "closable" to Qt.
+        """
+        self.pillCloseButtons = closeButtons
+
+        if pill != self.pillMode:
+            self.pillMode = pill
+            # Follow the pointer across the tabs, and give it back as it was
+            if pill:
+                self._trackedMouseBefore = self.hasMouseTracking()
+                self.setMouseTracking(True)
+            else:
+                self.setMouseTracking(self._trackedMouseBefore)
+                self.hoveredIndex = -1
+            for i in range(self.count()):
+                self._installPillButtons(i)
+
+        if pill:
+            for i in range(self.count()):
+                self.tabButton(i, QTabBar.ButtonPosition.LeftSide).setIcon(stockIcon("close-small"))
+            self._syncPillButtons()
+
+        self.update()
+
+    def _installPillButtons(self, i: int):
+        Left = QTabBar.ButtonPosition.LeftSide
+        Right = QTabBar.ButtonPosition.RightSide
+
+        if self.pillMode:
+            assert not self.tabsClosable(), "Qt's close button would take the badge's place"
+            self.setTabIcon(i, QIcon())  # the badge says it instead
+            self.setTabButton(i, Left, QTabBar2CloseButton(self))
+            self.setTabButton(i, Right, QTabBar2Badge(self))
+        else:
+            for side in Left, Right:
+                button = self.tabButton(i, side)
+                if isinstance(button, (QTabBar2CloseButton, QTabBar2Badge)):
+                    self.setTabButton(i, side, None)
+                    button.deleteLater()
+
+    def setLabelPointDrop(self, drop: float):
+        """Draw the tab names `drop` points smaller than the rest of the app's text."""
+        if drop == self.labelPointDrop:
+            self._keepLabelFont()
+            return
+        self.labelPointDrop = drop
+        if drop:
+            self._keepLabelFont()
+        else:
+            self.setFont(QFont())  # follow the app's font again
+
+    def _keepLabelFont(self):
+        """
+        Hold on to the smaller font. The style sheet puts back the font a
+        widget had when it was first styled whenever it restyles it (e.g.
+        when the tabs move into the window, or the theme changes), so this
+        runs again after every font or style change.
+        """
+        if not self.labelPointDrop:
+            return
+        size = max(6.0, QApplication.font().pointSizeF() - self.labelPointDrop)
+        if self.font().pointSizeF() != size:
+            font = QApplication.font()
+            font.setPointSizeF(size)
+            self.setFont(font)
+
+    def changeEvent(self, event: QEvent):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._keepLabelFont()
+
+    def setTabBadge(self, i: int, iconKey: str):
+        """In pill mode, show what tab `i` has outstanding (a stockIcon key) at its right end."""
+        badge = self.tabButton(i, QTabBar.ButtonPosition.RightSide)
+        assert isinstance(badge, QTabBar2Badge)
+        badge.setIconKey(iconKey)
+
+    def tabBadge(self, i: int) -> str:
+        badge = self.tabButton(i, QTabBar.ButtonPosition.RightSide)
+        return badge.iconKey if isinstance(badge, QTabBar2Badge) else ""
+
+    def _updateHoveredIndex(self, pos: QPoint | None = None):
+        if not self.pillMode:
+            return
+        if pos is None:
+            pos = self.mapFromGlobal(QCursor.pos())
+        index = self.tabAt(pos) if self.rect().contains(pos) and self.underMouse() else -1
+        if index != self.hoveredIndex:
+            self.hoveredIndex = index
+            self._syncPillButtons()
+            self.update()
+
+    def _syncPillButtons(self):
+        for i in range(self.count()):
+            button = self.tabButton(i, QTabBar.ButtonPosition.LeftSide)
+            if isinstance(button, QTabBar2CloseButton):
+                button.setVisible(self.pillCloseButtons and i == self.hoveredIndex)
+            badge = self.tabButton(i, QTabBar.ButtonPosition.RightSide)
+            if isinstance(badge, QTabBar2Badge):
+                badge.setVisible(True)
+
+    def paintEvent(self, event: QPaintEvent):
+        super().paintEvent(event)
+
+        if not self.pillMode or not self.separatorColor.isValid():
+            return
+
+        # Short lines between two tabs where neither is lit up
+        current = self.currentIndex()
+        painter = QPainter(self)
+        painter.setPen(self.separatorColor)
+        for i in range(1, self.count()):
+            if {i - 1, i} & {current, self.hoveredIndex}:
+                continue
+            rect = self.tabRect(i)
+            length = min(16, rect.height() - 8)
+            top = rect.top() + (rect.height() - length) // 2
+            painter.drawLine(rect.left(), top, rect.left(), top + length - 1)
 
     # -------------------------------------------------------------------------
     # Mouse
@@ -87,6 +290,14 @@ class QTabBar2(QTabBar):
         # Block double-click signal if mouse moved before releasing button
         self.doubleClickedIndex = -1
         super().mouseMoveEvent(event)
+        self._updateHoveredIndex(event.position().toPoint())
+
+    def leaveEvent(self, event: QEvent):
+        super().leaveEvent(event)
+        if self.hoveredIndex >= 0:
+            self.hoveredIndex = -1
+            self._syncPillButtons()
+            self.update()
 
     def wheelEvent(self, event: QWheelEvent):
         self.wheelDelta.emit(event.angleDelta())
@@ -123,6 +334,10 @@ class QTabBar2(QTabBar):
         if runStandardHandler:
             super().mouseReleaseEvent(event)
 
+        # Dragging a tab around may have hidden its buttons
+        if self.pillMode:
+            self._syncPillButtons()
+
     # -------------------------------------------------------------------------
     # Misc. events
 
@@ -147,6 +362,9 @@ class QTabBar2(QTabBar):
     def tabInserted(self, index):
         self.shadowText.insert(index, self.tabText(index))
         super().tabInserted(index)
+        if self.pillMode:
+            self._installPillButtons(index)
+            self._syncPillButtons()
 
     def tabRemoved(self, index):
         del self.shadowText[index]
@@ -192,6 +410,20 @@ class QTabWidget2OverflowGradient(QWidget):
             painter.fillRect(QRect(saw-W, 0, W, sah-1), gradient)
 
 
+class QTabWidget2Band(QWidget):
+    """The strip that holds the tabs. With pill tabs, a line along its bottom sets it apart from the tab's contents."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("QTW2Band")
+        self.lineColor = QColor()
+
+    def paintEvent(self, event: QPaintEvent):
+        if self.lineColor.isValid():
+            painter = QPainter(self)
+            painter.fillRect(0, self.height() - 1, self.width(), 1, self.lineColor)
+
+
 class QTabWidget2(QWidget):
     currentChanged: Signal = Signal(int)
     tabCloseRequested: Signal = Signal(int)
@@ -204,6 +436,9 @@ class QTabWidget2(QWidget):
     currentChanged, which is emitted even when dragging the foreground tab)."""
 
     UrgentPropertyName = "QTabBar2_UrgentFlag"
+
+    PillBandMargins = (8, 0, 8, 8)
+    "Room around the pill tabs' track (left, top, right, bottom); the line under it takes the bottom pixel."
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -254,13 +489,18 @@ class QTabWidget2(QWidget):
         self.overflowGradient.setObjectName("QTW2OverflowGradient")
         self.overflowGradient.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
-        topWidget = QWidget(self)
+        self._pillTheme = None
+        "The theme that asks for pill tabs, while they're on."
+
+        topWidget = QTabWidget2Band(self)
         self.topWidget = topWidget
         topLayout = QHBoxLayout(topWidget)
+        self.topLayout = topLayout
         topLayout.setSpacing(2)
         topLayout.setContentsMargins(0, 0, 0, 0)
         topLayout.addWidget(self.tabScrollArea)
         topLayout.addWidget(self.overflowButton)
+        self.tabs.visibilityChanged.connect(self._layOutBand)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -283,11 +523,27 @@ class QTabWidget2(QWidget):
         return self.tabs.count()
 
     def refreshPrefs(self):
+        from gitfourchette.themes import activeTheme
+        theme = activeTheme()
+        pill = theme is not None and theme.pillTabs
+
         mustReevaluateStyleSheet = settings.prefs.expandingTabs != self.tabs.expanding()
 
         self.tabs.setExpanding(settings.prefs.expandingTabs)
         self.tabs.setAutoHide(settings.prefs.autoHideTabs)
-        self.tabs.setTabsClosable(settings.prefs.tabCloseButton)
+
+        # Pill tabs bring their own close buttons, and Qt's would take the
+        # badge's place: turn Qt's off before going pill, back on after leaving.
+        if pill:
+            self.tabs.setTabsClosable(False)
+            self.tabs.setPillMode(True, settings.prefs.tabCloseButton)
+        else:
+            self.tabs.setPillMode(False, settings.prefs.tabCloseButton)
+            self.tabs.setTabsClosable(settings.prefs.tabCloseButton)
+        for i in range(self.count()):
+            self._showTabStatus(i)
+        self._applyPillLook(theme if pill else None)
+
         self.tabs.update()
         self.syncBarSize()
         self.onResize()
@@ -295,6 +551,33 @@ class QTabWidget2(QWidget):
 
         if mustReevaluateStyleSheet:
             reevaluateStyleSheet(self)
+
+    def _applyPillLook(self, theme):
+        """Dress the band for pill tabs, or leave it as it's always been with the usual tabs (theme is None)."""
+        if theme is None and self._pillTheme is None:
+            return
+        self._pillTheme = theme
+
+        if theme is not None:
+            self.tabs.separatorColor = QColor(theme.tabSeparator)
+            self.tabs.setLabelPointDrop(theme.tabLabelDrop)
+        else:
+            self.tabs.separatorColor = QColor()
+            self.tabs.setLabelPointDrop(0)
+
+        self._layOutBand()
+
+    def _layOutBand(self):
+        """
+        Room around the pill tabs' track and a line under it, as long as the
+        tabs show (autoHideTabs hides a lone tab).
+        """
+        theme = self._pillTheme
+        band = theme is not None and self.tabs.isVisibleTo(self)
+        self.topLayout.setContentsMargins(*(QTabWidget2.PillBandMargins if band else (0, 0, 0, 0)))
+        self.topLayout.setSpacing(8 if theme is not None else 2)
+        self.topWidget.lineColor = QColor(theme.border) if band else QColor()
+        self.topWidget.update()
 
     def onCustomContextMenuRequested(self, localPoint: QPoint):
         globalPoint = self.tabs.mapToGlobal(localPoint)
@@ -319,7 +602,7 @@ class QTabWidget2(QWidget):
         if currentWidget is not None and currentWidget.property(QTabWidget2.UrgentPropertyName):
             currentWidget.setProperty(QTabWidget2.UrgentPropertyName, None)
             # Put back whatever the tab was saying about itself before it shouted
-            self.tabs.setTabIcon(i, self._statusIcon(currentWidget))
+            self._showTabStatus(i)
 
         # See if we should emit the currentWidgetChanged signal
         currentWidgetRef = weakref.ref(currentWidget or self)  # self stands in for None
@@ -469,9 +752,24 @@ class QTabWidget2(QWidget):
 
     StatusIconPropertyName = "gfTabStatusIcon"
 
-    def _statusIcon(self, widget: QWidget) -> QIcon:
-        iconKey = widget.property(QTabWidget2.StatusIconPropertyName)
-        return stockIcon(iconKey) if iconKey else QIcon()
+    def _showTabStatus(self, i: int):
+        """
+        Show what tab `i` says about itself: its status icon, or the urgent icon
+        while it wants attention. Pill tabs show it in their badge, at the right
+        end; the usual tabs, as the tab's icon.
+        """
+        widget = self.widget(i)
+        if widget is None:  # pragma: no cover - callers iterate over live tabs
+            return
+        if widget.property(QTabWidget2.UrgentPropertyName):
+            iconKey = "urgent-tab"
+        else:
+            iconKey = widget.property(QTabWidget2.StatusIconPropertyName) or ""
+
+        if self.tabs.pillMode:
+            self.tabs.setTabBadge(i, iconKey)
+        else:
+            self.tabs.setTabIcon(i, stockIcon(iconKey) if iconKey else QIcon())
 
     def setTabStatusIcon(self, i: int, iconKey: str):
         """
@@ -486,8 +784,7 @@ class QTabWidget2(QWidget):
         if widget.property(QTabWidget2.StatusIconPropertyName) == iconKey:
             return
         widget.setProperty(QTabWidget2.StatusIconPropertyName, iconKey or None)
-        if not widget.property(QTabWidget2.UrgentPropertyName):
-            self.tabs.setTabIcon(i, self._statusIcon(widget))
+        self._showTabStatus(i)
 
     def tabStatusIcon(self, i: int) -> str:
         widget = self.widget(i)
@@ -502,4 +799,4 @@ class QTabWidget2(QWidget):
         if widget.property(QTabWidget2.UrgentPropertyName) == "true":
             return
         widget.setProperty(QTabWidget2.UrgentPropertyName, "true")
-        self.tabs.setTabIcon(i, stockIcon("urgent-tab"))
+        self._showTabStatus(i)

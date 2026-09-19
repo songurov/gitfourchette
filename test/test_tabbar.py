@@ -8,10 +8,31 @@ from gitfourchette import settings
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.repowidget import RepoWidget
 from gitfourchette.settings import TabBarClick
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
+NEUTRAL_DARK_STYLE = "gitfourchette-builtin,dark,neutral"
+Left = QTabBar.ButtonPosition.LeftSide
+Right = QTabBar.ButtonPosition.RightSide
 
-def testTabOverflow(tempDir, mainWindow):
+
+@pytest.fixture
+def neutralTheme(mainWindow):
+    """Pill tabs, as the Neutral theme draws them."""
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    yield
+    GFApplication.applyPrefs(qtStyle="")
+
+
+def hoverTab(tabBar: QTabBar, index: int):
+    QTest.mouseMove(tabBar, tabBar.tabRect(index).center())
+    QTest.qWait(0)
+
+
+@pytest.mark.parametrize("pills", [False, True], ids=["usual", "pills"])
+def testTabOverflow(tempDir, mainWindow, request, pills):
+    if pills:
+        request.getfixturevalue("neutralTheme")
     numRepos = 10
     tabWidget = mainWindow.tabs
     tabBar = mainWindow.tabs.tabs
@@ -47,6 +68,9 @@ def testTabOverflow(tempDir, mainWindow):
     triggerMenuAction(menu, "RepoCopy0002")
     menu.close()
     assert mainWindow.tabs.currentIndex() == 2
+
+    if pills:
+        assert tabWidget.tabScrollArea.height() == 28  # the track keeps its height
 
 
 def testTabOverflowSingleTab(tempDir, mainWindow):
@@ -137,3 +161,206 @@ def testCloseLastTabAfterResizingWindow(tempDir, mainWindow):
 
     errorBoxes = [box.text() for box in mainWindow.findChildren(QMessageBox) if box.isVisible()]
     assert not errorBoxes, "the closed repo must not raise an exception while the home page comes back"
+
+
+# -----------------------------------------------------------------------------
+# Pill tabs (the Neutral theme)
+
+
+def testNeutralTabsArePillsWithTheStatusAtTheRightEnd(tempDir, mainWindow, neutralTheme):
+    from gitfourchette.toolbox.qtabwidget2 import QTabBar2Badge, QTabBar2CloseButton
+    from gitfourchette.themes import NEUTRAL_DARK
+
+    wd = unpackRepo(tempDir)
+    mainWindow.openRepo(wd)
+    tabWidget = mainWindow.tabs
+    tabBar = tabWidget.tabs
+    assert "git-status-unpushed" == tabWidget.tabStatusIcon(0)  # the fixture is ahead of its upstream
+
+    assert tabBar.pillMode
+    # The status moves out of the icon slot, into a badge at the right end of the tab
+    assert tabBar.tabIcon(0).isNull()
+    badge = tabBar.tabButton(0, Right)
+    assert isinstance(badge, QTabBar2Badge)
+    assert badge.iconKey == "git-status-unpushed"
+    assert badge.isVisible()
+    assert badge.geometry().left() > tabBar.tabRect(0).center().x()
+    # Qt's close button would sit where the badge is; ours is at the left end, out of sight until hovered
+    assert not tabBar.tabsClosable()
+    closeButton = tabBar.tabButton(0, Left)
+    assert isinstance(closeButton, QTabBar2CloseButton)
+    assert closeButton.geometry().right() < tabBar.tabRect(0).center().x()
+    assert not closeButton.isVisible()
+
+    # The track and its pill, measured on the reference: 28 px and 24 px tall
+    assert tabBar.height() == 28
+    assert tabBar.tabRect(0).height() == 28
+    # Tab names two points smaller than the rest of the text, with a line under the strip
+    assert tabBar.font().pointSizeF() == QApplication.font().pointSizeF() - NEUTRAL_DARK.tabLabelDrop
+    assert tabWidget.topWidget.lineColor.name() == NEUTRAL_DARK.border
+    assert tabWidget.topWidget.height() == 28 + 8
+
+    # Modern keeps the tabs it always had: the status in the icon slot, Qt's close button
+    GFApplication.applyPrefs(qtStyle="gitfourchette-builtin,dark")
+    assert not tabBar.pillMode
+    assert tabBar.tabsClosable()
+    assert not tabBar.tabIcon(0).isNull()
+    assert not isinstance(tabBar.tabButton(0, Right), QTabBar2Badge)
+    assert not isinstance(tabBar.tabButton(0, Left), QTabBar2CloseButton)
+    assert tabBar.font().pointSizeF() == QApplication.font().pointSizeF()
+    assert not tabWidget.topWidget.lineColor.isValid()
+
+    # And back
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    assert tabBar.tabIcon(0).isNull()
+    assert tabBar.tabBadge(0) == "git-status-unpushed"
+
+
+def testPillTabNamesStaySmallerWhenTheStyleSheetIsReapplied(tempDir, mainWindow, neutralTheme):
+    wd = unpackRepo(tempDir)
+    mainWindow.openRepo(wd)
+    tabBar = mainWindow.tabs.tabs
+    smaller = QApplication.font().pointSizeF() - 2
+    assert tabBar.font().pointSizeF() == smaller
+
+    # Restyling puts back the font the tabs had when they were first styled
+    GFApplication.applyPrefs(expandingTabs=False)
+    assert tabBar.font().pointSizeF() == smaller
+    GFApplication.applyPrefs(expandingTabs=True)
+    assert tabBar.font().pointSizeF() == smaller
+
+    # Compact mode shrinks everything; the tab names stay two points under that
+    GFApplication.applyPrefs(compactUi=True)
+    try:
+        assert tabBar.font().pointSizeF() == QApplication.font().pointSizeF() - 2
+        assert tabBar.font().pointSizeF() < smaller
+    finally:
+        GFApplication.applyPrefs(compactUi=False)
+
+
+def testPillTabCloseButtonShowsUnderThePointerAndCloses(tempDir, mainWindow, neutralTheme):
+    wd0 = unpackRepo(tempDir, renameTo="repo0")
+    wd1 = unpackRepo(tempDir, renameTo="repo1")
+    mainWindow.openRepo(wd0)
+    mainWindow.openRepo(wd1)
+    tabBar = mainWindow.tabs.tabs
+    assert mainWindow.tabs.currentIndex() == 1
+
+    # Not even on the current tab, until the pointer comes
+    assert not tabBar.tabButton(0, Left).isVisible()
+    assert not tabBar.tabButton(1, Left).isVisible()
+
+    hoverTab(tabBar, 0)
+    assert tabBar.hoveredIndex == 0
+    assert tabBar.tabButton(0, Left).isVisible()
+    assert not tabBar.tabButton(1, Left).isVisible()
+
+    hoverTab(tabBar, 1)
+    assert not tabBar.tabButton(0, Left).isVisible()
+    assert tabBar.tabButton(1, Left).isVisible()
+
+    assert tabBar.tabButton(1, Left).toolTip() == "Close tab"
+    assertTranslatedInForkLanguages("Close tab")
+
+    # Leaving the tabs puts it away
+    QTest.mouseMove(mainWindow.tabs.stacked, QPoint(10, 10))
+    QTest.qWait(0)
+    assert tabBar.hoveredIndex == -1
+    assert not tabBar.tabButton(1, Left).isVisible()
+
+    # Clicking it closes that tab, even the one that isn't current
+    hoverTab(tabBar, 0)
+    QTest.mouseClick(tabBar.tabButton(0, Left), Qt.MouseButton.LeftButton)
+    assert mainWindow.tabs.count() == 1
+    assert os.path.samefile(mainWindow.tabs.widget(0).workdir, wd1)
+
+
+def testPillTabCloseButtonHonorsThePref(tempDir, mainWindow, neutralTheme):
+    wd = unpackRepo(tempDir)
+    mainWindow.openRepo(wd)
+    tabBar = mainWindow.tabs.tabs
+
+    GFApplication.applyPrefs(tabCloseButton=False)
+    try:
+        hoverTab(tabBar, 0)
+        assert tabBar.hoveredIndex == 0
+        assert not tabBar.tabButton(0, Left).isVisible()
+        assert not tabBar.tabsClosable()  # and Qt's own doesn't come back either
+    finally:
+        GFApplication.applyPrefs(tabCloseButton=True)
+
+    hoverTab(tabBar, 0)
+    assert tabBar.tabButton(0, Left).isVisible()
+
+
+@pytest.mark.parametrize("click", ["middle", "double"])
+def testPillTabsStillCloseOnClick(tempDir, mainWindow, neutralTheme, click):
+    GFApplication.applyPrefs(**{f"{click}ClickTabBar": TabBarClick.Close})
+    mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo0"))
+    mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo1"))
+    tabBar = mainWindow.tabs.tabs
+    mouseSpecialClick(tabBar, click, pos=tabBar.tabRect(0).center())
+    QTest.qWait(0)
+    assert mainWindow.tabs.count() == 1
+
+
+def testPillTabBadgeFollowsItsTab(tempDir, mainWindow, neutralTheme):
+    clean = unpackRepo(tempDir, renameTo="clean")
+    shell("git reset --hard origin/master", clean)
+    ahead = unpackRepo(tempDir, renameTo="ahead")
+    mainWindow.openRepo(clean)
+    mainWindow.openRepo(ahead)
+    tabWidget = mainWindow.tabs
+    tabBar = tabWidget.tabs
+    assert [tabBar.tabBadge(0), tabBar.tabBadge(1)] == ["", "git-status-unpushed"]
+
+    # Dragging a tab around takes its badge along
+    start, end = tabBar.tabRect(1).center(), tabBar.tabRect(0).center()
+    QTest.mousePress(tabBar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+    for step in range(1, 11):
+        QTest.mouseMove(tabBar, start + (end - start) * step / 10)
+        QTest.qWait(10)
+    QTest.mouseRelease(tabBar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+    waitUntilTrue(lambda: tabBar.tabBadge(0) == "git-status-unpushed")
+    assert tabBar.tabBadge(1) == ""
+    assert os.path.samefile(tabWidget.widget(0).workdir, ahead)
+    waitUntilTrue(lambda: tabBar.tabRect(0).contains(tabBar.tabButton(0, Right).geometry()))
+    assert tabBar.tabButton(0, Right).isVisible()
+
+    # A tab asking for attention says so in its badge, and gives it back when you look
+    tabWidget.setCurrentIndex(1)
+    tabWidget.requestAttention(0)
+    assert tabBar.tabBadge(0) == "urgent-tab"
+    assert tabBar.tabIcon(0).isNull()
+    tabWidget.setCurrentIndex(0)
+    assert tabBar.tabBadge(0) == "git-status-unpushed"
+
+    # A new status lands in the badge too
+    writeFile(f"{ahead}/newfile.txt", "work in progress")
+    mainWindow.currentRepoWidget().refreshRepo()
+    assert tabBar.tabBadge(0) == "git-status-dirty-unpushed"
+
+
+def testPillTabSeparatorsSkipTheLitTabs(tempDir, mainWindow, neutralTheme):
+    from gitfourchette.themes import NEUTRAL_DARK
+    for i in range(4):
+        mainWindow.openRepo(unpackRepo(tempDir, renameTo=f"repo{i}"))
+    tabWidget = mainWindow.tabs
+    tabBar = tabWidget.tabs
+    tabWidget.setCurrentIndex(1)
+    QTest.mouseMove(tabWidget.stacked, QPoint(10, 10))
+    QTest.qWait(0)
+
+    def separators():
+        image = tabBar.grab().toImage()
+        y = tabBar.height() // 2
+        return [i for i in range(1, tabBar.count())
+                if image.pixelColor(tabBar.tabRect(i).left(), y).name() == NEUTRAL_DARK.tabSeparator]
+
+    # Only between two tabs that are neither current nor under the pointer
+    assert separators() == [3]
+    hoverTab(tabBar, 3)
+    assert separators() == []
+    tabWidget.setCurrentIndex(0)
+    hoverTab(tabBar, 0)
+    assert separators() == [2, 3]
