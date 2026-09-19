@@ -690,3 +690,24 @@ def testPrefsFileWithTheRetiredRememberPassphrasesKeyStillLoads(mainWindow):
         assert not hasattr(oldPrefs, "rememberPassphrases")
     finally:
         path.unlink()
+
+
+def testEveryPrefIsShownOnceOrHiddenForAReason():
+    """Settings is laid out by prefsschema: each field has one row, or a reason not to have one."""
+    from gitfourchette import prefsschema
+
+    fields = sorted(field.name for field in dataclasses.fields(settings.Prefs))
+    shown = [key for pane in prefsschema.PANES for row in pane.rows() for key in prefsschema.rowKeys(row)]
+    hidden = list(prefsschema.HIDDEN)
+    assert sorted(shown + hidden) == fields  # none missing, none twice, none unknown
+    assert all(prefsschema.HIDDEN.values())
+    assert not [field for field in fields if field.startswith("_")], "layout markers belong in prefsschema"
+
+
+@pytest.mark.parametrize("key", ["font", "contextLines", "tabCloseButton", "commands", "gitPath"])
+def testDeepLinksOpenTheirPaneWithTheControlFocused(mainWindow, key):
+    dlg = GFApplication.instance().openPrefsDialog(key)
+    control = dlg.findChild(QWidget, f"prefctl_{key}")
+    assert dlg.stackedWidget.currentWidget().isAncestorOf(control)
+    waitUntilTrue(lambda: control is QApplication.focusWidget() or control.isAncestorOf(QApplication.focusWidget()))
+    dlg.reject()

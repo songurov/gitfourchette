@@ -129,9 +129,13 @@ COMPACT_POINT_DROP = 1.0
 
 @dataclasses.dataclass
 class Prefs(PrefsFile):
+    """
+    The user's settings. Where each field appears in the Settings window,
+    or why it doesn't, is up to prefsschema.py.
+    """
+
     _filename = "prefs.json"
 
-    _category_general           : int                   = 0
     language                    : str                   = ""
     qtStyle                     : str                   = ""
     pathDisplayStyle            : PathDisplayStyle      = PathDisplayStyle.FullPaths
@@ -147,7 +151,6 @@ class Prefs(PrefsFile):
     """The little dinosaur that fetches eggs on the Home page."""
     homeMascotFollowsCursor     : bool                  = True
 
-    _category_diff              : int                   = 0
     font                        : str                   = ""
     fontSize                    : int                   = 0
     syntaxHighlighting          : str                   = PygmentsPresets.Automatic
@@ -162,13 +165,11 @@ class Prefs(PrefsFile):
     showWhitespace              : bool                  = False
     whitespaceMode              : WhitespaceMode        = WhitespaceMode.Strict
 
-    _category_imageDiff         : int                   = 0
     imageFileThresholdKB        : int                   = 5000
     renderSvg                   : bool                  = True
     """An SVG is a picture; show it as one. The toolbar toggle is right there
     for the times you want to read the markup."""
 
-    _category_graph             : int                   = 0
     chronologicalOrder          : bool                  = True
     graphRowLayout              : GraphRowLayout        = GraphRowLayout.GraphFirst
     """Messages that all start at the same x stay readable however busy the
@@ -184,45 +185,34 @@ class Prefs(PrefsFile):
     verifyGpgOnTheFly           : bool                  = False
     alternatingRowColors        : bool                  = False
 
-    _category_git               : int                   = 0
     gitPath                     : str                   = ToolPresets.defaultGit()
     ownSshAgent                 : bool                  = False
     ownAskpass                  : bool                  = True
     lfsAware                    : bool                  = True
 
-    _category_external          : int                   = 0
     externalEditor              : str                   = ""
     terminal                    : str                   = ToolPresets.DefaultTerminalCommand
-    _spacer0                    : int                   = 0
     externalDiff                : str                   = ToolPresets.DefaultDiffCommand
     externalMerge               : str                   = ToolPresets.DefaultMergeCommand
 
-    _category_userCommands      : int                   = 0
     commands                    : str                   = ""
     confirmCommands             : bool                  = True
 
-    _category_tabs              : int                   = 0
     tabCloseButton              : bool                  = True
     expandingTabs               : bool                  = True
     autoHideTabs                : bool                  = False
 
-    _category_mouseShortcuts    : int                   = 0
-    _label_tabBarClicks         : int                   = 0
     doubleClickTabBar           : TabBarClick           = TabBarClick.Folder
     middleClickTabBar           : TabBarClick           = TabBarClick.Close
-    _label_fileListClicks       : int                   = 0
     doubleClickFileList         : FileListClick         = FileListClick.Stage
     """Staging is what you do with a file in the working directory nine times out
     of ten, and a double-click that does nothing is a dead gesture."""
     middleClickFileList         : FileListClick         = FileListClick.Stage
-    _label_diffViewClicks       : int                   = 0
     middleClickStageLines       : bool                  = True
 
-    _category_trash             : int                   = 0
     maxTrashFiles               : int                   = 250
     maxTrashFileKB              : int                   = 1000
 
-    _category_advanced          : int                   = 0
     maxRecentRepos              : int                   = 20
     shortHashChars              : int                   = 7
     autoRefresh                 : bool                  = True
@@ -236,8 +226,6 @@ class Prefs(PrefsFile):
     resetDontShowAgain          : bool                  = False
     """Shown as a button that brings back every message the user asked not to see again."""
 
-    _category_hidden            : int                   = 0
-    # Hide autoFetch from PrefsDialog because autoFetchMinutes's control includes a checkbox
     autoFetch                   : bool                  = False
     smoothScroll                : bool                  = True
     toolBarButtonStyle          : Qt.ToolButtonStyle    = Qt.ToolButtonStyle.ToolButtonTextBesideIcon

@@ -6,9 +6,9 @@
 
 import logging
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
-from gitfourchette import trtables
+from gitfourchette import prefsschema, trtables
 from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.exttools.toolpresets import ToolPresets
 from gitfourchette.exttools.usercommandsyntaxhighlighter import UserCommandSyntaxHighlighter
@@ -85,22 +85,9 @@ def localeCodeToLanguageName(code: str) -> str:
 class PrefsDialog(QDialog):
     lastCategory = 0
 
-    CategoryPrefix = "_category_"
-    SpacerPrefix = "_spacer"
-    LabelPrefix = "_label_"
     ControlQObjectNamePrefix = "prefctl_"
     LocCategoryHeaderSuffix = "_HEADER"
     LocSettingHelpSuffix = "_help"
-
-    Dependencies: ClassVar[dict[str, tuple[str, bool]]] = {
-        "homeMascotFollowsCursor": ("homeMascot", True),
-        "contextLines": ("wholeFileDiff", False),
-    }
-    """
-    Rows that only mean something while another setting has a given value:
-    child key -> (parent checkbox key, parent value that enables the child).
-    The child is disabled, not hidden, and keeps its own value.
-    """
 
     @benchmark
     def __init__(self, parent: QWidget, focusOn: str = ""):
@@ -114,8 +101,15 @@ class PrefsDialog(QDialog):
 
         self.categoryKeys: list[str] = []
 
+        self.dependencies: dict[str, tuple[str, bool]] = {}
+        """
+        Rows that only mean something while another setting has a given value:
+        child key -> (parent checkbox key, parent value that enables the child).
+        The child is disabled, not hidden, and keeps its own value.
+        """
+
         self.dependentRowWidgets: dict[str, list[QWidget]] = {}
-        "Widgets of each row in Dependencies, to enable or disable along with their parent."
+        "Widgets of each row in dependencies, to enable or disable along with their parent."
 
         self.categoryList = QListWidget()
         self.categoryList.setWordWrap(True)
@@ -169,57 +163,42 @@ class PrefsDialog(QDialog):
         self.setModal(True)
 
     def _fillControls(self, focusOn: str):
-        skipKeys = self.getHiddenSettingKeys()
-        form: QFormLayout | None = None
+        for pane in prefsschema.PANES:
+            form = self._newCategoryForm(pane.id)
 
-        for key in prefs.__dict__:
-            # New category tab
-            if key.startswith(self.CategoryPrefix):
-                category = key.removeprefix(self.CategoryPrefix)
-                # Stop past the hidden category
-                if category == "hidden":
-                    break
-                form = self._newCategoryForm(category)
-                continue
-
-            assert form is not None
-
-            # Spacer
-            if key.startswith(self.SpacerPrefix):
-                form.addRow(makeshiftSpacer())
-                continue
-
-            # Label
-            if key.startswith(self.LabelPrefix):
-                labelKey = key.removeprefix(self.LabelPrefix)
-                labelText = trtables.prefKey(labelKey)
-                label = QLabel(labelText)
-                tweakWidgetFont(label, bold=True)  # A title, not an option that happens to be unavailable
-                if form.count():  # add a spacer before the label
+            for sectionIndex, section in enumerate(pane.sections):
+                if section.title:
+                    label = QLabel(trtables.prefKey(section.title))
+                    tweakWidgetFont(label, bold=True)  # A title, not an option that happens to be unavailable
+                    if form.count():  # add a spacer before the label
+                        form.addRow(makeshiftSpacer())
+                    form.addRow(label)
+                elif sectionIndex > 0:
                     form.addRow(makeshiftSpacer())
-                form.addRow(label)
-                continue
 
-            # Skip hidden settings
-            if key in skipKeys or key.startswith("_"):
-                continue
+                for row in section.rows:
+                    if self.isRowHidden(row):
+                        continue
 
-            # Add the control to the form layout, with a leading caption if any
-            control, label, field = self._newRow(key)
-            if label is not None:
-                form.addRow(label, field)
-            else:
-                form.addRow(field)
+                    if row.parent:
+                        self.dependencies[row.key] = (row.parent.removeprefix("!"), not row.parent.startswith("!"))
 
-            # If the current key matches the setting we want to focus on,
-            # bring this tab to the foreground
-            if focusOn == key:
-                categoryIndex = self.stackedWidget.indexOf(form.parentWidget())
-                self.setCategory(categoryIndex)
-                control.setFocus()
+                    # Add the control to the form layout, with a leading caption if any
+                    control, label, field = self._newRow(row)
+                    if label is not None:
+                        form.addRow(label, field)
+                    else:
+                        form.addRow(field)
+
+                    # If the current key matches the setting we want to focus on,
+                    # bring this tab to the foreground
+                    if focusOn == row.key:
+                        categoryIndex = self.stackedWidget.indexOf(form.parentWidget())
+                        self.setCategory(categoryIndex)
+                        control.setFocus()
 
     def _bindDependencies(self):
-        for childKey, (parentKey, parentValue) in self.Dependencies.items():
+        for childKey, (parentKey, parentValue) in self.dependencies.items():
             parent = self.findChild(QCheckBox, self.ControlQObjectNamePrefix + parentKey)
             childWidgets = self.dependentRowWidgets.get(childKey, [])
             if parent is None or not childWidgets:  # One of them isn't shown on this platform
@@ -260,12 +239,13 @@ class PrefsDialog(QDialog):
 
         return form
 
-    def _newRow(self, key: str) -> tuple[QWidget, QLabel | None, QWidget | QLayout]:
+    def _newRow(self, row: prefsschema.Row) -> tuple[QWidget, QLabel | None, QWidget | QLayout]:
         """
         Build the widgets representing the given setting.
         Return tuple: main control widget, label (if any), field to be inserted
         into the QFormLayout.
         """
+        key = row.key
 
         # Get caption and suffix
         suffix = ""
@@ -289,8 +269,8 @@ class PrefsDialog(QDialog):
         if suffix:
             rowWidgets.append(QLabel(suffix))
 
-        if key == "autoFetchMinutes":
-            self.prependCheckBox(rowWidgets, "autoFetch", caption)
+        if row.toggle:
+            self.prependCheckBox(rowWidgets, row.toggle, caption)
         elif key == "resetDontShowAgain":
             rowWidgets.append(self.dontShowAgainCountLabel(control))
 
@@ -319,7 +299,7 @@ class PrefsDialog(QDialog):
                 rowLayout.addStretch()
             formField = rowLayout
 
-        isChild = key in self.Dependencies
+        isChild = key in self.dependencies
         if isChild:
             self.dependentRowWidgets[key] = [w for w in rowWidgets if not isinstance(w, QHintButton)]
 
@@ -398,22 +378,14 @@ class PrefsDialog(QDialog):
         else:
             return None
 
-    def getHiddenSettingKeys(self) -> set[str]:
-        skipKeys = {
-            "fontSize",  # bundled with "font"
-        }
-
-        # Prevent hiding menubar on macOS
-        if MACOS:
-            skipKeys.add("showMenuBar")
-
-        # In frozen distributions, hide settings that depend on system Python
-        # packages outside our sandbox.
-        if APP_FREEZE_QT:
-            skipKeys.add("forceQtApi")
-            skipKeys.add("pygmentsPlugins")
-
-        return skipKeys
+    @staticmethod
+    def isRowHidden(row: prefsschema.Row) -> bool:
+        if row.notOn == "macos":
+            return MACOS
+        elif row.notOn == "frozen":
+            return bool(APP_FREEZE_QT)
+        assert not row.notOn, f"unknown platform {row.notOn}"
+        return False
 
     def makeControlWidget(self, key: str, value, caption: str) -> QWidget:
         valueType = type(value)
