@@ -30,6 +30,19 @@ AVATAR_SIZE = 16
 AVATAR_RADIUS = 4
 AVATAR_SPACING = 5
 
+AVATAR_SWATCHES = (
+    "#8a542d", "#805b1e", "#72631c", "#5f6a29", "#037465",
+    "#00717c", "#615a94", "#73548a", "#814f7a", "#8b4c67",
+)
+"""
+Author chip colors. Same lightness and chroma (OKLCH L .50, C .09), so no
+author is louder than another and white initials read at 5.7:1 or more on
+every one of them, in both themes. The hues (55, 76, 97, 118, 180, 205, 288,
+310, 332, 354) stay 20 degrees or more away from the colors that already
+mean something: red for danger and deletions, green for additions, and the
+two blues that serve as the accent (the default one, and macOS's).
+"""
+
 _INITIALS_SPLIT = re.compile(r"[\s._\-]+")
 
 
@@ -54,18 +67,27 @@ def avatarInitials(signature: Signature) -> str:
 
 def avatarColor(signature: Signature) -> QColor:
     """
-    Stable color for an author. Hue comes from a hash of their email, while
-    saturation and lightness are fixed, so that no author ends up with a chip
-    that fights the rest of the interface.
+    Stable color for an author, picked from AVATAR_SWATCHES by a hash of
+    their email, so the same person always gets the same chip.
     """
 
     digest = hashlib.sha256(avatarKey(signature).encode("utf-8")).digest()
-    hue = (digest[0] << 8 | digest[1]) % 360
-    return QColor.fromHsl(hue, 130, 110)
+    index = (digest[0] << 8 | digest[1]) % len(AVATAR_SWATCHES)
+    return QColor(AVATAR_SWATCHES[index])
 
 
-def paintAvatar(painter: QPainter, rect: QRect, signature: Signature, picture: QPixmap | None = None):
-    """Draw the author's picture inside rect, or their initials if we have none."""
+def paintAvatar(
+        painter: QPainter,
+        rect: QRect,
+        signature: Signature,
+        picture: QPixmap | None = None,
+        fill: QColor | None = None,
+        ink: QColor | None = None,
+):
+    """
+    Draw the author's picture inside rect, or their initials if we have none.
+    The initials go on the author's color, unless `fill` and `ink` say otherwise.
+    """
 
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -79,15 +101,15 @@ def paintAvatar(painter: QPainter, rect: QRect, signature: Signature, picture: Q
         return
 
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(avatarColor(signature))
+    painter.setBrush(fill or avatarColor(signature))
     painter.drawRoundedRect(rect, AVATAR_RADIUS, AVATAR_RADIUS)
 
     font = QFont(painter.font())
     font.setStretch(QFont.Stretch.Unstretched)
-    font.setBold(True)
+    font.setBold(False)
     font.setPixelSize(max(7, round(rect.height() * .55)))
     painter.setFont(font)
-    painter.setPen(QColor(Qt.GlobalColor.white))
+    painter.setPen(ink or QColor(Qt.GlobalColor.white))
     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, avatarInitials(signature))
     painter.restore()
 

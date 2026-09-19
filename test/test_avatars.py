@@ -4,9 +4,12 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import math
 import os
 
-from gitfourchette.avatars import AvatarCache, avatarCacheDir, avatarUrl, githubLogin, paintAvatar
+from gitfourchette.avatars import AvatarCache, avatarCacheDir, avatarColor, avatarUrl, githubLogin, paintAvatar
+from gitfourchette.themes import ThemeAccent
+from gitfourchette.toolbox import contrastRatio
 from .util import *
 
 
@@ -131,3 +134,36 @@ def testAvatarPictureIsDrawnInsteadOfInitials(mainWindow):
 
     assert QColor(canvas.pixel(16, 16)) == QColor("#ff8800"), "the picture fills the chip"
     assert QColor(canvas.pixel(0, 0)) != QColor("#ff8800"), "...with its corners rounded off"
+
+
+def oklchHue(color: QColor) -> float:
+    """Hue angle of a color in OKLCH, the space the avatar swatches are picked in."""
+    def linear(c: float) -> float:
+        return c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4
+    r, g, b = (linear(c) for c in (color.redF(), color.greenF(), color.blueF()))
+    lc, mc, sc = (x ** (1 / 3) for x in (.4122214708 * r + .5363325363 * g + .0514459929 * b,
+                                         .2119034982 * r + .6806995451 * g + .1073969566 * b,
+                                         .0883024619 * r + .2817188376 * g + .6299787005 * b))
+    a = 1.9779984951 * lc - 2.4285922050 * mc + .4505937099 * sc
+    b = .0259040371 * lc + .7827717662 * mc - .8086757660 * sc
+    return math.degrees(math.atan2(b, a)) % 360
+
+
+def testAvatarColorsReadAndStayClearOfColorsThatMeanSomething():
+    white = QColor("white")
+    meaningful = {
+        "danger": ["#ff6b60", "#d92b1f"],
+        "added": ["#1a7f37", "#62bb78", "#287c42"],
+        "accent": ["#0a60ff", ThemeAccent.Blue],
+    }
+
+    colors = {avatarColor(Signature("Someone", f"person{i}@example.com")).name() for i in range(500)}
+    assert 5 <= len(colors) <= 10, "a small table of swatches, not a hue per person"
+
+    for color in map(QColor, colors):
+        assert contrastRatio(white, color) >= 4.5, f"white initials must read on {color.name()}"
+        hue = oklchHue(color)
+        for meaning, references in meaningful.items():
+            for reference in references:
+                distance = abs((hue - oklchHue(QColor(reference)) + 180) % 360 - 180)
+                assert distance >= 20, f"{color.name()} looks like {meaning} ({reference})"

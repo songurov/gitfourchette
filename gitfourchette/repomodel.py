@@ -11,6 +11,7 @@ from collections.abc import Iterable, Iterator
 
 from gitfourchette import settings
 from gitfourchette.appconsts import *
+from gitfourchette.avatars import avatarKey
 from gitfourchette.gitdriver import GitDelta
 from gitfourchette.graph import Graph, GraphSpliceLoop, MockCommit
 from gitfourchette.graph.graphbuilder import CommitTraits
@@ -233,6 +234,9 @@ class RepoModel:
     headIsDetached: bool
     homeBranch: str
 
+    _selfAvatarKey: str | None
+    "Cache for `selfAvatarKey`, cleared whenever the refs are synced."
+
     prefs: RepoPrefs
 
     def __init__(self, repo: Repo):
@@ -246,6 +250,7 @@ class RepoModel:
 
         self.headIsDetached = False
         self.homeBranch = ""
+        self._selfAvatarKey = None
 
         self.superproject = ""
 
@@ -318,6 +323,19 @@ class RepoModel:
         return self.refs.get("HEAD", NULL_OID)
 
     @property
+    def selfAvatarKey(self) -> str:
+        """
+        Whose commits are yours: the avatar key of the identity that git
+        commits with in this repo. Empty if there's no identity set up.
+        """
+        if self._selfAvatarKey is None:
+            try:
+                self._selfAvatarKey = avatarKey(self.repo.default_signature)
+            except (KeyError, ValueError):
+                self._selfAvatarKey = ""
+        return self._selfAvatarKey
+
+    @property
     def singleRemote(self) -> bool:
         return len(self.remotes) == 1
 
@@ -331,6 +349,7 @@ class RepoModel:
 
         headWasDetached = self.headIsDetached
         self.headIsDetached = self.repo.head_is_detached
+        self._selfAvatarKey = None  # the identity may have been set up since
 
         if self.headIsDetached or self.repo.head_is_unborn:
             self.homeBranch = ""

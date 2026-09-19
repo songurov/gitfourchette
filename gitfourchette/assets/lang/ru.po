@@ -7547,6 +7547,10 @@ msgstr "Искать фотографию каждого автора на GitHu
 msgid "A chip with the author’s initials, colored from their email address, so that the same person always looks the same in the history."
 msgstr "Значок с инициалами автора, цвет которого вычисляется по его адресу электронной почты, чтобы один и тот же человек всегда выглядел в истории одинаково."
 
+#: trtables.py:466
+msgid "Your own commits get a gray chip, so that other people’s stand out, and a run of commits by one author shows their color once."
+msgstr "Ваши коммиты получают серый значок, чтобы коммиты других людей выделялись, а серия коммитов одного автора показывает его цвет один раз."
+
 #: trtables.py:447
 msgid "Row spacing"
 msgstr "Межстрочный интервал"

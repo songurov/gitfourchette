@@ -7955,6 +7955,10 @@ msgstr "Caută poza fiecărui autor pe GitHub sau Gravatar. Asta trimite adresa 
 msgid "A chip with the author’s initials, colored from their email address, so that the same person always looks the same in the history."
 msgstr "O insignă cu inițialele autorului, colorată în funcție de adresa de e-mail, astfel încât aceeași persoană arată mereu la fel în istoric."
 
+#: trtables.py:466
+msgid "Your own commits get a gray chip, so that other people’s stand out, and a run of commits by one author shows their color once."
+msgstr "Commit-urile tale primesc o insignă gri, ca să iasă în evidență cele ale altora, iar un șir de commit-uri ale aceluiași autor își arată culoarea o singură dată."
+
 #: trtables.py:447
 msgid "Row spacing"
 msgstr "Spațiere între rânduri"

@@ -493,9 +493,12 @@ def _prefKeyTable() -> dict[str, str]:
         "refBoxMaxWidth_help": _("You can always hover over an indicator to display the full name of the ref."),
         "authorDisplayStyle": _("Author"),
         "showAvatars": _("Show author avatars"),
-        "showAvatars_help": _(
-            "A chip with the author’s initials, colored from their email address, "
-            "so that the same person always looks the same in the history."),
+        "showAvatars_help": paragraphs(
+            _("A chip with the author’s initials, colored from their email address, "
+              "so that the same person always looks the same in the history."),
+            _("Your own commits get a gray chip, so that other people’s stand out, "
+              "and a run of commits by one author shows their color once."),
+        ),
         "downloadAvatars": _("Download pictures from GitHub and Gravatar"),
         "downloadAvatars_note": _("Sends authors’ email addresses to these services."),
         "downloadAvatars_help": _(

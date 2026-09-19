@@ -1028,7 +1028,7 @@ def testDownloadedAvatarsReachTheHistory(tempDir, mainWindow, monkeypatch):
     pictures = []
     monkeypatch.setattr(
         "gitfourchette.graphview.commitlogdelegate.paintAvatar",
-        lambda painter, rect, signature, pic=None: pictures.append(pic))
+        lambda painter, rect, signature, pic=None, *_colors: pictures.append(pic))
 
     rw.graphView.viewport().repaint()
     assert any(p is picture for p in pictures), "the author's picture should have been drawn"
@@ -1771,3 +1771,188 @@ def testUnpushedCuesSurviveTheQuieterGraph(tempDir, mainWindow, monkeypatch):
 
     row = graphView.getFilterIndexForCommit(oid).row()
     assert qlvSummonToolTip(graphView, row, x=center.x()) == "This commit isn’t on any remote yet."
+
+
+# -----------------------------------------------------------------------------
+# Graph colors: author chips and ref chips
+
+
+@dataclasses.dataclass
+class PaintedChip:
+    email: str
+    color: QColor
+    opacity: float
+    ink: QColor | None
+
+
+def spyOnAuthorChips(graphView: GraphView, monkeypatch) -> dict[Oid, PaintedChip]:
+    """Record, per commit, the color of the author chip painted from now on, and how opaque."""
+    painted = {}
+    realPaintAvatar = commitlogdelegate.paintAvatar
+    currentCommit = []
+    realPaintAuthor = graphView.clDelegate._paintAuthor
+
+    def spyOnRow(painter, rect, commit, *args, **kwargs):
+        currentCommit[:] = [commit.id]
+        return realPaintAuthor(painter, rect, commit, *args, **kwargs)
+
+    def spy(painter, rect, signature, *args, **kwargs):
+        # Paint the same chip on its own to read its color, left of the initials
+        image = QImage(16, 16, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        chipPainter = QPainter(image)
+        realPaintAvatar(chipPainter, QRect(0, 0, 16, 16), signature, *args, **kwargs)
+        chipPainter.end()
+        ink = args[2] if len(args) > 2 else kwargs.get("ink")
+        painted[currentCommit[0]] = PaintedChip(signature.email, image.pixelColor(2, 8), painter.opacity(), ink)
+        return realPaintAvatar(painter, rect, signature, *args, **kwargs)
+
+    monkeypatch.setattr(graphView.clDelegate, "_paintAuthor", spyOnRow)
+    monkeypatch.setattr(commitlogdelegate, "paintAvatar", spy)
+    return painted
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def testYourOwnAuthorChipIsNeutralAndRepeatsStepBack(tempDir, mainWindow, monkeypatch, theme):
+    wd = unpackRepo(tempDir)
+    someoneElse = Signature("Someone Else", "else@example.com", TEST_SIGNATURE.time, 0)
+    shell("""
+        git config user.name 'A U Thor'
+        git config user.email a.u.thor@example.com
+        git commit --allow-empty -m 'By someone else'
+        git commit --allow-empty -m 'By someone else, again'
+    """, wd, authorSig=someoneElse)
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, theme), showAvatars=True)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    sequence = rw.repoModel.commitSequence
+    assert {c.author.email for c in sequence[1:3]} == {"else@example.com"}
+    assert {c.author.email for c in sequence[3:7]} == {"a.u.thor@example.com"}
+
+    painted = spyOnAuthorChips(graphView, monkeypatch)
+    pointerAway(graphView)
+    graphView.viewport().repaint()
+
+    # Your own commits get a neutral chip, other people's their color
+    own = painted[sequence[3].id]
+    other = painted[sequence[1].id]
+    assert own.color.hslSaturation() < 32, "your own chip is gray (the theme's own grays)"
+    assert other.color.hslSaturation() > 60, "someone else's chip has their color"
+
+    # A run of commits by one author shows the chip at full strength once
+    assert other.opacity == 1
+    assert own.opacity == 1, "full strength where the author changes"
+    assert contrastRatio(own.ink, own.color) >= 4.5
+    assert painted[sequence[2].id].opacity < .5, "someone else's color steps back below it"
+
+    # Your gray chip is already quiet: below it, it stays, and only its initials
+    # step back, to the least that still reads (fading it would leave nothing)
+    for commit in sequence[4:7]:
+        repeat = painted[commit.id]
+        assert repeat.opacity == 1
+        assert repeat.color == own.color
+        assert 3 <= contrastRatio(repeat.ink, repeat.color) < 3.5
+
+    # ...and on the selected row
+    rw.jump(NavLocator.inCommit(sequence[5].id))
+    graphView.viewport().repaint()
+    assert painted[sequence[5].id].opacity == 1
+    assert painted[sequence[5].id].ink == own.ink
+
+    # ...and on the first row on screen, when the run started above it
+    graphView.verticalScrollBar().setValue(graphView.verticalScrollBar().value() + graphView.sizeHintForRow(0) * 4)
+    QTest.qWait(0)
+    painted.clear()
+    graphView.viewport().repaint()
+    firstOnScreen = graphView.indexAt(QPoint(0, 0)).data(CommitLogModel.Role.Oid)
+    assert firstOnScreen == sequence[4].id
+    assert painted[firstOnScreen].opacity == 1
+    assert painted[firstOnScreen].ink == own.ink
+
+    assertTranslatedInForkLanguages("Your own commits get a gray chip, so that other people’s stand out, "
+                                    "and a run of commits by one author shows their color once.")
+
+
+def chipCalls(graphView: GraphView, monkeypatch, oid: Oid) -> tuple[list[DrawnRun], list[QColor], list[str]]:
+    """Repaint the graph; return the chip text drawn on a commit's row, the chip fills, and the chip icons."""
+    rowRect = QRectF(graphView.visualRect(graphView.getFilterIndexForCommit(oid)))
+    fills = []
+    icons = []
+    realFillPath = QPainter.fillPath
+    realStockIcon = commitlogdelegate.stockIcon
+
+    def spyFill(painter, path, brush):
+        if painter.device() is graphView.viewport() and rowRect.contains(path.boundingRect().center()):
+            fills.append(QBrush(brush).color())
+        return realFillPath(painter, path, brush)
+
+    def spyIcon(name, *args, **kwargs):
+        icons.append(name)
+        if args:  # recolored: remember the color, "gray=#rrggbb"
+            icons.append(args[0])
+        return realStockIcon(name, *args, **kwargs)
+
+    with monkeypatch.context() as m:
+        m.setattr(QPainter, "fillPath", spyFill)
+        m.setattr(commitlogdelegate, "stockIcon", spyIcon)
+        runs = drawnRuns(graphView, monkeypatch, oid)
+    return runs, fills, icons
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def testRefChipsReadOnPlainAndSelectedRows(tempDir, mainWindow, monkeypatch, theme):
+    wd = unpackRepo(tempDir)
+    shell("git switch --detach no-parent", wd)
+    # The owner's accent (macOS blue), on which the house chip used to fade to 2:1
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, theme, "#0a60ff"))
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    palette = graphView.palette()
+
+    chips = {
+        "branch": ("master", "master"),
+        "remote": ("origin/first-merge", "first-merge"),
+        "tag": ("annotated_tag", "annotated_tag"),
+        "detached HEAD": ("HEAD", "Detached HEAD"),
+    }
+
+    for kind, (rev, chipText) in chips.items():
+        oid = rw.repo.revparse_single(rev).peel(Commit).id
+        index = graphView.getFilterIndexForCommit(oid)
+
+        # Plain row: an opaque tint, and the text reads on it
+        graphView.setCurrentIndex(graphView.model().index(0, 0))
+        graphView.scrollTo(index, QAbstractItemView.ScrollHint.PositionAtCenter)
+        runs, fills, _icons = chipCalls(graphView, monkeypatch, oid)
+        textRun = next(run for run in runs if run.text == chipText)
+        assert fills, f"{kind}: the chip is filled"
+        assert all(fill.alpha() == 255 for fill in fills), f"{kind}: the fill doesn't let the row through"
+        assert max(contrastRatio(textRun.color, fill) for fill in fills) >= 4.5, f"{kind}: text on its tint"
+
+        # Selected row: the chip is an outline in the selection's text color
+        graphView.setFocus()
+        graphView.setCurrentIndex(index)
+        graphView.scrollTo(index, QAbstractItemView.ScrollHint.PositionAtCenter)
+        runs, fills, _icons = chipCalls(graphView, monkeypatch, oid)
+        textRun = next(run for run in runs if run.text == chipText)
+        assert not fills, f"{kind}: no tint on the selection"
+        assert textRun.color == palette.color(QPalette.ColorRole.HighlightedText), kind
+        assert contrastRatio(textRun.color, palette.color(QPalette.ColorRole.Highlight)) >= 4.5, kind
+
+    # The Working Directory's chip (an icon alone) on the selection
+    graphView.setCurrentIndex(graphView.model().index(0, 0))
+    graphView.scrollToTop()
+    _runs, _fills, icons = chipCalls(graphView, monkeypatch, UC_FAKEID)
+    assert icons[icons.index("git-workdir") + 1] == "gray=" + palette.color(QPalette.ColorRole.HighlightedText).name()
+
+
+def testCheckedOutBranchChipHasACheck(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+
+    _runs, _fills, icons = chipCalls(rw.graphView, monkeypatch, rw.repo.head_commit_id)
+    assert "check" in icons, "the checked-out branch is marked with a check, as in the sidebar"
+    assert "git-head" not in icons

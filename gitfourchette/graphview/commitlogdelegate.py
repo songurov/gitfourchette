@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
-from gitfourchette.avatars import AVATAR_SIZE, AVATAR_SPACING, paintAvatar
+from gitfourchette.avatars import AVATAR_SIZE, AVATAR_SPACING, avatarKey, paintAvatar
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow, CommitToolTipZone
 from gitfourchette.graphview.commitinfosearch import CommitInfoSearch
@@ -45,8 +45,20 @@ class RefBox:
         return self.color
 
 
-REFBOX_BG_ALPHA = (0.08, 0.20)
-"""How much of the refbox color tints its background, light and dark."""
+REFBOX_FILL = (.12, .20)
+"""How much of the refbox color goes into its (opaque) fill, light and dark.
+Opaque, so the text's contrast doesn't depend on what's behind the chip."""
+
+
+@dataclass
+class ChipStyle:
+    """How the chips of the row being painted are colored."""
+    selected: bool = False
+    dark: bool = False
+    base: QColor = None
+    text: QColor = None
+    highlightedText: QColor = None
+    secondary: QColor = None
 
 
 REFBOXES = [
@@ -57,18 +69,18 @@ REFBOXES = [
     # detached HEAD as returned by Repo.map_commits_to_refs
     RefBox("HEAD", "git-head-detached", QColor("#B3382C"), QColor("#FF8C7A"), keepPrefix=True),
 
-    # Working Directory
-    RefBox(UC_FAKEREF, "git-workdir", QColor("#6B7280"), QColor("#A8AEB8")),
+    # Working Directory (no color of its own: the row's secondary text color)
+    RefBox(UC_FAKEREF, "git-workdir"),
 
     # Mounted
-    RefBox("FAKEREF_FUSEMOUNT", "git-mount", QColor("#6B7280"), QColor("#A8AEB8")),
+    RefBox("FAKEREF_FUSEMOUNT", "git-mount"),
 
-    # Commit comparison
-    RefBox("FAKEREF_COMPAREA", "compare-a", QColor(Qt.GlobalColor.red), iconWidth=48),
-    RefBox("FAKEREF_COMPAREB", "compare-b", QColor(Qt.GlobalColor.blue), iconWidth=48),
+    # Commit comparison: A in the danger hue, B in the branch blue
+    RefBox("FAKEREF_COMPAREA", "compare-a", QColor("#B3382C"), QColor("#FF8C7A"), iconWidth=48),
+    RefBox("FAKEREF_COMPAREB", "compare-b", QColor("#2264B8"), QColor("#7FB4FF"), iconWidth=48),
 
     # Fallback
-    RefBox("", "hint", QColor(Qt.GlobalColor.gray), keepPrefix=True)
+    RefBox("", "hint", keepPrefix=True)
 ]
 
 
@@ -102,6 +114,28 @@ NARROW_WIDTH = (500, 750)
 
 AHEAD_SPACING = 4
 """Room between a branch's name and its count of commits to push."""
+
+REPEATED_AUTHOR_OPACITY = .35
+"""A run of commits by one author shows their chip once at full strength."""
+
+SELF_CHIP_MIX = .16
+"""How much of the text color goes into the chip of your own commits:
+a neutral chip, so that other people's commits stand out."""
+
+REPEATED_INITIALS_CONTRAST = 3.0
+"""Your own chip is already as quiet as a faded color, and fading it further
+leaves nothing to see. In a run of your commits, it keeps its gray and only its
+initials step back, to 3:1 on the chip: the least a mark needs to be seen."""
+
+
+def readableOn(color: QColor, ground: QColor, towards: QColor, minContrast=4.5) -> QColor:
+    """`color`, mixed toward `towards` just enough to read at `minContrast` on `ground`."""
+    ratio = 0.0
+    mixed = color
+    while contrastRatio(mixed, ground) < minContrast and ratio < 1:
+        ratio = round(ratio + .05, 2)
+        mixed = mixColors(color, towards, ratio)
+    return mixed
 
 
 def secondaryTextColor(palette: QPalette, group: QPalette.ColorGroup) -> QColor:
@@ -164,6 +198,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         self.mounts = GFApplication.instance().mountManager
 
         self._transientToolTipZones: list[CommitToolTipZone] | None = None
+        self._chipStyle = ChipStyle()
 
     def prepareForDeletion(self):
         del self.repoModel
@@ -259,11 +294,22 @@ class CommitLogDelegate(QStyledItemDelegate):
 
         # The message is the one bright column. Author, hash and date recede,
         # except on the row under the pointer, whose details come forward.
+        secondaryColor = secondaryTextColor(palette, colorGroup)
         if isSelected:
             metaColor = starColor = painter.pen().color()
         else:
-            starColor = secondaryTextColor(palette, colorGroup)
+            starColor = secondaryColor
             metaColor = palette.color(colorGroup, QPalette.ColorRole.Text) if isHovered else starColor
+
+        textColor = palette.color(colorGroup, QPalette.ColorRole.Text)
+        baseColor = palette.color(colorGroup, QPalette.ColorRole.Base)
+        self._chipStyle = ChipStyle(
+            selected=isSelected,
+            dark=textColor.lightnessF() > baseColor.lightnessF(),
+            base=baseColor,
+            text=textColor,
+            highlightedText=palette.color(colorGroup, QPalette.ColorRole.HighlightedText),
+            secondary=secondaryColor)
 
         # Get metrics of '0' before setting a custom font,
         # so that alignments are consistent in all commits regardless of bold or italic.
@@ -346,7 +392,8 @@ class CommitLogDelegate(QStyledItemDelegate):
         if authorWidth != 0 and commit:
             rect.setLeft(tabBound)
             rect.setRight(leftBoundHash - XMARGIN)
-            self._paintAuthor(painter, rect, commit)
+            faded = not isSelected and self.repeatsAuthorAbove(option, index, commit)
+            self._paintAuthor(painter, rect, commit, faded)
 
         # Hash
         if hashWidth != 0 and commit:
@@ -466,7 +513,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         needleRect.setWidth(iconWidth)
         stockIcon("magnifying-glass", "gray=black").paint(painter, needleRect)
 
-    def _paintAuthor(self, painter: QPainter, rect: QRect, commit: Commit):
+    def _paintAuthor(self, painter: QPainter, rect: QRect, commit: Commit, faded: bool = False):
         assert commit
         author = commit.author
         authorText = abbreviatePerson(author, settings.prefs.authorDisplayStyle)
@@ -481,7 +528,21 @@ class CommitLogDelegate(QStyledItemDelegate):
             picture = None
             if settings.prefs.downloadAvatars:
                 picture = GFApplication.instance().avatarCache.pixmapFor(author)
-            paintAvatar(painter, chipRect, author, picture)
+            fill = ink = None
+            opacity = REPEATED_AUTHOR_OPACITY if faded else 1.0
+            selfKey = self.repoModel.selfAvatarKey
+            if selfKey and avatarKey(author) == selfKey:
+                style = self._chipStyle
+                fill = mixColors(style.base, style.text, SELF_CHIP_MIX)
+                ink = style.text
+                if faded and picture is None:
+                    ink = readableOn(fill, fill, style.text, REPEATED_INITIALS_CONTRAST)
+                    opacity = 1.0
+            painter.save()
+            if opacity != 1:
+                painter.setOpacity(opacity)
+            paintAvatar(painter, chipRect, author, picture, fill, ink)
+            painter.restore()
             rect.setLeft(chipRect.right() + AVATAR_SPACING)
 
         gpgStatus, _gpgKeyInfo = self.repoModel.getCachedGpgStatus(commit)
@@ -628,8 +689,17 @@ class CommitLogDelegate(QStyledItemDelegate):
 
         refboxDef = next(d for d in REFBOXES if refName.startswith(d.prefix))
 
-        penColor = painter.pen().color()
-        dark = penColor.lightnessF() > .5
+        # On the selection, a chip is an outline in the selection's text color,
+        # which reads on the accent whatever the chip's kind. Elsewhere, it's
+        # tinted with its kind's color, and the text is made to read on the tint.
+        style = self._chipStyle
+        if style.selected:
+            color = style.highlightedText
+            fillColor = None
+        else:
+            kindColor = refboxDef.penColor(style.dark, style.secondary)
+            fillColor = mixColors(style.base, kindColor, REFBOX_FILL[style.dark])
+            color = readableOn(kindColor, fillColor, style.text)
 
         if forceOmitName:
             text = ""
@@ -637,9 +707,6 @@ class CommitLogDelegate(QStyledItemDelegate):
             text = refName.removeprefix(refboxDef.prefix)
         else:
             text = refName
-        color = refboxDef.penColor(dark, penColor)
-        bgColor = QColor(color)  # modify copy
-        bgColor.setAlphaF(REFBOX_BG_ALPHA[dark])
         iconName = refboxDef.icon
 
         # Omit remote name if there's a single remote
@@ -659,8 +726,9 @@ class CommitLogDelegate(QStyledItemDelegate):
                     aheadToolTip = _n("{n} commit not pushed to any remote", "{n} commits not pushed to any remote", ahead)
 
         if isHome:
+            # The checked-out branch: a check, as in the sidebar
             font = self.homeRefboxFont
-            iconName = "git-head"
+            iconName = "check"
         elif refName == 'HEAD' and self.repoModel.headIsDetached:
             text = _("Detached HEAD")
             font = self.homeRefboxFont
@@ -744,8 +812,9 @@ class CommitLogDelegate(QStyledItemDelegate):
         framePath.addRoundedRect(frameRect.adjusted(.5, .5, .5, -.5),  # Snap to pixel grid
                                  rrRadius, rrRadius)
 
+        if fillColor is not None:
+            painter.fillPath(framePath, fillColor)
         painter.drawPath(framePath)
-        painter.fillPath(framePath, bgColor)
 
         if iconName:
             icon = stockIcon(iconName, f"gray={color.name()}")
@@ -837,6 +906,17 @@ class CommitLogDelegate(QStyledItemDelegate):
     def isDim(self, oid: Oid):
         """Can be overridden"""
         return oid != NULL_OID and oid in self.repoModel.foreignCommits
+
+    def repeatsAuthorAbove(self, option: QStyleOptionViewItem, index: QModelIndex, commit: Commit) -> bool:
+        """
+        True if the row above is by the same author and on screen, so this
+        row's chip can step back. The first row on screen always shows it.
+        """
+        if not settings.prefs.showAvatars or option.rect.top() <= 0:
+            return False
+        above = index.siblingAtRow(index.row() - 1).data(CommitLogModel.Role.Commit)
+        aboveAuthor = getattr(above, "author", None)
+        return aboveAuthor is not None and avatarKey(aboveAuthor) == avatarKey(commit.author)
 
     def isUnpushed(self, oid: Oid | None) -> bool:
         """Can be overridden"""

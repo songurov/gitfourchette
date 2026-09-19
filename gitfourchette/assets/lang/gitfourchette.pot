@@ -7889,6 +7889,10 @@ msgstr ""
 msgid "A chip with the author’s initials, colored from their email address, so that the same person always looks the same in the history."
 msgstr ""
 
+#: trtables.py:466
+msgid "Your own commits get a gray chip, so that other people’s stand out, and a run of commits by one author shows their color once."
+msgstr ""
+
 #: trtables.py:447
 msgid "Row spacing"
 msgstr ""

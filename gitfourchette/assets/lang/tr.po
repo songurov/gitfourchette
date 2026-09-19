@@ -7867,6 +7867,10 @@ msgstr "Her yazarın resmini GitHub veya Gravatar üzerinde arar. Bu, yazarları
 msgid "A chip with the author’s initials, colored from their email address, so that the same person always looks the same in the history."
 msgstr "Yazarın baş harflerini içeren, rengi e-posta adresinden türetilen bir rozet; böylece aynı kişi geçmişte her zaman aynı görünür."
 
+#: trtables.py:466
+msgid "Your own commits get a gray chip, so that other people’s stand out, and a run of commits by one author shows their color once."
+msgstr "Kendi işlemeleriniz gri bir rozet alır, böylece başkalarınınki öne çıkar; aynı yazarın art arda gelen işlemeleri rengini yalnızca bir kez gösterir."
+
 #: trtables.py:447
 msgid "Row spacing"
 msgstr "Satır aralığı"

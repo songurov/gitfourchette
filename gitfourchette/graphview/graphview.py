@@ -128,6 +128,17 @@ class GraphView(QListView):
         else:
             super().mouseMoveEvent(event)
 
+    def scrollContentsBy(self, dx: int, dy: int):
+        super().scrollContentsBy(dx, dy)
+
+        # The first row on screen always shows its author's chip at full
+        # strength (see CommitLogDelegate.repeatsAuthorAbove). Scrolling moves
+        # pixels that were painted for another place: repaint the top two rows.
+        if dy and settings.prefs.showAvatars:
+            top = self.indexAt(QPoint(0, 0))
+            for row in (top.row(), top.row() + 1):
+                self.update(self.model().index(row, 0))
+
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         currentIndex = self.currentIndex()
         if (not currentIndex.isValid()
