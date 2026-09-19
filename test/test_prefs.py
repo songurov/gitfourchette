@@ -472,3 +472,69 @@ def testSectionTitlesAndPreviewsAreNotDrawnDisabled(mainWindow):
         dlg.reject()
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+def testDependentRowsFollowTheirParent(mainWindow):
+    settings.prefs.homeMascot = False
+    settings.prefs.wholeFileDiff = True
+    settings.prefs.autoFetch = False
+
+    dlg = GFApplication.instance().openPrefsDialog("homeMascot")
+
+    def control(key: str) -> QWidget:
+        return dlg.findChild(QWidget, f"prefctl_{key}")
+
+    def label(key: str) -> QLabel:
+        return next(label for label in dlg.findChildren(QLabel) if label.buddy() is control(key))
+
+    mascot, eyes = control("homeMascot"), control("homeMascotFollowsCursor")
+    wholeFile, context = control("wholeFileDiff"), control("contextLines")
+
+    # Primed from the stored values: disabled, not hidden, and still holding their own value
+    assert not eyes.isEnabled()
+    assert eyes.isChecked()
+    assert not context.isEnabled()
+    assert not label("contextLines").isEnabled()
+
+    mascot.setChecked(True)
+    assert eyes.isEnabled()
+    mascot.setChecked(False)
+    assert not eyes.isEnabled()
+
+    wholeFile.setChecked(False)
+    assert context.isEnabled()
+    assert label("contextLines").isEnabled()
+    wholeFile.setChecked(True)
+    assert not context.isEnabled()
+
+    # The eyes' checkbox sits under the dinosaur's text, not under its box
+    dlg.setCategory(0)
+    QTest.qWait(0)
+    assert eyes.mapTo(dlg, QPoint(0, 0)).x() > mascot.mapTo(dlg, QPoint(0, 0)).x()
+
+    # The auto-fetch row still works the same way
+    autoFetch, minutes = control("autoFetch"), control("autoFetchMinutes")
+    assert not minutes.isEnabled()
+    autoFetch.setChecked(True)
+    assert minutes.isEnabled()
+
+    dlg.reject()
+
+
+def testStoredContextLinesBelowTheMinimumComeBackInRange(mainWindow):
+    import json
+    from gitfourchette.settings import CONTEXT_LINES_RANGE, Prefs
+
+    class OldPrefs(Prefs):
+        _filename = "prefs-contextlines-test.json"
+
+    oldPrefs = OldPrefs()
+    path = Path(oldPrefs.getParentDir(), OldPrefs._filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"contextLines": 0, "tabSpaces": 8}), encoding="utf-8")
+    try:
+        assert oldPrefs.load()
+        assert oldPrefs.contextLines == CONTEXT_LINES_RANGE[0]
+        assert oldPrefs.tabSpaces == 8
+    finally:
+        path.unlink()

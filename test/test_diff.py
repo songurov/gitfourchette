@@ -1363,6 +1363,23 @@ def testWholeFileToggleLivesInTheContextMenu(tempDir, mainWindow):
     assert spinBox.isEnabled()
 
 
+def testContextLinesRangeIsTheSameInSettingsAndToolbar(tempDir, mainWindow):
+    from gitfourchette.settings import CONTEXT_LINES_RANGE
+
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+
+    menu = rw.diffArea.diffButtons.contextButton.menu()
+    toolbarSpinBox: QSpinBox = menu.findChild(QSpinBox)
+
+    dlg = GFApplication.instance().openPrefsDialog("contextLines")
+    prefsSpinBox: QSpinBox = dlg.findChild(QSpinBox, "prefctl_contextLines")
+
+    assert (toolbarSpinBox.minimum(), toolbarSpinBox.maximum()) == CONTEXT_LINES_RANGE
+    assert (prefsSpinBox.minimum(), prefsSpinBox.maximum()) == CONTEXT_LINES_RANGE
+    dlg.reject()
+
+
 def testWholeFileHasItsOwnButton(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     rw = mainWindow.openRepo(wd)

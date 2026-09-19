@@ -6,7 +6,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from gitfourchette import trtables
 from gitfourchette.exttools.toolcommands import ToolCommands
@@ -15,7 +15,7 @@ from gitfourchette.exttools.usercommandsyntaxhighlighter import UserCommandSynta
 from gitfourchette.localization import *
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
-from gitfourchette.settings import SHORT_DATE_PRESETS, prefs
+from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, prefs
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
 from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent, formatStyle, parseStyle
 from gitfourchette.toolbox import *
@@ -92,6 +92,16 @@ class PrefsDialog(QDialog):
     LocCategoryHeaderSuffix = "_HEADER"
     LocSettingHelpSuffix = "_help"
 
+    Dependencies: ClassVar[dict[str, tuple[str, bool]]] = {
+        "homeMascotFollowsCursor": ("homeMascot", True),
+        "contextLines": ("wholeFileDiff", False),
+    }
+    """
+    Rows that only mean something while another setting has a given value:
+    child key -> (parent checkbox key, parent value that enables the child).
+    The child is disabled, not hidden, and keeps its own value.
+    """
+
     @benchmark
     def __init__(self, parent: QWidget, focusOn: str = ""):
         super().__init__(parent)
@@ -103,6 +113,9 @@ class PrefsDialog(QDialog):
         "Delta to on-disk preferences."
 
         self.categoryKeys: list[str] = []
+
+        self.dependentRowWidgets: dict[str, list[QWidget]] = {}
+        "Widgets of each row in Dependencies, to enable or disable along with their parent."
 
         self.categoryList = QListWidget()
         self.categoryList.setWordWrap(True)
@@ -139,6 +152,7 @@ class PrefsDialog(QDialog):
         layout.addWidget(self.stackedWidget,    2, 1)
         layout.addWidget(self.guideBrowser,     0, 2, 4, 1)
         self._fillControls(focusOn)
+        self._bindDependencies()
         layout.addWidget(buttonBox, 3, 1)  # Add buttonBox last so it comes last in tab order
 
         layout.setColumnStretch(0, 0)
@@ -203,6 +217,24 @@ class PrefsDialog(QDialog):
                 categoryIndex = self.stackedWidget.indexOf(form.parentWidget())
                 self.setCategory(categoryIndex)
                 control.setFocus()
+
+    def _bindDependencies(self):
+        for childKey, (parentKey, parentValue) in self.Dependencies.items():
+            parent = self.findChild(QCheckBox, self.ControlQObjectNamePrefix + parentKey)
+            childWidgets = self.dependentRowWidgets.get(childKey, [])
+            if parent is None or not childWidgets:  # One of them isn't shown on this platform
+                continue
+            self.bindEnabled(parent, childWidgets, enabledWhen=parentValue)
+
+    def bindEnabled(self, parent: QCheckBox, widgets: list[QWidget], enabledWhen: bool = True):
+        """Enable `widgets` only while `parent` is checked (or unchecked, if not `enabledWhen`)."""
+
+        def follow(state: Qt.CheckState):
+            for widget in widgets:
+                widget.setEnabled((state == Qt.CheckState.Checked) == enabledWhen)
+
+        parent.checkStateChanged.connect(follow)
+        follow(parent.checkState())  # Prime enabled/disabled state
 
     def _newCategoryForm(self, category: str) -> QFormLayout:
         formContainer = QWidget(self)
@@ -283,8 +315,24 @@ class PrefsDialog(QDialog):
                 rowLayout.addStretch()
             formField = rowLayout
 
+        isChild = key in self.Dependencies
+        if isChild:
+            self.dependentRowWidgets[key] = [w for w in rowWidgets if not isinstance(w, QHintButton)]
+
         # No caption, make field span entire row
         if not caption or isinstance(rowWidgets[0], QCheckBox):
+            if isChild and isinstance(rowWidgets[0], QCheckBox):
+                # Line up a dependent checkbox's text with its parent's text
+                style = rowWidgets[0].style()
+                indent = (style.pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth, None, rowWidgets[0])
+                          + style.pixelMetric(QStyle.PixelMetric.PM_CheckBoxLabelSpacing, None, rowWidgets[0]))
+                indentedLayout = QHBoxLayout()
+                indentedLayout.addSpacing(indent)
+                if isinstance(formField, QLayout):
+                    indentedLayout.addLayout(formField)
+                else:
+                    indentedLayout.addWidget(formField)
+                formField = indentedLayout
             return control, None, formField
 
         # There's a leading caption, so add it as the label in the row
@@ -293,6 +341,8 @@ class PrefsDialog(QDialog):
         label.setBuddy(rowWidgets[0])
         if tip:
             label.setToolTip(tip)
+        if isChild:
+            self.dependentRowWidgets[key].insert(0, label)
         return control, label, formField
 
     def setCategory(self, row: int):
@@ -389,8 +439,8 @@ class PrefsDialog(QDialog):
             control = self.boundedIntControl(key, value, 0, 50)
             control.setSpecialValueText(_p("a count of zero turns the setting off", "Off"))
             return control
-        elif key == "contextLines":  # staging/discarding individual lines is flaky with 0 context lines
-            return self.boundedIntControl(key, value, 1, 32)
+        elif key == "contextLines":
+            return self.boundedIntControl(key, value, *CONTEXT_LINES_RANGE)
         elif key == "tabSpaces":
             return self.boundedIntControl(key, value, 1, 16)
         elif key == "autoFetchMinutes":
@@ -764,19 +814,12 @@ class PrefsDialog(QDialog):
         controlling whether another pref key is enabled or disabled.
         """
 
-        def enableRowWidgets(enable: bool):
-            for w in rowWidgets:
-                if not isinstance(w, QCheckBox):
-                    w.setEnabled(enable)
-
         booleanValue = prefs.__dict__[booleanKey]
 
         checkBox = self.boolCheckBoxControl(booleanKey, booleanValue, caption)
         checkBox.setObjectName(f"prefctl_{booleanKey}")  # Name the control so that unit tests can find it
-        checkBox.checkStateChanged.connect(lambda state: enableRowWidgets(state == Qt.CheckState.Checked))
+        self.bindEnabled(checkBox, list(rowWidgets))
 
         rowWidgets.insert(0, checkBox)
         QWidget.setTabOrder(rowWidgets[0], rowWidgets[1])
-
-        enableRowWidgets(booleanValue)  # Prime enabled/disabled state
         return checkBox

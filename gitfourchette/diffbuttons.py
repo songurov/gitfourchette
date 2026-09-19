@@ -9,7 +9,7 @@ from gitfourchette import settings
 from gitfourchette.application import GFApplication
 from gitfourchette.localization import *
 from gitfourchette.qt import *
-from gitfourchette.settings import WhitespaceMode
+from gitfourchette.settings import CONTEXT_LINES_RANGE, WhitespaceMode
 from gitfourchette.toolbox import *
 
 
@@ -91,7 +91,7 @@ class DiffButtons(QWidget):
         layout = QHBoxLayout(container)
 
         spinbox = QSpinBox()
-        spinbox.setRange(0, 32)  # TODO: couple with PrefsDialog bounds
+        spinbox.setRange(*CONTEXT_LINES_RANGE)  # Same range as in Settings
         spinbox.valueChanged.connect(self.setContextLines)
         spinbox.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
 

@@ -118,6 +118,10 @@ class WhitespaceMode(enum.StrEnum):
 WHOLE_FILE_CONTEXT = 1_000_000
 """Context lines meaning 'as much as there is'. git clamps to the file's length."""
 
+CONTEXT_LINES_RANGE = (1, 32)
+"""How many context lines Settings and the diff toolbar offer. Not 0: staging or
+discarding individual lines is flaky without any context around them."""
+
 COMPACT_POINT_DROP = 1.0
 """How much smaller compact mode runs. One point is the difference between
 'roomy' and 'a screenful', without becoming unreadable."""
@@ -242,6 +246,13 @@ class Prefs(PrefsFile):
     resetDontShowAgain          : bool                  = False
     donatePrompt                : int                   = 0
     refSortClearTimestamp       : int                   = 0
+
+    def load(self) -> bool:
+        loaded = super().load()
+        # The diff toolbar used to offer 0 context lines; bring such a value back in range
+        low, high = CONTEXT_LINES_RANGE
+        self.contextLines = min(max(self.contextLines, low), high)
+        return loaded
 
     @property
     def listViewScrollMode(self) -> QAbstractItemView.ScrollMode:
