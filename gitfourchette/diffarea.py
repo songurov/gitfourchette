@@ -367,6 +367,7 @@ class DiffArea(QWidget):
         commitButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         commitButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         commitButton.setAutoRaise(True)
+        commitButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
         commitPushButton = QPushButton(_("Commit && Push"), self)
         commitPushButton.setObjectName("commitPushButton")
@@ -407,6 +408,17 @@ class DiffArea(QWidget):
             commitPushButton.setEnabled(bool(text.strip()))
 
         commitButton.clicked.connect(lambda: beginCommit(False))
+        commitButtonMenu = ActionDef.makeQMenu(
+            commitButton,
+            [
+                TaskBook.action(self, NewCommit),
+                TaskBook.action(self, AmendCommit),
+                TaskBook.action(self, NewStash),
+            ])
+        # Prevent shortcuts from taking over
+        for action in commitButtonMenu.actions():
+            action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        commitButton.setMenu(commitButtonMenu)
         commitPushButton.clicked.connect(lambda: beginCommit(True))
         stashButton.clicked.connect(lambda: NewStash.invoke(self))
         aiButton.clicked.connect(self.generateCommitMessage)

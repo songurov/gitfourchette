@@ -18,6 +18,7 @@ from gitfourchette.forms.signatureform import SignatureOverride
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
 from gitfourchette.nav import NavLocator
 from gitfourchette.sidebar.sidebarmodel import SidebarItem
+from gitfourchette.tasks import AmendCommit, NewCommit, TaskBook
 from gitfourchette.tasks.committasks import recentCommitSummaries
 from . import reposcenario
 from .util import *
@@ -34,6 +35,10 @@ def testCommitFormPlacementPreservesMessage(tempDir, mainWindow):
 
     GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
     assert form.parentWidget() is rw.diffArea.bottomCommitFormHost
+    assert editor.toPlainText() == "Keep this message"
+
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.FilesPanel)
+    assert form.parentWidget() is rw.diffArea.stageCommitFormHost
     assert editor.toPlainText() == "Keep this message"
 
 
@@ -58,12 +63,10 @@ def testCommitAiButtonDisabledWithoutCli(tempDir, mainWindow, monkeypatch):
     monkeypatch.setattr(diffarea, "availableProviders", dict)
     rw = mainWindow.openRepo(wd)
 
+    # Staged changes are there, so the missing CLI is the only thing holding the button back
+    assert not rw.diffArea.stagedFiles.isEmpty()
     assert not rw.diffArea.commitAiButton.isEnabled()
     assert "Install" in rw.diffArea.commitAiButton.toolTip()
-
-    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.FilesPanel)
-    assert form.parentWidget() is rw.diffArea.stageCommitFormHost
-    assert editor.toPlainText() == "Keep this message"
 
 
 def testInlineCommitSkipsDialog(tempDir, mainWindow):
@@ -443,6 +446,19 @@ def testAmendAltersCommitterDate(tempDir, mainWindow):
     assert amendedHeadCommit.author.name != TEST_SIGNATURE.name
     assert amendedHeadCommit.committer.name == TEST_SIGNATURE.name
     assert amendedHeadCommit.committer.time > amendedHeadCommit.author.time
+
+
+@pytest.mark.parametrize(["task", "dialogTitle"], [(NewCommit, "new commit"), (AmendCommit, "amend")])
+def testCommitButtonMenuLeavesShortcutsToMainWindow(tempDir, mainWindow, task, dialogTitle):
+    # The commit button's menu holds the same actions as the Repo menu.
+    # If both claimed the same shortcut, Qt would find it ambiguous and do nothing.
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    rw = mainWindow.openRepo(wd)
+    assert findMenuAction(rw.diffArea.commitButton.menu(), dialogTitle).shortcut() == TaskBook.shortcuts[task][0]
+
+    QTest.keySequence(mainWindow, TaskBook.shortcuts[task][0])
+    findQDialog(rw, dialogTitle, t=CommitDialog).reject()
 
 
 def testCommitDialogJumpsToWorkdir(tempDir, mainWindow):
