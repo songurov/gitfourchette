@@ -1168,6 +1168,10 @@ class MainWindow(QMainWindow):
         with suppress(NoRepoWidgetError):
             self.currentRepoWidget().refreshRepo()
 
+    def openWorkdirs(self) -> set[str]:
+        """Workdirs of every open tab, loaded or not."""
+        return {os.path.normpath(w.workdir) for w in self.tabs.widgets() if w.workdir}
+
     def onRepoNameChanged(self) -> None:
         self.refreshAllTabTexts()
         self.fillRecentMenu()

@@ -295,6 +295,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         SidebarItem.RemotesHeader: _p("SidebarModel", "Remotes"),
         SidebarItem.TagsHeader: _p("SidebarModel", "Tags"),
         SidebarItem.SubmodulesHeader: _p("SidebarModel", "Submodules"),
+        SidebarItem.WorktreesHeader: _p("SidebarModel", "Worktrees"),
         SidebarItem.LocalBranch: _p("SidebarModel", "Local branch"),
         SidebarItem.DetachedHead: _p("SidebarModel", "Detached HEAD"),
         SidebarItem.UnbornHead: _p("SidebarModel", "Unborn HEAD"),
@@ -303,6 +304,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         SidebarItem.Remote: _p("SidebarModel", "Remote"),
         SidebarItem.Tag: _p("SidebarModel", "Tag"),
         SidebarItem.Submodule: _p("SidebarModel", "Submodules"),
+        SidebarItem.Worktree: _p("SidebarModel", "Worktree"),
         SidebarItem.Spacer: "---",
     }
 

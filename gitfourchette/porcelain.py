@@ -679,6 +679,57 @@ class GitConfigHelper:
             yield name, section
 
 
+def _points_at_gitdir(workdir: str, gitdir: str) -> bool:
+    """Whether `workdir` is a worktree served by `gitdir`."""
+    dotgit = _Path(workdir, ".git")
+    try:
+        if dotgit.is_dir():
+            return dotgit.resolve() == _Path(gitdir).resolve()
+        text = dotgit.read_text().strip()
+        if not text.startswith("gitdir:"):
+            return False
+        target = _Path(workdir, text.removeprefix("gitdir:").strip())
+        return target.resolve() == _Path(gitdir).resolve()
+    except OSError:
+        return False
+
+
+@_dataclasses.dataclass(frozen=True)
+class WorktreeInfo:
+    """
+    Snapshot of a single worktree attached to a repository.
+    See the git-worktree and gitrepository-layout manpages for the on-disk
+    layout that this is read from.
+    """
+
+    name: str
+    "Name registered in $GIT_COMMON_DIR/worktrees. Empty for the main worktree."
+
+    path: str
+    "Absolute path to the worktree's workdir. Empty if the main worktree is bare."
+
+    head: str
+    "Full name of the ref checked out here, or empty if this worktree's HEAD is detached."
+
+    head_id: Oid
+    "Commit that this worktree's HEAD resolves to, or NULL_OID if it can't be resolved."
+
+    is_main: bool
+    "This is the main worktree, i.e. the one that owns $GIT_COMMON_DIR."
+
+    is_current: bool
+    "This is the worktree that the Repo object was opened on."
+
+    locked: bool
+    "The worktree is locked, so git won't prune it (see git worktree lock)."
+
+    lock_reason: str
+    "Reason given when the worktree was locked. Only meaningful if `locked` is set."
+
+    prunable: bool
+    "The workdir is gone, so 'git worktree prune' would clean up this entry."
+
+
 class Repo(_VanillaRepository):
     """
     Drop-in replacement for pygit2.Repository with convenient front-ends to common git operations.
@@ -785,6 +836,83 @@ class Repo(_VanillaRepository):
             raise ValueError("Won't resolve absolute path outside gitdir")
 
         return str(p)
+
+    def listall_worktrees(self) -> list[WorktreeInfo]:
+        """
+        Return the main worktree and all linked worktrees, main first
+        (same order as `git worktree list`).
+
+        The metadata is read straight from $GIT_COMMON_DIR/worktrees rather
+        than through pygit2's worktree API, which exposes neither the ref
+        checked out in a worktree nor its lock state.
+        """
+        commondir = _normpath(self.commondir)
+        my_gitdir = _normpath(self.path)
+        worktrees = []
+
+        # The main worktree. A bare repo doesn't have one, but it may still
+        # own linked worktrees (see git-worktree manpage).
+        if self.get_config_value("core.bare") != "true":
+            if my_gitdir == commondir:  # this Repo is the main worktree
+                main_path = _normpath(self.workdir) if self.workdir else ""
+            else:  # this Repo is a linked worktree; the main one is next to $GIT_COMMON_DIR
+                main_path = _dirname(commondir)
+                if not _points_at_gitdir(main_path, commondir):
+                    # $GIT_COMMON_DIR isn't inside the main worktree, which
+                    # happens with `git init --separate-git-dir`. Nothing
+                    # records where the main worktree went - git itself can't
+                    # find it either - so don't point at a folder that isn't one.
+                    main_path = ""
+            if main_path:
+                worktrees.append(self._read_worktree("", main_path, commondir, commondir == my_gitdir))
+
+        for name in sorted(self.list_worktrees()):
+            gitdir = _joinpath(commondir, "worktrees", name)
+            # 'gitdir' points to the '.git' file inside the linked workdir.
+            # list_worktrees already skips entries that have no 'gitdir' file,
+            # so this only guards the race window between the two.
+            try:
+                dotgit = _Path(gitdir, "gitdir").read_text().strip()
+            except OSError:  # pragma: no cover
+                continue
+            worktrees.append(self._read_worktree(
+                name, _dirname(_normpath(dotgit)), gitdir, gitdir == my_gitdir))
+
+        return worktrees
+
+    def _read_worktree(self, name: str, path: str, gitdir: str, is_current: bool) -> WorktreeInfo:
+        head = ""
+        head_id = NULL_OID
+
+        with _suppress(OSError):
+            head_text = _Path(gitdir, "HEAD").read_text().strip()
+            if head_text.startswith("ref: "):
+                head = head_text.removeprefix("ref: ").strip()
+            else:
+                with _suppress(ValueError):
+                    head_id = Oid(hex=head_text)
+
+        if head and head_id == NULL_OID:
+            with _suppress(KeyError, GitError, ValueError):
+                head_id = self.references[head].peel(Commit).id
+
+        locked = False
+        lock_reason = ""
+        with _suppress(OSError):
+            lock_reason = _Path(gitdir, "locked").read_text().strip()
+            locked = True
+
+        return WorktreeInfo(
+            name=name,
+            path=path,
+            head=head,
+            head_id=head_id,
+            is_main=not name,
+            is_current=is_current,
+            locked=locked,
+            lock_reason=lock_reason,
+            prunable=bool(name) and not _isdir(path),  # only linked worktrees can be pruned
+        )
 
     def refresh_index(self, force: bool = False):
         """

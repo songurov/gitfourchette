@@ -751,6 +751,7 @@ class RefreshRepo(RepoTask):
         refsChanged = False
         stashesChanged = False
         submodulesChanged = False
+        worktreesChanged = False
         remotesChanged = False
         upstreamsChanged = False
         homeBranchChanged = False
@@ -762,6 +763,9 @@ class RefreshRepo(RepoTask):
 
         if effectFlags & (TaskEffects.Head | TaskEffects.Workdir):
             submodulesChanged = repoModel.syncSubmodules()
+
+        if effectFlags & (TaskEffects.Head | TaskEffects.Refs):
+            worktreesChanged = repoModel.syncWorktrees()
 
         if effectFlags & (TaskEffects.Refs | TaskEffects.Remotes):
             remotesChanged = repoModel.syncRemotes()
@@ -798,7 +802,7 @@ class RefreshRepo(RepoTask):
 
         # Refresh sidebar
         rw.sidebar.backUpSelection()
-        anyChanges = refsChanged | stashesChanged | submodulesChanged | remotesChanged | homeBranchChanged | upstreamsChanged
+        anyChanges = refsChanged | stashesChanged | submodulesChanged | worktreesChanged | remotesChanged | homeBranchChanged | upstreamsChanged
         if anyChanges:
             with QSignalBlockerContext(rw.sidebar):
                 rw.sidebar.refresh(repoModel)

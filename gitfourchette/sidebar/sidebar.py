@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import os
 import warnings
 from collections.abc import Callable, Iterable
 from contextlib import suppress
@@ -16,7 +17,7 @@ from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.localization import *
 from gitfourchette.nav import NavLocator
-from gitfourchette.porcelain import Oid, RefPrefix, Repo
+from gitfourchette.porcelain import Oid, RefPrefix, Repo, WorktreeInfo
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEREF
 from gitfourchette.repoprefs import RefSort
@@ -36,6 +37,8 @@ class Sidebar(QTreeView):
     toggleHideRefPattern = Signal(str, bool)
     openSubmoduleRepo = Signal(str)
     openSubmoduleFolder = Signal(str)
+    openWorktreeRepo = Signal(str)
+    openWorktreeFolder = Signal(str)
     statusMessage = Signal(str)
 
     sidebarModel: SidebarModel
@@ -159,6 +162,13 @@ class Sidebar(QTreeView):
             submenu.append(action)
 
         return submenu
+
+    def isWorktreeOpenElsewhere(self, worktree: WorktreeInfo) -> bool:
+        """Removing a worktree open in another tab would pull the floor out from under it."""
+        getter = getattr(self.window(), "openWorkdirs", None)
+        if getter is None:  # pragma: no cover - the sidebar always lives in a MainWindow
+            return False
+        return os.path.normpath(worktree.path) in getter()
 
     def makeNodeMenu(self, node: SidebarNode):
         actions = []
@@ -501,6 +511,45 @@ class Sidebar(QTreeView):
                 TaskBook.action(self, UpdateSubmodulesRecursive, enabled=bool(submodules)),
             ]
 
+        elif item == SidebarItem.WorktreesHeader:
+            worktrees = self.sidebarModel.repoModel.worktrees
+            anyStale = any(w.prunable and not w.locked for w in worktrees)
+
+            actions += [
+                TaskBook.action(self, NewWorktree),
+                ActionDef.SEPARATOR,
+                TaskBook.action(self, PruneWorktrees, enabled=anyStale),
+            ]
+
+        elif item == SidebarItem.Worktree:
+            worktree = self.sidebarModel.repoModel.worktreeByName(data)
+            if worktree is None:  # pragma: no cover - nodes and worktrees are rebuilt together
+                return None
+
+            actions += [
+                ActionDef(_("&Open Worktree in New Tab"),
+                          lambda: self.openWorktreeRepo.emit(worktree.path),
+                          enabled=not worktree.is_current and not worktree.prunable),
+
+                ActionDef(_("Open Worktree &Folder"),
+                          lambda: self.openWorktreeFolder.emit(worktree.path),
+                          enabled=not worktree.prunable),
+
+                ActionDef(_("Copy &Path"),
+                          lambda: self.copyToClipboard(worktree.path)),
+            ]
+
+            if not worktree.is_main:
+                actions += [
+                    ActionDef.SEPARATOR,
+                    TaskBook.action(self, UnlockWorktree, taskArgs=data) if worktree.locked
+                    else TaskBook.action(self, LockWorktree, taskArgs=data),
+                    ActionDef.SEPARATOR,
+                    TaskBook.action(self, RemoveWorktree, taskArgs=data,
+                                    enabled=not worktree.is_current
+                                    and not self.isWorktreeOpenElsewhere(worktree)),
+                ]
+
         elif item == SidebarItem.Submodule:
             model = self.sidebarModel
             repo = model.repo
@@ -700,6 +749,16 @@ class Sidebar(QTreeView):
 
         elif item == SidebarItem.Submodule:
             self.openSubmoduleRepo.emit(node.data)
+
+        elif item == SidebarItem.WorktreesHeader:
+            NewWorktree.invoke(self)
+
+        elif item == SidebarItem.Worktree:
+            worktree = self.sidebarModel.repoModel.worktreeByName(node.data)
+            if worktree is None or worktree.is_current or worktree.prunable:
+                QApplication.beep()
+            else:
+                self.openWorktreeRepo.emit(worktree.path)
 
         elif item == SidebarItem.StashesHeader:
             NewStash.invoke(self)
