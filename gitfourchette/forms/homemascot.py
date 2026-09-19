@@ -13,7 +13,9 @@ to" and walks along it; meanwhile an egg falls from the sky onto the end of
 the app's name. The dinosaur picks it up, carries it home and lays it in the
 nest. Once the nest holds three eggs, they hatch at the start of the next
 round, and the nest starts over - forever, but only while the splash page is
-on screen. It takes its time: about half a minute a round.
+on screen. It takes its time: at least 25 seconds a round. How far it walks
+follows the text, so when the text is short - a narrow font, a short
+translation - it rests at home before the next round rather than hurrying.
 
 It stands on the glyphs themselves, not on the labels' boxes: the logo and the
 welcome text are rendered offscreen and scanned for their first opaque row, so
@@ -138,6 +140,8 @@ LET_GO_AT = 800
 """When the egg leaves the hands, while picking it up or laying it."""
 FALL_MS = 1800
 BOUNCE_MS = 300
+MIN_ROUND_MS = 25_000
+"""The shortest a round may take, however short the text it walks along."""
 
 FRAME_MS = 50
 """20 fps is plenty for pixel art, and keeps an idle Home cheap."""
@@ -229,7 +233,7 @@ class Surface:
 
 @dataclasses.dataclass(frozen=True)
 class Segment:
-    kind: str  # "greet", "walk", "jump", "pick", "place", "turn"
+    kind: str  # "greet", "walk", "jump", "pick", "place", "turn", "rest"
     start: QPointF
     end: QPointF
     duration: float  # ms
@@ -252,14 +256,45 @@ def inkRows(image: QImage) -> list[tuple[int, int, int]]:
     return rows
 
 
-def renderAlpha(widget: QWidget) -> QImage:
-    """The widget's own pixels on a transparent background."""
-    dpr = widget.devicePixelRatioF()
-    image = QImage(QSize(max(1, round(widget.width() * dpr)), max(1, round(widget.height() * dpr))),
+def renderAlpha(label: QLabel) -> QImage:
+    """
+    The label's own pixels on a transparent background.
+
+    What gets drawn is a detached copy of the label, not the label itself:
+    QWidget.render() on a widget that is on screen first delivers every pending
+    move and resize event in the whole window. That reaches into the repo tabs,
+    including one that is being torn down - closing the last tab brings Home
+    back before Qt has deleted that tab.
+    """
+    copy = QLabel()
+    copy.setScreen(label.screen())  # same DPI, so the text comes out the same size
+    copy.setObjectName(label.objectName())
+    copy.setFont(label.font())
+    copy.setPalette(label.palette())
+    copy.setLayoutDirection(label.layoutDirection())
+    copy.setFrameStyle(label.frameStyle())
+    copy.setLineWidth(label.lineWidth())
+    copy.setMidLineWidth(label.midLineWidth())
+    copy.setContentsMargins(label.contentsMargins())
+    copy.setMargin(label.margin())
+    copy.setIndent(label.indent())
+    copy.setAlignment(label.alignment())
+    copy.setWordWrap(label.wordWrap())
+    copy.setScaledContents(label.hasScaledContents())
+    copy.setTextFormat(label.textFormat())
+    pixmap = label.pixmap()
+    if pixmap.isNull():
+        copy.setText(label.text())
+    else:
+        copy.setPixmap(pixmap)
+    copy.resize(label.size())
+
+    dpr = label.devicePixelRatioF()
+    image = QImage(QSize(max(1, round(label.width() * dpr)), max(1, round(label.height() * dpr))),
                    QImage.Format.Format_ARGB32_Premultiplied)
     image.setDevicePixelRatio(dpr)
     image.fill(Qt.GlobalColor.transparent)
-    widget.render(image, QPoint(0, 0), QRegion(), QWidget.RenderFlag.DrawChildren)
+    copy.render(image, QPoint(0, 0), QRegion(), QWidget.RenderFlag.DrawChildren)
     return image
 
 
@@ -396,7 +431,7 @@ class HomeMascot(QWidget):
         def jump(a: QPointF, b: QPointF, carrying=False) -> Segment:
             return Segment("jump", a, b, JUMP_MS, 1 if b.x() >= a.x() else -1, carrying)
 
-        return [
+        segments = [
             Segment("greet", home, home, GREET_MS, 1),
             jump(home, welcomeFrom),
             walk(welcomeFrom, welcomeTo),
@@ -411,6 +446,10 @@ class HomeMascot(QWidget):
             Segment("place", home, home, PLACE_MS, -1, carrying=True),
             Segment("turn", home, home, TURN_MS, 1),
         ]
+        # Whatever the walks leave of the round, it spends at home, by its nest
+        busy = sum(s.duration for s in segments)
+        segments.append(Segment("rest", home, home, max(0.0, MIN_ROUND_MS - busy), 1))
+        return segments
 
     def cycleDuration(self) -> float:
         return sum(s.duration for s in self.segments)
@@ -527,6 +566,8 @@ class HomeMascot(QWidget):
 
         if segment.kind == "greet":
             self.pose = self.greetPose(t)
+        elif segment.kind == "rest":
+            self.pose = STAND
         elif segment.kind == "pick":
             self.pose = self.handsPose(t, carryingBefore=False)
         elif segment.kind == "place":

@@ -56,7 +56,7 @@ def testWalksTheWholeRound(mainWindow):
     logo, welcomeLine, nameLine = mascot.surfaces()
     kinds = [s.kind for s in mascot.segments]
     assert kinds == ["greet", "jump", "walk", "jump", "walk", "pick", "turn",
-                     "walk", "jump", "walk", "jump", "place", "turn"]
+                     "walk", "jump", "walk", "jump", "place", "turn", "rest"]
 
     at(mascot, 1)
     assert mascot.feet.y() == logo.top
@@ -77,6 +77,31 @@ def testTakesItsTime(mainWindow):
     mascot = stillMascot(mainWindow)
     assert mascot.cycleDuration() >= 25_000
     assert hm.WALK_SPEED <= 25
+
+
+def testTakesItsTimeHoweverShortTheText(mainWindow):
+    """How far it walks follows the font; how long a round takes doesn't.
+    With little to walk along, it rests at home instead of hurrying."""
+    mascot = stillMascot(mainWindow)
+    label = mainWindow.welcomeWidget.ui.welcomeLabel
+    label.setText(label.text().replace(qAppName(), "Git"))
+    QTest.qWait(0)  # let the layout fit the label to its new text
+    at(mascot, 0)
+
+    home = mascot.segments[0].start
+    walks = [s for s in mascot.segments if s.kind == "walk"]
+    busy = sum(s.duration for s in mascot.segments if s.kind != "rest")
+    assert busy < 25_000, "the text should be too short to fill a round by walking"
+
+    assert mascot.cycleDuration() == pytest.approx(25_000)
+    for walk in walks:  # still strolling
+        assert walk.duration == pytest.approx(1000 * abs(walk.end.x() - walk.start.x()) / hm.WALK_SPEED)
+    rest = mascot.segments[-1]
+    assert rest.kind == "rest"
+    assert rest.duration == pytest.approx(25_000 - busy)
+    at(mascot, mascot.segmentStart("rest") + rest.duration / 2)
+    assert mascot.feet == home
+    assert (mascot.pose.legs, mascot.pose.arm, mascot.facing) == ("stand", "rest", 1)
 
 
 def testNoSceneAtTheBottomAnyMore(mainWindow):
@@ -231,6 +256,22 @@ def testOnlyAnimatesWhileTheSplashIsShown(tempDir, mainWindow):
 
     mainWindow.closeAllTabs()
     waitUntilTrue(mascot.isAnimating)
+
+
+def testMeasuringHomeLeavesAClosingTabAlone(tempDir, mainWindow):
+    """
+    Closing the last tab brings Home back before Qt has deleted that tab, and
+    the mascot measures the page again. That mustn't deliver the tab's pending
+    resize events: its diff view has already let go of its gutter, and would
+    raise an error in a dialog.
+    """
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    diffView = rw.diffView
+    assert diffView.testAttribute(Qt.WidgetAttribute.WA_PendingResizeEvent), "not shown yet, so not sized yet"
+
+    mainWindow.closeTab(0)  # torn down, but deleted later
+    assert mainWindow.welcomeWidget.mascot.surfaces() is not None
+    assert diffView.testAttribute(Qt.WidgetAttribute.WA_PendingResizeEvent), "the tab being torn down was resized"
 
 
 def colorsIn(widget: QWidget) -> set[str]:
