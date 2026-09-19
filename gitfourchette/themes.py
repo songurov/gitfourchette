@@ -225,6 +225,10 @@ class ThemeColors:
     "Room between a file list's edges and its rows, around Neutral's rounded selection."
     fileHeaderHeight: int = 24
     "The strip over a file list, with its name and buttons (Unstaged, Staged)."
+    fileColumnWidth: int = 0
+    "Width the file lists start at, next to the diff; 0 makes them just wide enough for their buttons."
+    unstagedShare: float = 0
+    "Share of the file column that the unstaged files start with, over the staged ones; 0 lets Qt split it."
     scrollHandleMargin: str = "3px"
     "Room on each side of a scroll bar's handle, across the bar."
 
@@ -550,6 +554,8 @@ NEUTRAL_DARK = ThemeColors(
     fileTreeIndent     = 16,
     fileListInset      = 10,
     fileHeaderHeight   = 30,
+    fileColumnWidth    = 360,
+    unstagedShare      = .7,
     scrollHandleMargin = "2px",
     fieldBg            = "#242424",
     fieldBorder        = "#4a4a4a",
@@ -611,6 +617,8 @@ NEUTRAL_LIGHT = ThemeColors(
     fileTreeIndent     = 16,
     fileListInset      = 10,
     fileHeaderHeight   = 30,
+    fileColumnWidth    = 360,
+    unstagedShare      = .7,
     scrollHandleMargin = "2px",
     fieldBorder        = "#c8c8c8",
     splitterHandle     = "#dcdcdc",

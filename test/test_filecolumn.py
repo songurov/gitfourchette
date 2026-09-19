@@ -196,3 +196,32 @@ def testNeutralFileListHeadersHaveStagePills(tempDir, mainWindow):
         assert area.dirtyHeader.countColor is None
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+def _openWithCommitFormUnderTheDiff(tempDir, mainWindow, variant):
+    from gitfourchette.settings import CommitFormPlacement
+    from gitfourchette.themes import formatStyle
+    # With the commit form under the diff, the file lists' width is the theme's alone
+    GFApplication.applyPrefs(qtStyle=formatStyle(BUILTIN, "dark", variant=variant),
+                             commitFormPlacement=CommitFormPlacement.BottomBar)
+    rw = _openTree(tempDir, mainWindow)
+    QTest.qWait(0)
+    return rw.diffArea
+
+
+@pytest.mark.parametrize(["variant", "width"], [("", 260), ("neutral", 360)])
+def testFileColumnStartingWidth(tempDir, mainWindow, variant, width):
+    try:
+        area = _openWithCommitFormUnderTheDiff(tempDir, mainWindow, variant)
+        assert area.findChild(QSplitter, "Split_DiffArea").sizes()[0] == width
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+
+def testNeutralGivesMostOfTheColumnToUnstagedFiles(tempDir, mainWindow):
+    try:
+        area = _openWithCommitFormUnderTheDiff(tempDir, mainWindow, "neutral")
+        unstaged, staged = area.findChild(QSplitter, "Split_Staging").sizes()
+        assert unstaged / (unstaged + staged) == pytest.approx(.7, abs=.01)
+    finally:
+        GFApplication.applyPrefs(qtStyle="")

@@ -144,10 +144,17 @@ class DiffArea(QWidget):
         # each row of its controls to fit on one line (they wrap onto more lines
         # if the user narrows the file lists down). Leave room for the commit
         # button's caption to grow: it counts the staged files once loaded.
-        fileStackWidth = 260
+        # The theme may want the file lists wider than that from the start:
+        # Neutral's are Fork's 360 px, with Unstaged over Staged at 70/30.
+        theme = activeTheme()
+        fileStackWidth = max(260, theme.fileColumnWidth if theme is not None else 0)
         if settings.prefs.commitFormPlacement != settings.CommitFormPlacement.BottomBar:
             fileStackWidth = max(fileStackWidth, fileStack.sizeHint().width() + self.commitButton.sizeHint().width())
         splitter.setSizes([fileStackWidth, 500])
+
+        if theme is not None and theme.unstagedShare:
+            share = round(theme.unstagedShare * 1000)
+            self.stagingSplitter.setSizes([share, 1000 - share])
 
         # Ignore height in size policy to keep DiffArea from jumping around when we're showing a banner.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Ignored)
@@ -226,6 +233,7 @@ class DiffArea(QWidget):
         fileStack = QStackedWidget()
         fileStack.addWidget(stagingSplitter)
         fileStack.addWidget(committedFilesContainer)
+        self.stagingSplitter = stagingSplitter
         return fileStack
 
     def _makeFileListGap(self) -> QSpacerItem:
