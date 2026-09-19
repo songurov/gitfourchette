@@ -441,6 +441,35 @@ def setTabOrder(*args: QWidget):
         QWidget.setTabOrder(widget1, widget2)
 
 
+_DEFAULT_SPLITTER_SIZES = "defaultSizes"
+
+
+def setDefaultSplitterSizes(splitter: QSplitter, sizes: list[int]):
+    """
+    Size a splitter's panes as it starts out, and remember those sizes for
+    restoreDefaultSplitterSizes.
+    """
+    splitter.setProperty(_DEFAULT_SPLITTER_SIZES, list(sizes))
+    splitter.setSizes(sizes)
+
+
+def restoreDefaultSplitterSizes(splitter: QSplitter):
+    """
+    Size a splitter's panes the way it started out, whatever its size now: the
+    sizes given to setDefaultSplitterSizes, or else, like Qt on a splitter
+    nobody sized, in proportion to what each pane asks for.
+
+    A pane that doesn't stretch gets its size back exactly; the stretching
+    ones share the rest.
+    """
+    sizes = splitter.property(_DEFAULT_SPLITTER_SIZES)
+    if not sizes:
+        horizontal = splitter.orientation() == Qt.Orientation.Horizontal
+        hints = (splitter.widget(i).sizeHint() for i in range(splitter.count()))
+        sizes = [hint.width() if horizontal else hint.height() for hint in hints]
+    splitter.setSizes(sizes)
+
+
 def packDialog(dialog: QDialog, widthHint=550, lockHeight=False):
     dialog.layout().activate()
     dialog.adjustSize()

@@ -84,6 +84,8 @@ from .qtutils import (
     DocumentLinks,
     findParentWidget,
     setTabOrder,
+    setDefaultSplitterSizes,
+    restoreDefaultSplitterSizes,
     packDialog,
     QModelIndex_default,
     QPoint_zero,

@@ -372,6 +372,8 @@ class MainWindow(QMainWindow):
                       objectName="ShowStatusBarAction", properties=WITHOUT_REPO),
             ActionDef(englishTitleCase(_("Show menu bar")), self.toggleMenuBar, checkState=-1,
                       objectName="ShowMenuBarAction", properties=WITHOUT_REPO),
+            ActionDef(_("Reset &Layout"), self.resetLayout,
+                      tip=_("Give every pane its default size again"), properties=WITHOUT_REPO),
             ActionDef.SEPARATOR,
             TaskBook.action(self, tasks.JumpToUncommittedChanges, accel="U"),
             TaskBook.action(self, tasks.JumpToHEAD, accel="H"),
@@ -1563,6 +1565,17 @@ class MainWindow(QMainWindow):
         qmb = asyncMessageBox(self, 'warning', _("Restore session"), text)
         addULToMessageBox(qmb, [f"<b>{compactPath(path)}</b><br>{exc}" for path, exc in errors])
         qmb.show()
+
+    def resetLayout(self) -> None:
+        """
+        Give every pane of every tab its default size, and stop carrying the
+        sizes the session saved: tabs opened from now on start out the same.
+        """
+        RepoWidget.sharedSplitterSizes.clear()
+        for widget in self.tabs.widgets():
+            if isinstance(widget, RepoWidget):
+                widget.resetLayout()
+        self.saveSession()
 
     def saveSession(self, writeNow=False) -> None:
         if writeNow:

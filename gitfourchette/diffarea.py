@@ -75,7 +75,7 @@ class DiffArea(QWidget):
         commitPage.setObjectName("Split_CommitTab")
         commitPage.addWidget(commitDetailView)
         commitPage.addWidget(commitPatchStack)
-        commitPage.setSizes([300, 400])
+        setDefaultSplitterSizes(commitPage, [300, 400])
         commitPage.setChildrenCollapsible(False)
 
         pageStack = QStackedWidget(self)
@@ -150,11 +150,11 @@ class DiffArea(QWidget):
         fileStackWidth = max(260, theme.fileColumnWidth if theme is not None else 0)
         if settings.prefs.commitFormPlacement != settings.CommitFormPlacement.BottomBar:
             fileStackWidth = max(fileStackWidth, fileStack.sizeHint().width() + self.commitButton.sizeHint().width())
-        splitter.setSizes([fileStackWidth, 500])
+        setDefaultSplitterSizes(splitter, [fileStackWidth, 500])
 
         if theme is not None and theme.unstagedShare:
             share = round(theme.unstagedShare * 1000)
-            self.stagingSplitter.setSizes([share, 1000 - share])
+            setDefaultSplitterSizes(self.stagingSplitter, [share, 1000 - share])
 
         # Ignore height in size policy to keep DiffArea from jumping around when we're showing a banner.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Ignored)
@@ -835,7 +835,7 @@ class DiffArea(QWidget):
         bottomCommitSplitter.addWidget(bottomCommitFormHost)
         bottomCommitSplitter.setStretchFactor(0, 1)
         bottomCommitSplitter.setStretchFactor(1, 0)
-        bottomCommitSplitter.setSizes([500, 220])
+        setDefaultSplitterSizes(bottomCommitSplitter, [500, 220])
 
         self.diffHeader = header
         self.diffStack = stack

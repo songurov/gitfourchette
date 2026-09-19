@@ -3965,6 +3965,14 @@ msgid "Show menu bar"
 msgstr "Afișează bara de meniu"
 
 #: mainwindow.py:367
+msgid "Reset &Layout"
+msgstr "Resetează &dispunerea"
+
+#: mainwindow.py:368
+msgid "Give every pane its default size again"
+msgstr "Readu fiecare panou la dimensiunea implicită"
+
+#: mainwindow.py:367
 msgid "Focus on Sidebar"
 msgstr "Focus pe bara laterală"
 

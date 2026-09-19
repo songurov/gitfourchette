@@ -148,14 +148,14 @@ class RepoWidget(QWidget):
 
         sideSplitter.addWidget(sidebarContainer)
         sideSplitter.addWidget(centralSplitter)
-        sideSplitter.setSizes([220, 500])
+        setDefaultSplitterSizes(sideSplitter, [220, 500])
         sideSplitter.setStretchFactor(0, 0)  # don't auto-stretch sidebar when resizing window
         sideSplitter.setStretchFactor(1, 1)
         sideSplitter.setChildrenCollapsible(False)
 
         centralSplitter.addWidget(graphContainer)
         centralSplitter.addWidget(self.diffArea)
-        centralSplitter.setSizes([100, 150])
+        setDefaultSplitterSizes(centralSplitter, [100, 150])
         centralSplitter.setCollapsible(0, True)  # Let DiffArea be maximized, thereby hiding the graph
         centralSplitter.setCollapsible(1, False)  # DiffArea can never be collapsed
         self.centralSplitSizesBackup = centralSplitter.sizes()
@@ -327,6 +327,13 @@ class RepoWidget(QWidget):
                 name = splitter.objectName()
                 sizes = self.sharedSplitterSizes[name]
                 splitter.setSizes(sizes)
+        self.syncDiffAreaMaximizeButton()
+
+    def resetLayout(self):
+        """Give every pane the size it has in a new tab (see MainWindow.resetLayout)."""
+        for splitter in self.splittersToSave:
+            restoreDefaultSplitterSizes(splitter)
+        self.centralSplitSizesBackup = self.centralSplitter.sizes()
         self.syncDiffAreaMaximizeButton()
 
     def isDiffAreaMaximized(self):

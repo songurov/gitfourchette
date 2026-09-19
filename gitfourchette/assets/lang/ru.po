@@ -3877,6 +3877,14 @@ msgid "Show menu bar"
 msgstr "Показать строку меню"
 
 #: mainwindow.py:367
+msgid "Reset &Layout"
+msgstr "Сбросить &компоновку"
+
+#: mainwindow.py:368
+msgid "Give every pane its default size again"
+msgstr "Вернуть всем панелям размеры по умолчанию"
+
+#: mainwindow.py:367
 msgid "Focus on Sidebar"
 msgstr "Перейти к боковой панели"
 

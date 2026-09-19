@@ -3939,6 +3939,14 @@ msgid "Show menu bar"
 msgstr ""
 
 #: mainwindow.py:367
+msgid "Reset &Layout"
+msgstr ""
+
+#: mainwindow.py:368
+msgid "Give every pane its default size again"
+msgstr ""
+
+#: mainwindow.py:367
 msgid "Focus on Sidebar"
 msgstr ""
 

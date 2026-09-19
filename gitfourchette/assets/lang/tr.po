@@ -3921,6 +3921,14 @@ msgid "Show menu bar"
 msgstr "Menü çubuğunu göster"
 
 #: mainwindow.py:367
+msgid "Reset &Layout"
+msgstr "&Düzeni Sıfırla"
+
+#: mainwindow.py:368
+msgid "Give every pane its default size again"
+msgstr "Her bölmeyi varsayılan boyutuna döndür"
+
+#: mainwindow.py:367
 msgid "Focus on Sidebar"
 msgstr "Kenar Çubuğuna Odaklan"
 
