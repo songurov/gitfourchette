@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         self.repoMenu2 = QMenu(self)
         self.repoMenu2.setObjectName("ToolBarRepoMenu")
         self.repoMenu2.aboutToShow.connect(self.fillRepoButtonMenu)
-        self.mainToolBar.repoAction.setMenu(self.repoMenu2)
+        self.mainToolBar.setRepoMenu(self.repoMenu2)
 
         self.openInMenu = QMenu(self)
         self.openInMenu.setObjectName("OpenInMenu")
@@ -699,7 +699,8 @@ class MainWindow(QMainWindow):
         self.mainToolBar.setRepoSummary(
             settings.history.peekRepoNickname(rw.workdir),
             rw.repoModel.homeBranch,
-            rw.repoModel.numUncommittedChanges > 0)
+            rw.repoModel.numUncommittedChanges > 0,
+            rw.repoModel.headIsDetached)
 
     def fillOpenInMenu(self) -> None:
         """Where to take the repo that's in front of you."""

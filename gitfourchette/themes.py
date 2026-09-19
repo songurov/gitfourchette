@@ -295,6 +295,8 @@ class ThemeColors:
     "The page that Neutral draws after a file's status tile."
     toolbarDivider: str = ""
     "The short lines between the main toolbar's fetch, pull and push (Centered layout)."
+    repoBoxDim: str = ""
+    "The branch in the Centered toolbar's box: secondary text that reads on the box's own background."
 
     # Code and diffs, with the automatic syntax scheme only: a Pygments preset
     # picked in Settings keeps its own colors. "" keeps the preset's background
@@ -348,15 +350,16 @@ class ThemeColors:
         def mix(a: str, b: str, r=.5):
             return mixColors(QColor(a), QColor(b), r).name()
 
-        def readableMix(ratio: float, minContrast: float) -> str:
+        def readableMix(ratio: float, minContrast: float, grounds: tuple[str, ...] = ()) -> str:
             """
             The dimmest mix of text into surface, starting at `ratio`, that stands out
-            from both the window and the surface by at least `minContrast`:1.
+            from both the window and the surface (or from `grounds`) by at least `minContrast`:1.
             """
+            grounds = grounds or (self.bg, self.surface)
             while True:
                 color = mix(self.text, self.surface, ratio)
                 if ratio <= 0 or all(contrastRatio(QColor(color), QColor(ground)) >= minContrast
-                                     for ground in (self.bg, self.surface)):
+                                     for ground in grounds):
                     return color
                 ratio = round(ratio - .05, 2)
 
@@ -402,6 +405,9 @@ class ThemeColors:
         self.newTabButtonShade  = self.newTabButtonShade or self.newTabButtonEdge
         self.pillDisabled       = mix(self.button, self.panelHeader, .5)
         self.toolbarDivider     = self.toolbarDivider or self.border
+        # The box is drawn in the tabs' track color, lighter than the window on
+        # a dark theme: textDim would fall short of 4.5:1 on it
+        self.repoBoxDim         = self.text if self.highContrast else readableMix(.4, 4.5, grounds=(self.tabTrack,))
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
