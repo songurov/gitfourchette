@@ -117,6 +117,7 @@ from gitfourchette.tasks.worktreetasks import (
 )
 
 from gitfourchette.tasks.gitflowtasks import (
+    GitFlowFinishFeature,
     GitFlowInit,
     GitFlowStartFeature,
     GitFlowStartHotfix,

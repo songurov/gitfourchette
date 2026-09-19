@@ -164,6 +164,16 @@ class Sidebar(QTreeView):
 
         return submenu
 
+    def gitFlowBranchActions(self, branchName: str) -> list[ActionDef]:
+        """Finish a Git Flow branch from its own menu."""
+        cfg = self.sidebarModel.repo.gitflow_config()
+        classified = cfg.classify(branchName) if cfg is not None else None
+        if not classified or classified[0] not in gitflowtasks.FINISH_TASKS:
+            return []
+        kind, name = classified
+        task = gitflowtasks.FINISH_TASKS[kind]
+        return [TaskBook.action(self, task, gitflowtasks.finishActionName(kind, name), taskArgs=branchName)]
+
     def gitFlowFolderActions(self, folderPrefix: str) -> list[ActionDef]:
         """Start a Git Flow branch from the folder that holds that kind of branch."""
         cfg = self.sidebarModel.repo.gitflow_config()
@@ -265,6 +275,8 @@ class Sidebar(QTreeView):
                     _("&Merge into {0}…", activeBranchDisplay),
                     taskArgs=refName,
                 ).replace(enabled=not isCurrentBranch and activeBranchName),
+
+                *self.gitFlowBranchActions(branchName),
 
                 ActionDef.SEPARATOR,
 

@@ -894,7 +894,48 @@ class RepoWidget(QWidget):
             return [TaskBook.action(self, tasks.GitFlowInit, properties={QUICKLAUNCH_SEARCH_ONLY: True})]
 
         # A branch type whose prefix is empty is switched off
-        return [TaskBook.action(self, task) for kind, task in gitflowtasks.START_TASKS.items() if cfg.prefix(kind)]
+        items = [TaskBook.action(self, task) for kind, task in gitflowtasks.START_TASKS.items() if cfg.prefix(kind)]
+
+        finishable = self.gitFlowFinishableBranches(cfg)
+        if finishable:
+            items.append(ActionDef.SEPARATOR)
+        for kind, (branch, name) in finishable.items():
+            task = gitflowtasks.FINISH_TASKS[kind]
+            items.append(TaskBook.action(self, task, gitflowtasks.finishActionName(kind, name), taskArgs=branch))
+
+        return items
+
+    def gitFlowFinishableBranches(self, cfg: GitFlowConfig) -> dict[GitFlowKind, tuple[str, str]]:
+        """
+        Git Flow branches worth offering to finish from the Repo menu, at most
+        one per kind, as {kind: (branch, name without prefix)}: the current
+        branch, and the one whose finish just stopped on a merge that is now
+        committed (HEAD is that merge, on the production or development branch).
+        """
+        repo = self.repo
+        homeBranch = self.repoModel.homeBranch
+        found: dict[GitFlowKind, tuple[str, str]] = {}
+
+        classified = cfg.classify(homeBranch) if homeBranch else None
+        if classified and classified[0] in gitflowtasks.FINISH_TASKS:
+            found[classified[0]] = (homeBranch, classified[1])
+
+        if homeBranch not in (cfg.master, cfg.develop):
+            return found
+        mergedIn = repo.head_commit.parent_ids[1:2]
+        if not mergedIn:
+            return found
+
+        # Not every flow branch that is already merged: that would list every
+        # merged-but-kept branch and every branch without commits, forever.
+        for branch in repo.branches.local:
+            classified = cfg.classify(branch)
+            if not classified or classified[0] in found or classified[0] not in gitflowtasks.FINISH_TASKS:
+                continue
+            if repo.branches.local[branch].target == mergedIn[0]:
+                found[classified[0]] = (branch, classified[1])
+
+        return found
 
     @CallbackAccumulator.deferredMethod(250)
     def scheduleFlushGpgVerificationQueue(self):

@@ -22,12 +22,20 @@ from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.tasks.branchtasks import flowConfirmLeavingDetachedHead
+from gitfourchette.tasks.committasks import SetUpGitIdentity
 from gitfourchette.tasks.repotask import AbortTask, RepoTask, TaskPrereqs, TaskEffects
 from gitfourchette.toolbox import *
 
 
 class GitFlowTask(RepoTask):
     """Checks and git steps shared by the Git Flow tasks."""
+
+    doneSteps: list[str]
+    """What this run has changed so far, for error messages ("merged into develop")."""
+
+    def __init__(self, parent: QObject):
+        super().__init__(parent)
+        self.doneSteps = []
 
     def gitFlow(self) -> GitFlowConfig:
         cfg = self.repo.gitflow_config()
@@ -67,6 +75,25 @@ class GitFlowTask(RepoTask):
                 app=qAppName(), state=bquo(trtables.enum(state))))
 
         raise AbortTask(paragraphs(sentence, _("Conclude or abort it, then try again.")))
+
+    def doneStepsText(self) -> str:
+        if not self.doneSteps:
+            return ""
+        return _("Already done: {0}.", ", ".join(self.doneSteps))
+
+    def abortAfterSteps(self, *sentences: str, icon: MessageBoxIconName = "warning", details: str = ""):
+        """Stop, telling the user which steps were already done, so it isn't mistaken for "nothing happened"."""
+        doneStepsText = self.doneStepsText()
+        if doneStepsText:
+            sentences += (doneStepsText,)
+        raise AbortTask(paragraphs(*sentences), icon=icon, details=details)
+
+    def flowGit(self, *args: str):
+        """Run a git command that changes the repo. If it fails, say which steps were already done."""
+        driver = yield from self.flowCallGit(*args, autoFail=False)
+        if driver.exitCode() != 0:
+            raise AbortTask(driver.htmlErrorText(subtitle=self.doneStepsText()), details=driver.formatCommandLine())
+        return driver
 
     def requireLocalBranch(self, branch: str):
         if branch not in self.repo.branches.local:
@@ -110,12 +137,56 @@ class GitFlowTask(RepoTask):
                 # Not "clean": git couldn't tell (e.g. corrupt index)
                 raise AbortTask(driver.htmlErrorText())
 
+    def requireNotCheckedOutElsewhere(self, branch: str):
+        """Git won't check out a branch that another worktree has checked out."""
+        refName = RefPrefix.HEADS + branch
+        for worktree in self.repo.listall_worktrees():
+            if not worktree.is_current and worktree.head == refName:
+                raise AbortTask(_("{0} is checked out in another worktree ({1}).", bquo(branch), escape(worktree.path)))
+
     def flowCheckout(self, branch: str):
         """Switch to a local branch, unless it's already checked out."""
         if not self.repo.head_is_detached and self.repo.head_branch_shorthand == branch:
             return
         self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head | TaskEffects.Workdir
-        yield from self.flowCallGit("checkout", "--progress", "--no-guess", branch)
+        yield from self.flowGit("checkout", "--progress", "--no-guess", branch)
+
+    def flowMerge(self, source: str, into: str, finishName: str):
+        """
+        Check out `into`, then merge `source` into it with a merge commit.
+        On conflicts, leave the repo in the usual merge state, with the merge
+        message ready, and tell the user how to pick up where this left off.
+        """
+        repo = self.repo
+        yield from self.flowCheckout(into)
+
+        self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head | TaskEffects.Workdir
+        driver = yield from self.flowCallGit("merge", "--no-ff", "--no-edit", "--progress", source, autoFail=False)
+        if driver.exitCode() == 0:
+            return
+
+        repo.refresh_index()
+        if repo.state() != RepositoryState.MERGE:
+            # Didn't even start (e.g. an untracked file would be overwritten)
+            raise AbortTask(driver.htmlErrorText(subtitle=self.doneStepsText()), details=driver.formatCommandLine())
+
+        # The merge is left for the user to conclude, as when merging by hand
+        self.repoModel.prefs.draftCommitMessage = repo.message_without_conflict_comments
+        self.epilog.jumpTo = NavLocator.inWorkdir()
+
+        if repo.any_conflicts:
+            self.abortAfterSteps(
+                _("Merging {0} into {1} caused conflicts.", bquo(source), bquo(into)),
+                _("Fix the conflicts and commit the merge. Then choose {0} again to complete the remaining steps.",
+                  finishName),
+                icon="information")
+        else:
+            # No conflicts, yet git didn't commit: a hook (pre-merge-commit, commit-msg) said no
+            self.abortAfterSteps(
+                _("Git stopped before committing the merge of {0} into {1}.", bquo(source), bquo(into)),
+                _("Commit to conclude the merge. Then choose {0} again to complete the remaining steps.",
+                  finishName),
+                details=driver.stderrScrollback())
 
 
 class GitFlowInit(GitFlowTask):
@@ -271,8 +342,144 @@ class GitFlowStartHotfix(GitFlowStart):
     kind = GitFlowKind.HOTFIX
 
 
+def finishActionName(kind: GitFlowKind, name: str, quote=lquoe) -> str:
+    """Menu label of the command that finishes a Git Flow branch, e.g. 'Finish Feature “login”…'."""
+    if kind == GitFlowKind.FEATURE:
+        return _("Finish Feature {0}…", quote(name))
+    elif kind == GitFlowKind.RELEASE:
+        return _("Finish Release {0}…", quote(name))
+    else:
+        return _("Finish Hotfix {0}…", quote(name))
+
+
+class GitFlowFinish(GitFlowTask):
+    """
+    Merge a Git Flow branch where it belongs, then delete it.
+
+    Every step is skipped when it's found done already, so after stopping on
+    a conflict, running this again once the merge is committed does only what
+    is left. Nothing is fetched, pushed or deleted on the remote.
+    """
+
+    kind: ClassVar[GitFlowKind]
+
+    def prereqs(self) -> TaskPrereqs:
+        return TaskPrereqs.NoUnborn | TaskPrereqs.NoConflicts | TaskPrereqs.NoCherrypick
+
+    def tip(self, branch: str) -> Oid:
+        return self.repo.commit_id_from_refname(RefPrefix.HEADS + branch)
+
+    def flow(self, branch: str):
+        repo = self.repo
+        kind = self.kind
+
+        # A rebase in progress detaches HEAD: say "rebase", not "detached HEAD"
+        self.requireNoOperationInProgress()
+        # Finishing checks out other branches, one after another: start from a branch
+        self.checkPrereqs(TaskPrereqs.NoDetached)
+
+        cfg = self.gitFlow()
+        classified = cfg.classify(branch)
+        if classified is None or classified[0] != kind:
+            raise AbortTask(_("{0} doesn’t start with {1}.", bquo(branch), bquo(cfg.prefix(kind))))
+        name = classified[1]
+        finishName = finishActionName(kind, name, hquo)
+
+        # --------------------------------------------------------------------
+        # Checks, before anything changes
+
+        self.requireLocalBranch(branch)
+        base = repo.gitflow_branch_base(branch) or cfg.develop
+        targets = cfg.finish_targets(kind, base)
+        for target in targets:
+            self.requireLocalBranch(target)
+
+        yield from self.flowRequireCleanTree()
+        for b in [branch, *targets]:
+            self.requireNotBehindRemote(b)
+        for target in targets:
+            self.requireNotCheckedOutElsewhere(target)
+
+        branchTip = self.tip(branch)
+        firstTarget = targets[0]
+        lastTarget = targets[-1]
+
+        # --------------------------------------------------------------------
+        # Ask
+
+        deleteCheckBox = QCheckBox(_("Delete local branch {0} afterwards", lquoe(branch)))
+        deleteCheckBox.setChecked(True)
+        yield from self.flowConfirm(
+            text=_("Merge {0} into {1}?", bquo(branch), bquo(firstTarget)),
+            verb=_("Finish"),
+            checkbox=deleteCheckBox)
+        deleteBranch = deleteCheckBox.isChecked()
+
+        if deleteBranch:
+            self.requireNotCheckedOutElsewhere(branch)
+
+        yield from self.flowSubtask(SetUpGitIdentity, self.name())
+
+        # --------------------------------------------------------------------
+        # Merge into the first target, unless it's there already
+
+        if not repo.is_ancestor(branchTip, self.tip(firstTarget)):
+            yield from self.flowMerge(branch, firstTarget, finishName)
+            self.doneSteps.append(_("merged into {0}", bquo(firstTarget)))
+
+        # --------------------------------------------------------------------
+        # Delete the local branch (never the remote one)
+
+        origin = repo.gitflow_origin()
+        remoteStillThere = False
+        deleted = False
+        if deleteBranch and branch in repo.branches.local:
+            # Checked here rather than by 'git branch -d', which compares with the
+            # branch's upstream: we keep the remote branch, which may be behind.
+            if not repo.is_ancestor(self.tip(branch), self.tip(lastTarget)):
+                self.abortAfterSteps(
+                    _("{0} isn’t fully merged into {1}.", bquo(branch), bquo(lastTarget)),
+                    _("It was kept."))
+
+            if repo.head_branch_shorthand == branch:
+                yield from self.flowCheckout(lastTarget)
+
+            # Not libgit2's branch deletion: along with branch.<name>, it drops any
+            # config key containing "branch.<name>.", gitflow.branch.<name>.base included.
+            self.epilog.effects |= TaskEffects.Refs
+            yield from self.flowGit("branch", "-D", branch)
+            deleted = True
+
+            # As in git-flow, the recorded base goes only once no copy of the branch is left
+            remoteStillThere = f"{RefPrefix.REMOTES}{origin}/{branch}" in repo.references
+            if not remoteStillThere:
+                repo.gitflow_forget_branch(branch)
+
+        # --------------------------------------------------------------------
+        # Report
+
+        if not self.doneSteps and not deleted:
+            self.epilog.status = _("Nothing left to do: {0} is already finished.", tquo(branch))
+            return
+
+        self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head | TaskEffects.Workdir
+        self.epilog.jumpTo = NavLocator.inRef(RefPrefix.HEADS + lastTarget)
+        status = [_("{0} finished.", tquo(branch))]
+        if remoteStillThere:
+            status.append(_("{0} is still on {1}.", tquo(branch), tquo(origin)))
+        self.epilog.status = " ".join(status)
+
+
+class GitFlowFinishFeature(GitFlowFinish):
+    kind = GitFlowKind.FEATURE
+
+
 START_TASKS: dict[GitFlowKind, type[GitFlowStart]] = {
     GitFlowKind.FEATURE: GitFlowStartFeature,
     GitFlowKind.RELEASE: GitFlowStartRelease,
     GitFlowKind.HOTFIX: GitFlowStartHotfix,
+}
+
+FINISH_TASKS: dict[GitFlowKind, type[GitFlowFinish]] = {
+    GitFlowKind.FEATURE: GitFlowFinishFeature,
 }

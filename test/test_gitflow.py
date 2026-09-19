@@ -4,11 +4,13 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import os
 import re
 import shlex
 
 import pytest
 
+from gitfourchette import tasks
 from gitfourchette.forms.gitflowinitdialog import GitFlowInitDialog
 from gitfourchette.forms.quicklaunch import QuickLaunch
 from gitfourchette.forms.textinputdialog import TextInputDialog
@@ -724,3 +726,359 @@ def testQuickLaunchGitFlowEntriesFollowRepo(tempDir, mainWindow):
     assert not any("Git Flow" in title for title in palette.visibleTitles())
     assert paletteQuery(palette, "start feature") == []
     palette.close()
+
+
+# -----------------------------------------------------------------------------
+# Finish feature
+
+def makeFeature(wd: str, name: str = "x", base: str = "develop", checkout: bool = True):
+    """A feature branch with one commit of its own, started from `base` the way git-flow does."""
+    shell(f"""
+        git checkout -q -b feature/{name} {base}
+        echo {name} > {name}.txt
+        git add {name}.txt
+        git commit -q -m 'feature {name}'
+        git config gitflow.branch.feature/{name}.base {base}
+        {"" if checkout else f"git checkout -q {base}"}
+    """, wd)
+
+
+def makeConflictingFeature(wd: str):
+    """feature/x and develop both change shared.txt, differently. HEAD on develop."""
+    shell("""
+        git checkout -q -b feature/x develop
+        echo 'feature side' > shared.txt
+        git add shared.txt
+        git commit -q -m 'feature side'
+        git config gitflow.branch.feature/x.base develop
+        git checkout -q develop
+        echo 'develop side' > shared.txt
+        git add shared.txt
+        git commit -q -m 'develop side'
+    """, wd)
+
+
+def countMerges(repo: Repo, branch: str) -> int:
+    walker = repo.walk(repo.branches.local[branch].target)
+    walker.simplify_first_parent()
+    return sum(1 for commit in walker if len(commit.parent_ids) > 1)
+
+
+def finishFromSidebar(rw, branch: str, pattern: str):
+    menu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByRef(RefPrefix.HEADS + branch))
+    triggerMenuAction(menu, pattern)
+
+
+def confirmFinish(rw, pattern: str, delete: bool = True):
+    qmb = findQMessageBox(rw, pattern)
+    assert qmb.checkBox().isChecked()  # deleting is the default, as in git-flow
+    qmb.checkBox().setChecked(delete)
+    qmb.accept()
+
+
+@pytest.mark.parametrize("method", ["sidebar", "repomenu"])
+@pytest.mark.parametrize("delete", [True, False])
+def testFinishFeature(tempDir, mainWindow, method, delete):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    featureTip = repo.branches.local["feature/x"].target
+    assert repo.head_branch_shorthand == "feature/x"
+
+    if method == "sidebar":
+        finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    else:
+        assert "Finish Feature “x”…" in flowMenuTitles(mainWindow)
+        triggerMenuAction(flowMenu(mainWindow), "finish feature .x.")
+
+    qmb = findQMessageBox(rw, "merge .feature/x. into .develop.")
+    assert qmb.checkBox().text() == "Delete local branch “feature/x” afterwards"
+    confirmFinish(rw, "merge .feature/x. into .develop.", delete)
+
+    # A merge commit, even for a single-commit feature
+    mergeCommit = repo.peel_commit(repo.branches.local["develop"].target)
+    assert mergeCommit.parent_ids[1] == featureTip
+    assert mergeCommit.message.startswith("Merge branch 'feature/x' into develop")
+    assert repo.head_branch_shorthand == "develop"
+
+    assert ("feature/x" in repo.branches.local) == (not delete)
+    assert repo.gitflow_branch_base("feature/x") == ("" if delete else "develop")
+    config = readTextFile(f"{wd}.git/config")
+    if delete:
+        assert '"branch.feature/x"' not in config
+    else:
+        assert '"branch.feature/x"' in config
+    assert re.search(r"feature/x.+finished", mainWindow.statusBar().currentMessage(), re.IGNORECASE)
+
+
+def testFinishFeatureNotOnBranch(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    shell("git checkout -q master", wd)
+    rw = mainWindow.openRepo(wd)
+    featureTip = rw.repo.branches.local["feature/x"].target
+
+    # Not the current branch: only the sidebar offers it
+    assert not any(t.startswith("Finish") for t in flowMenuTitles(mainWindow))
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+
+    assert rw.repo.head_branch_shorthand == "develop"
+    assert rw.repo.peel_commit(rw.repo.head_commit_id).parent_ids[1] == featureTip
+    assert "feature/x" not in rw.repo.branches.local
+
+
+def testFinishFeatureIntoRecordedBase(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch other master~1", wd)
+    makeFeature(wd, base="other")
+    rw = mainWindow.openRepo(wd)
+    developBefore = rw.repo.branches.local["develop"].target
+    featureTip = rw.repo.branches.local["feature/x"].target
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .other.")
+
+    assert rw.repo.head_branch_shorthand == "other"
+    assert rw.repo.peel_commit(rw.repo.branches.local["other"].target).parent_ids[1] == featureTip
+    assert rw.repo.branches.local["develop"].target == developBefore
+
+
+def testFinishFeatureConflictThenResume(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeConflictingFeature(wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    mergesBefore = countMerges(repo, "develop")
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+
+    # Stopped in the usual merge state, saying how to pick up from here
+    acceptQMessageBox(rw, r"merging .feature/x. into .develop. caused conflicts.+choose finish feature .x.… again")
+    assert repo.state() == RepositoryState.MERGE
+    assert repo.any_conflicts
+    assert rw.mergeBanner.isVisible()
+    assert rw.repoModel.prefs.draftCommitMessage.startswith("Merge branch 'feature/x' into develop")
+
+    # Finishing again right away is refused: conflicts first, then the merge itself
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    acceptQMessageBox(rw, "fix merge conflicts before")
+    shell("git checkout --theirs shared.txt && git add shared.txt", wd)
+    rw.refreshRepo()
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    acceptQMessageBox(rw, "a merge is in progress")
+    assert repo.state() == RepositoryState.MERGE
+
+    # Conclude the merge with the message git prepared
+    rw.diffArea.commitButton.click()
+    commitDialog = findQDialog(rw, "commit")
+    assert commitDialog.getFullMessage().startswith("Merge branch 'feature/x' into develop")
+    commitDialog.accept()
+    assert repo.state() == RepositoryState.NONE
+    assert countMerges(repo, "develop") == mergesBefore + 1
+
+    # One click away: the merge that just got committed is the feature's
+    assert "Finish Feature “x”…" in flowMenuTitles(mainWindow)
+    triggerMenuAction(flowMenu(mainWindow), "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+
+    assert countMerges(repo, "develop") == mergesBefore + 1  # no second merge
+    assert "feature/x" not in repo.branches.local
+    assert repo.head_branch_shorthand == "develop"
+    assert repo.gitflow_branch_base("feature/x") == ""
+
+
+def testFinishFeatureAbortedMergeRetries(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeConflictingFeature(wd)
+    rw = mainWindow.openRepo(wd)
+    developTip = rw.repo.branches.local["develop"].target
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+    acceptQMessageBox(rw, "caused conflicts")
+
+    rw.mergeBanner.buttons[-1].click()
+    acceptQMessageBox(rw, "abort.+merge")
+    assert rw.repo.state() == RepositoryState.NONE
+    assert rw.repo.branches.local["develop"].target == developTip
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+    acceptQMessageBox(rw, "caused conflicts")
+    assert rw.repo.state() == RepositoryState.MERGE
+    assert "feature/x" in rw.repo.branches.local
+
+
+def refsSnapshot(repo: Repo) -> dict[str, Oid]:
+    return {name: repo.references[name].target for name in repo.listall_references()}
+
+
+def testFinishRefusesDirtyTree(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    writeFile(f"{wd}master.txt", "changed\n")
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    acceptQMessageBox(rw, "uncommitted changes to tracked files")
+    assert refsSnapshot(rw.repo) == refsBefore
+    assert rw.repo.head_branch_shorthand == "feature/x"
+
+
+def testFinishRefusesDetachedHead(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    shell("git checkout -q --detach master", wd)
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    acceptQMessageBox(rw, "detached HEAD")
+    assert refsSnapshot(rw.repo) == refsBefore
+
+
+def testFinishRefusesWhenCheckedOutInOtherWorktree(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    worktreePath = os.path.normpath(f"{wd}/../elsewhere")
+    shell(f"git worktree add -q {shlex.quote(worktreePath)} develop", wd)
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    acceptQMessageBox(rw, "develop. is checked out in another worktree")
+    assert refsSnapshot(rw.repo) == refsBefore
+
+
+def testFinishFeatureAheadOfItsUpstreamIsDeleted(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd)
+    barePath = os.path.normpath(f"{wd}/../remote.git")
+    shell(f"""
+        git init -q --bare {shlex.quote(barePath)}
+        git remote set-url origin {shlex.quote(barePath)}
+        git push -q -u origin feature/x
+        git commit -q --allow-empty -m 'not pushed yet'
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    pushedTip = repo.branches.remote["origin/feature/x"].target
+    featureTip = repo.branches.local["feature/x"].target
+    assert repo.compare_branch_with_remote("feature/x", "origin") == BranchComparison.AHEAD
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+
+    # 'git branch -d' would refuse here: the branch is ahead of its upstream
+    assert repo.peel_commit(repo.branches.local["develop"].target).parent_ids[1] == featureTip
+    assert "feature/x" not in repo.branches.local
+    # The remote branch is kept, and so is the base that git-flow would need to finish it from there
+    assert repo.branches.remote["origin/feature/x"].target == pushedTip
+    assert repo.gitflow_branch_base("feature/x") == "develop"
+    assert re.search(r"feature/x.+finished.+feature/x.+is still on .origin", mainWindow.statusBar().currentMessage(),
+                     re.IGNORECASE)
+
+
+def testFinishStoppedByHookIsNotCalledAConflict(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd, checkout=False)
+    shell("git commit -q --allow-empty -m 'develop moves on'", wd)  # so the merge isn't a no-op
+    hookPath = f"{wd}.git/hooks/pre-merge-commit"
+    writeFile(hookPath, "#!/bin/sh\necho 'merges need a ticket number' >&2\nexit 1\n")
+    os.chmod(hookPath, 0o755)
+    rw = mainWindow.openRepo(wd)
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+    qmb = findQMessageBox(rw, "git stopped before committing the merge of .feature/x. into .develop.")
+    assert "caused conflicts" not in qmb.text()
+    assert "merges need a ticket number" in qmb.detailedText()
+    qmb.accept()
+    assert rw.repo.state() == RepositoryState.MERGE
+    assert not rw.repo.any_conflicts
+    assert "feature/x" in rw.repo.branches.local
+
+
+def testFinishFeatureCheckoutFailureLeavesRepoAsItWas(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("""
+        git checkout -q develop
+        echo tracked > blocker.txt
+        git add blocker.txt
+        git commit -q -m 'blocker on develop'
+    """, wd)
+    makeFeature(wd, base="develop~1")
+    shell("git config gitflow.branch.feature/x.base develop", wd)
+    writeFile(f"{wd}blocker.txt", "untracked on feature/x\n")
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+    qmb = findQMessageBox(rw, "untracked working tree files would be overwritten")
+    assert "already done" not in qmb.text().lower()
+    qmb.accept()
+    assert refsSnapshot(rw.repo) == refsBefore
+    assert rw.repo.head_branch_shorthand == "feature/x"
+
+
+def testContinueFinishingMenuIgnoresStaleMergedBranches(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeFeature(wd, "old", checkout=False)
+    shell("""
+        git merge -q --no-ff --no-edit feature/old
+        git commit -q --allow-empty -m 'develop moves on'
+        git branch feature/new develop
+    """, wd)
+    makeConflictingFeature(wd)
+    rw = mainWindow.openRepo(wd)
+    assert rw.repo.head_branch_shorthand == "develop"
+
+    startItems = ["Start Feature…", "Start Release…", "Start Hotfix…"]
+    assert flowMenuTitles(mainWindow) == startItems
+
+    finishFromSidebar(rw, "feature/x", "finish feature .x.")
+    confirmFinish(rw, "merge .feature/x. into .develop.")
+    acceptQMessageBox(rw, "caused conflicts")
+    shell("git checkout --theirs shared.txt && git add shared.txt && git commit -q --no-edit", wd)
+    rw.refreshRepo()
+
+    assert flowMenuTitles(mainWindow) == startItems + ["Finish Feature “x”…"]
+
+
+def testStartAndFinishRefusedDuringRebase(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeConflictingFeature(wd)
+    shell("""
+        git checkout -q feature/x
+        git rebase develop || true
+        git checkout --theirs shared.txt
+        git add shared.txt
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    assert rw.repo.state() == RepositoryState.REBASE_INTERACTIVE  # what libgit2 calls git's default rebase
+    assert not rw.repo.any_conflicts
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    acceptQMessageBox(rw, "a rebase is in progress.+conclude or abort it")
+
+    tasks.GitFlowFinishFeature.invoke(rw, "feature/x")
+    acceptQMessageBox(rw, "a rebase is in progress.+conclude or abort it")
+    assert rw.repo.state() == RepositoryState.REBASE_INTERACTIVE  # what libgit2 calls git's default rebase
