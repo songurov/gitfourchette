@@ -591,6 +591,20 @@ DiffArea QLabel.panelTitle {
     color: ${textDim};
 }
 
+/* Secondary text, e.g. a sample of what a setting produces */
+QLabel.secondary {
+    color: ${textDim};
+}
+
+/* Settings fields get an outline that reads at 3:1 against the window. The
+   :focus and :disabled rules above still win over this one. */
+PrefsDialog QLineEdit,
+PrefsDialog QSpinBox,
+PrefsDialog QComboBox,
+PrefsDialog QPlainTextEdit {
+    border-color: ${controlBorder};
+}
+
 SearchBar QLineEdit {
     border: 1px solid ${border};
     border-radius: ${outerRadius};

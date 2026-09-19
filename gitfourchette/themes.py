@@ -19,7 +19,7 @@ from pathlib import Path
 from string import Template
 
 from gitfourchette.qt import *
-from gitfourchette.toolbox import mixColors, relativeLuminance
+from gitfourchette.toolbox import mixColors, relativeLuminance, contrastRatio
 
 
 class ThemeName(enum.StrEnum):
@@ -96,14 +96,23 @@ def pinnedColorScheme(styleName: str) -> Qt.ColorScheme:
     Anything else, including the built-in theme without a mode, follows the
     system, which Qt spells ColorScheme.Unknown.
     """
-    tokens = styleName.split(",")
-    if tokens[0] != ThemeName.BuiltIn:
+    engine, mode, _accent = parseStyle(styleName)
+    if engine != ThemeName.BuiltIn:
         return Qt.ColorScheme.Unknown
-    if "dark" in tokens[1:]:
+    if mode == "dark":
         return Qt.ColorScheme.Dark
-    if "light" in tokens[1:]:
+    if mode == "light":
         return Qt.ColorScheme.Light
     return Qt.ColorScheme.Unknown
+
+
+def systemPrefersHighContrast() -> bool:
+    """Whether the system asks for more contrast (e.g. Increase Contrast on macOS)."""
+    try:
+        preference = QGuiApplication.styleHints().accessibility().contrastPreference()
+    except AttributeError:  # pragma: no cover - Qt < 6.10
+        return False
+    return preference == Qt.ContrastPreference.HighContrast
 
 
 def withThemeMode(styleName: str, dark: bool) -> str:
@@ -139,6 +148,8 @@ class ThemeColors:
     danger: str = "red"
 
     accent: str = ThemeAccent.Blue
+    highContrast: bool = False
+    "The system asks for more contrast: outlines get stronger and secondary text stops being dimmed."
     outerRadius: int = 7
     innerRadius: int = round(outerRadius * .75)
 
@@ -151,6 +162,7 @@ class ThemeColors:
     tooltipBorder: str = "#f0f"
     textDim: str = "#f0f"
     textFaint: str = "#f0f"
+    controlBorder: str = "#f0f"
     inputDisabled: str = "#f0f"
     light: str = "#f0f"
     midlight: str = "#f0f"
@@ -175,6 +187,18 @@ class ThemeColors:
         def mix(a: str, b: str, r=.5):
             return mixColors(QColor(a), QColor(b), r).name()
 
+        def readableMix(ratio: float, minContrast: float) -> str:
+            """
+            The dimmest mix of text into surface, starting at `ratio`, that stands out
+            from both the window and the surface by at least `minContrast`:1.
+            """
+            while True:
+                color = mix(self.text, self.surface, ratio)
+                if ratio <= 0 or all(contrastRatio(QColor(color), QColor(ground)) >= minContrast
+                                     for ground in (self.bg, self.surface)):
+                    return color
+                ratio = round(ratio - .05, 2)
+
         # Determine whether 'onAccent' should be white or black.
         isDarkTheme = QColor(self.text).lightness() > QColor(self.surface).lightness()
         accentLuminance = relativeLuminance(QColor(self.accent))
@@ -191,8 +215,12 @@ class ThemeColors:
         self.buttonHover        = mix(self.button, self.text, .04)
         self.buttonPressed      = mix(self.button, self.accent, .66)
         self.tooltipBorder      = mix(self.tooltipText, self.tooltipBg, .8)
-        self.textDim            = mix(self.text, self.surface, .4)
+        # Secondary text still reads at 4.5:1 (WCAG AA); with more contrast asked for, it isn't dimmed at all.
+        self.textDim            = self.text if self.highContrast else readableMix(.4, 4.5)
         self.textFaint          = mix(self.text, self.surface, .7)
+        # Outline of checkboxes, radio buttons and fields: 3:1 against what's around it (WCAG
+        # non-text contrast), 4.5:1 with more contrast asked for.
+        self.controlBorder      = readableMix(.6, 4.5 if self.highContrast else 3.0)
         self.inputDisabled      = mix(self.bg, self.surface, .5)
         self.onAccent           = "white" if accentLuminance < luminanceThreshold else "black"
 
@@ -218,6 +246,7 @@ class ThemeColors:
         Example: "gitfourchette-builtin,dark,#ff00ff"
 
         Omit lightOrDark and/or #accentHex to infer colors from system palette.
+        The system's contrast preference (Increase Contrast on macOS) is honored too.
         """
 
         engine, _mode, accentToken = parseStyle(styleName)
@@ -232,6 +261,8 @@ class ThemeColors:
         theme = MODERN_DARK if dark else MODERN_LIGHT
         if accent is not None:
             theme = dataclasses.replace(theme, accent=accent.name())
+        if systemPrefersHighContrast():
+            theme = dataclasses.replace(theme, highContrast=True)
 
         return theme
 

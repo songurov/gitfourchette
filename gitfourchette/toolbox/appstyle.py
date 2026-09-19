@@ -39,6 +39,10 @@ if not (MACOS or WINDOWS):
     })
 
 
+_PE = QStyle.PrimitiveElement
+_State = QStyle.StateFlag
+
+
 class AppStyle(QProxyStyle):
     """
     Draws the app with a stock Qt style, but hands out our own icons where Qt
@@ -47,6 +51,43 @@ class AppStyle(QProxyStyle):
     Dialog buttons ask the style for their icons, so without this, a foreign
     icon set shows up on the very buttons the user is looking at.
     """
+
+    indicatorOutline: tuple[QColor, QColor] | None = None
+    """
+    Outline for checkbox and radio button indicators (enabled, disabled), set
+    by our own theme. Fusion derives the outline from the window color, which
+    leaves an unchecked box nearly invisible on a dark palette (1.1:1). Only
+    the outline is redrawn; the box, the check mark, the focus ring and the
+    size stay the style's own. None leaves the style alone (native themes).
+    """
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        super().drawPrimitive(element, option, painter, widget)
+
+        if (self.indicatorOutline is None
+                or element not in (_PE.PE_IndicatorCheckBox, _PE.PE_IndicatorRadioButton)
+                or self.baseStyle().objectName().lower() != "fusion"):
+            return
+
+        state = option.state
+        if state & _State.State_HasFocus and state & _State.State_KeyboardFocusChange:
+            return  # Keep the style's focus outline
+
+        enabledColor, disabledColor = self.indicatorOutline
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(QPen(enabledColor if state & _State.State_Enabled else disabledColor))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        rect = option.rect
+        # Same geometry as Fusion's own outline, so that it's covered exactly
+        if element == _PE.PE_IndicatorCheckBox:
+            painter.translate(.5, .5)
+            painter.drawRect(rect.adjusted(0, 0, -1, -1))
+        else:
+            center = QPointF(rect.center()) + QPointF(1, 1)
+            radius = (rect.width() + (rect.width() + 1) % 2) / 2.0 - 1
+            painter.drawEllipse(center, radius, radius)
+        painter.restore()
 
     def standardIcon(self, standardIcon, option=None, widget=None) -> QIcon:
         try:

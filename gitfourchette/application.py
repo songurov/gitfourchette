@@ -636,10 +636,12 @@ class GFApplication(QApplication):
         headerBg = mixColors(windowColor, textColor, .07)
         headerFg = mixColors(windowColor, textColor, .82)
         faintSep = mixColors(windowColor, textColor, .18)
+        secondaryFg = mixColors(windowColor, textColor, .6)
         qss += textwrap.dedent(f"""
             ContextHeader {{ background-color: {headerBg.name()}; }}
             ContextHeader QLabel {{ color: {headerFg.name()}; }}
             QFaintSeparator {{ background: {faintSep.name()}; color: transparent; }}
+            QLabel.secondary {{ color: {secondaryFg.name()}; }}
         """)
 
         if MACOS:  # Strip iOS-y QMessageBox styling (all bold)
@@ -659,6 +661,11 @@ class GFApplication(QApplication):
         # our icons instead of the desktop's
         if effectiveStyle and not paletteOnly:
             self.setStyle(AppStyle(effectiveStyle))
+
+        # Our theme knows an outline color that reads on its palette; native styles draw their own
+        AppStyle.indicatorOutline = None
+        if customTheme is not None:
+            AppStyle.indicatorOutline = (QColor(customTheme.controlBorder), QColor(customTheme.textFaint))
 
         if MACOS:
             self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus, settings.qtIsNativeMacosStyle())

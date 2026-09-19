@@ -77,6 +77,7 @@ from .qtutils import (
     lerp,
     mixColors,
     relativeLuminance,
+    contrastRatio,
     DocumentLinks,
     findParentWidget,
     setTabOrder,

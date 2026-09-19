@@ -445,3 +445,30 @@ def testCountOutsideItsRangeIsSavedAsShown(mainWindow):
     assert spinBox.value() == 1
     dlg.accept()
     assert settings.prefs.maxRecentRepos == 1
+
+
+def testSectionTitlesAndPreviewsAreNotDrawnDisabled(mainWindow):
+    from gitfourchette.themes import ThemeName
+    from gitfourchette.toolbox import contrastRatio
+
+    GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark")
+    try:
+        dlg = GFApplication.instance().openPrefsDialog("doubleClickTabBar")
+        window = dlg.palette().color(QPalette.ColorRole.Window)
+
+        # Section titles on the Mouse Shortcuts page are titles, not unavailable options
+        titles = [label for label in dlg.findChildren(QLabel)
+                  if label.text() in ("Repository tabs:", "File lists:", "Diff view:")]
+        assert len(titles) == 3
+        for title in titles:
+            assert title.isEnabled()
+            assert contrastRatio(title.palette().color(QPalette.ColorRole.WindowText), window) >= 7
+
+        # The date format's sample is secondary text, readable at 4.5:1
+        preview: QLabel = dlg.findChild(QWidget, "prefctl_shortTimeFormat").findChild(QLabel)
+        preview.ensurePolished()
+        assert preview.isEnabled()
+        assert contrastRatio(preview.palette().color(QPalette.ColorRole.WindowText), window) >= 4.5
+        dlg.reject()
+    finally:
+        GFApplication.applyPrefs(qtStyle="")

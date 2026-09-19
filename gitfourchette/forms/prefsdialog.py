@@ -180,8 +180,7 @@ class PrefsDialog(QDialog):
                 labelKey = key.removeprefix(self.LabelPrefix)
                 labelText = trtables.prefKey(labelKey)
                 label = QLabel(labelText)
-                label.setEnabled(False)
-                tweakWidgetFont(label, bold=True)
+                tweakWidgetFont(label, bold=True)  # A title, not an option that happens to be unavailable
                 if form.count():  # add a spacer before the label
                     form.addRow(makeshiftSpacer())
                 form.addRow(label)
@@ -693,7 +692,7 @@ class PrefsDialog(QDialog):
             self.assign(prefKey, text)
 
         preview = QLabel(bogusTime)
-        preview.setEnabled(False)
+        preview.setProperty("class", "secondary")  # Dimmed, but still readable
         preview.setMaximumWidth(preview.fontMetrics().horizontalAdvance(bogusTime))
         preview.setText(genPreview(prefValue))
 

@@ -415,6 +415,14 @@ def relativeLuminance(color: QColor) -> float:
     return r + g + b
 
 
+def contrastRatio(color1: QColor, color2: QColor) -> float:
+    """Contrast ratio per WCAG 2.2, from 1 (no contrast) to 21 (black on white)"""
+    # https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio
+    l1 = relativeLuminance(color1)
+    l2 = relativeLuminance(color2)
+    return (max(l1, l2) + .05) / (min(l1, l2) + .05)
+
+
 def findParentWidget(o: QObject) -> QWidget:
     p = o.parent()
     while p:
