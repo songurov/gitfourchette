@@ -396,12 +396,19 @@ def qlvGetSelection(view: QListView, role=Qt.ItemDataRole.DisplayRole):
     return data
 
 
-def qlvSummonToolTip(listView: QListView, row: int, x: int = -16):
+def qlvSummonToolTip(listView: QListView | QTreeView, row: int, x: int = -16):
+    """
+    Summon the tooltip of the nth visible row from the top of an unscrolled view.
+    Works on QListView (e.g. GraphView) and QTreeView (e.g. FileList, in both list and tree modes).
+    """
+
     # If passing in a negative x, summon tooltip from right edge of viewport
     if x < 0:
         x = listView.viewport().width() + x
 
-    assert listView.uniformItemSizes(), "this function assumes uniform item heights"
+    # QTreeView spells QListView's uniformItemSizes as uniformRowHeights
+    uniform = listView.uniformRowHeights() if isinstance(listView, QTreeView) else listView.uniformItemSizes()
+    assert uniform, "this function assumes uniform item heights"
     rowHeight = listView.sizeHintForRow(0)
     y = row * rowHeight + 2
 

@@ -80,6 +80,22 @@ def testLfsFileToolTip(tempDir, mainWindow):
     assert re.search(r"lfs object hash:.+4b8c427", tip, re.IGNORECASE | re.DOTALL)
 
 
+def testLfsFileToolTipInTreeView(tempDir, mainWindow):
+    # The mainWindow fixture pins the flat list; the tree is the default presentation.
+    GFApplication.applyPrefs(fileTreeView=True)
+    wd = unpackRepo(tempDir, "lfsrepo")
+    rw = mainWindow.openRepo(wd)
+
+    addCommit = Oid(hex="0b0ff287d62e3ed6ea2725f078ab67b4d2a70f77")
+    rw.jump(NavLocator.inCommit(addCommit, "image1.png"), check=True)
+    assert rw.committedFiles.treeMode
+
+    tip = qlvSummonToolTip(rw.committedFiles, 0)
+    tip = stripHtml(tip)
+    assert re.search(r"size:.+79 bytes \(lfs\)", tip, re.IGNORECASE | re.DOTALL)
+    assert re.search(r"lfs object hash:.+4b8c427", tip, re.IGNORECASE | re.DOTALL)
+
+
 @requiresLfs
 def testLfsAddImageInWorkdir(tempDir, mainWindow):
     wd = unpackRepo(tempDir, "lfsrepo")
