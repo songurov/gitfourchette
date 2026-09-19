@@ -26,6 +26,10 @@ WORKS_WITHOUT_REPO = "gfWorksWithoutRepo"
 """QAction property: the command makes sense on Home, with no repo open.
 Opt-in, so a new menu item stays off Home until someone says it works there."""
 
+QUICKLAUNCH_SEARCH_ONLY = "gfQuickLaunchSearchOnly"
+"""QAction property: in Quick Launch, the command only shows up once something
+is typed, e.g. a command that most repos never need."""
+
 _DetailRole = Qt.ItemDataRole.UserRole + 1
 _IsHeaderRole = Qt.ItemDataRole.UserRole + 2
 _EntryRole = Qt.ItemDataRole.UserRole + 3
@@ -89,7 +93,8 @@ def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = (), withoutRepo: b
     menu's name isn't shown, but the query can still match it ("data overview").
 
     With `withoutRepo`, only the commands marked WORKS_WITHOUT_REPO: on Home,
-    Push or Blame have nothing to act on.
+    Push or Blame have nothing to act on. Commands marked QUICKLAUNCH_SEARCH_ONLY
+    are left off the first screen, until something is typed.
     """
     skip = set(skip)
     entries: dict[str, QuickLaunchEntry] = {}
@@ -118,7 +123,8 @@ def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = (), withoutRepo: b
                 continue
             shortcut = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
             entries[title] = QuickLaunchEntry(title, action.trigger, detail=shortcut, icon=action.icon(),
-                                              keywords=rootName)
+                                              keywords=rootName,
+                                              searchOnly=bool(action.property(QUICKLAUNCH_SEARCH_ONLY)))
 
     for rootAction in menuBar.actions():
         rootMenu = rootAction.menu()

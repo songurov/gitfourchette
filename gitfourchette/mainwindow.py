@@ -145,6 +145,13 @@ class MainWindow(QMainWindow):
         self.fillRecentMenu()
         self.fillWorkspaceMenu()
 
+        # Repo > Git Flow. Filled when it opens: what it offers depends on the repo in front.
+        self.gitFlowMenu = QMenu(self)
+        self.gitFlowMenu.setObjectName("GitFlowMenu")
+        self.gitFlowMenu.setToolTipsVisible(True)
+        self.gitFlowMenu.aboutToShow.connect(self.fillGitFlowMenu)
+        self.fillGitFlowMenu()
+
         self.welcomeWidget.ui.recentReposButton.setMenu(self.recentMenu)
         self.mainToolBar.workspaceAction.setMenu(self.workspaceMenu)
         self.mainToolBar.openRepoAction.triggered.connect(self.openDialog)
@@ -496,6 +503,7 @@ class MainWindow(QMainWindow):
             onHome = False
         except NoRepoWidgetError:
             onHome = True
+        self.fillGitFlowMenu()  # for the repo in front, not the one it was last opened for
         commands = menuBarEntries(self.globalMenuBar, skip=[self.recentMenu, self.workspaceMenu],
                                   withoutRepo=onHome)
         if onHome:
@@ -715,6 +723,15 @@ class MainWindow(QMainWindow):
         ActionDef.addToQMenu(self.workspaceMenu, *actions)
         self.mainToolBar.setWorkspaceName(current if history.getWorkspace(current) else "")
 
+
+    def fillGitFlowMenu(self) -> None:
+        try:
+            items = self.currentRepoWidget().gitFlowMenuItems()
+        except NoRepoWidgetError:
+            items = [TaskBook.action(self, tasks.GitFlowInit, enabled=False)]
+
+        self.gitFlowMenu.clear()
+        ActionDef.addToQMenu(self.gitFlowMenu, *items)
 
     def rememberCurrentWorkspace(self) -> None:
         """Keep the active workspace in sync with the tabs that are open."""

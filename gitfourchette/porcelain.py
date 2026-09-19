@@ -730,6 +730,103 @@ class WorktreeInfo:
     "The workdir is gone, so 'git worktree prune' would clean up this entry."
 
 
+class GitFlowKind(enum.StrEnum):
+    """Git Flow branch types that can be started and finished."""
+    FEATURE = "feature"
+    RELEASE = "release"
+    HOTFIX = "hotfix"
+
+
+class BranchComparison(enum.IntEnum):
+    """How a local branch stands against its namesake on a remote, as last fetched."""
+    NO_REMOTE = 0
+    "The remote-tracking branch doesn't exist."
+    EQUAL = 1
+    AHEAD = 2
+    "The local branch has commits that the remote-tracking branch hasn't."
+    BEHIND = 3
+    "The local branch could be fast-forwarded to the remote-tracking branch."
+    DIVERGED = 4
+
+
+@_dataclasses.dataclass(frozen=True)
+class GitFlowConfig:
+    """
+    Git Flow settings, stored under the same config keys as the git-flow
+    command line tools (AVH edition) so that git-flow, Fork and SourceTree
+    share them.
+
+    An empty prefix switches that branch type off.
+    """
+
+    master: str
+    "Production branch (gitflow.branch.master)."
+
+    develop: str
+    "Integration branch (gitflow.branch.develop)."
+
+    feature: str = "feature/"
+    bugfix: str = "bugfix/"
+    release: str = "release/"
+    hotfix: str = "hotfix/"
+    support: str = "support/"
+    versiontag: str = ""
+
+    KEYS: _typing.ClassVar[dict[str, str]] = {
+        "master": "gitflow.branch.master",
+        "develop": "gitflow.branch.develop",
+        "feature": "gitflow.prefix.feature",
+        "bugfix": "gitflow.prefix.bugfix",
+        "release": "gitflow.prefix.release",
+        "hotfix": "gitflow.prefix.hotfix",
+        "support": "gitflow.prefix.support",
+        "versiontag": "gitflow.prefix.versiontag",
+    }
+    "Dataclass field -> config key."
+
+    BRANCH_PREFIX_FIELDS: _typing.ClassVar[tuple[str, ...]] = ("feature", "bugfix", "release", "hotfix", "support")
+
+    def prefix(self, kind: GitFlowKind) -> str:
+        return getattr(self, kind.value)
+
+    def classify(self, branch: str) -> tuple[GitFlowKind, str] | None:
+        """
+        Return the Git Flow kind of a local branch and its name without the
+        prefix, e.g. ("feature", "login") for "feature/login".
+        The longest matching prefix wins. Return None for the production and
+        integration branches, for branches outside any prefix, and for
+        bugfix/support branches (which can't be started or finished here).
+        """
+        if branch in (self.master, self.develop):
+            return None
+
+        best_field = ""
+        best_prefix = ""
+        for field in self.BRANCH_PREFIX_FIELDS:
+            prefix = getattr(self, field)
+            if len(best_prefix) < len(prefix) < len(branch) and branch.startswith(prefix):
+                best_field = field
+                best_prefix = prefix
+
+        try:
+            kind = GitFlowKind(best_field)
+        except ValueError:  # no prefix matches, or it's a bugfix/support branch
+            return None
+        return kind, branch.removeprefix(best_prefix)
+
+    def branch_name(self, kind: GitFlowKind, name: str) -> str:
+        return self.prefix(kind) + name
+
+    def tag_name(self, version: str) -> str:
+        return self.versiontag + version
+
+    def finish_targets(self, kind: GitFlowKind, base: str) -> list[str]:
+        """Branches that finishing a branch of this kind merges into, in order."""
+        if kind == GitFlowKind.FEATURE:
+            return [base or self.develop]
+        return [self.master, self.develop]
+
+
 class Repo(_VanillaRepository):
     """
     Drop-in replacement for pygit2.Repository with convenient front-ends to common git operations.
@@ -1554,6 +1651,181 @@ class Repo(_VanillaRepository):
         else:
             with _suppress(KeyError):
                 del self.config[key]
+
+    # -------------------------------------------------------------------------
+    # Git Flow
+
+    def _local_config(self) -> GitConfig:
+        """The repo's own config file, as 'git config --local' writes it (also from a worktree)."""
+        return GitConfig(self.in_gitdir("config", common=True))
+
+    def gitflow_config(self) -> GitFlowConfig | None:
+        """
+        Git Flow settings of this repo, read at every config level (like
+        'git config --get'), or None if Git Flow isn't initialized here.
+
+        As in git-flow (AVH), "initialized" means: production and integration
+        branches configured, different, both existing as local branches, and at
+        least one gitflow.prefix key set. A fresh clone of a Git Flow repo, whose
+        integration branch only exists on the remote, isn't initialized yet.
+        """
+        config = self.config
+        master = self.get_config_value("gitflow.branch.master")
+        if not master:
+            return None
+
+        develop = self.get_config_value("gitflow.branch.develop")
+        if not develop or develop == master:
+            return None
+
+        local_branches = self.branches.local
+        if master not in local_branches or develop not in local_branches:
+            return None
+
+        if not any(entry.name.startswith("gitflow.prefix.") for entry in config):
+            return None
+
+        prefixes = {}
+        for field in ("feature", "bugfix", "release", "hotfix", "support", "versiontag"):
+            with _suppress(KeyError):
+                # A key present with an empty value stays empty (that branch type is off)
+                prefixes[field] = config[GitFlowConfig.KEYS[field]] or ""
+
+        return GitFlowConfig(master=master, develop=develop, **prefixes)
+
+    def gitflow_suggest_config(self) -> GitFlowConfig:
+        """
+        Starting point for setting up Git Flow: the current settings, else the
+        branch names that git-flow (AVH) would guess, else the defaults.
+        """
+        local_branches = set(self.branches.local)
+
+        def first_existing(candidates, exclude=""):
+            return next((c for c in candidates if c and c in local_branches and c != exclude), "")
+
+        configured_master = self.get_config_value("gitflow.branch.master")
+        master = first_existing([configured_master, "production", "main", "master"])
+        if not master and not self.head_is_unborn and not self.head_is_detached:
+            master = self.head_branch_shorthand
+        master = master or configured_master or "master"
+
+        configured_develop = self.get_config_value("gitflow.branch.develop")
+        develop = first_existing([configured_develop, "develop", "int", "integration"], exclude=master)
+        if not develop:
+            develop = configured_develop if configured_develop not in ("", master) else "develop"
+
+        prefixes = {}
+        config = self.config
+        for field in ("feature", "bugfix", "release", "hotfix", "support", "versiontag"):
+            with _suppress(KeyError):
+                prefixes[field] = config[GitFlowConfig.KEYS[field]] or ""
+
+        return GitFlowConfig(master=master, develop=develop, **prefixes)
+
+    def gitflow_write_config(self, cfg: GitFlowConfig):
+        """
+        Write all Git Flow settings to this repo's own config file, as
+        'git flow init' does. An empty prefix is written as an empty value,
+        not left out.
+        """
+        local = self._local_config()
+        for field, key in GitFlowConfig.KEYS.items():
+            local[key] = getattr(cfg, field)
+
+    def gitflow_origin(self) -> str:
+        """Remote that git-flow compares branches against."""
+        return self.get_config_value("gitflow.origin") or "origin"
+
+    def gitflow_flag(self, key: str) -> bool:
+        """Whether a boolean Git Flow setting (e.g. gitflow.allowdirty) is on. Unreadable counts as off."""
+        try:
+            return self.config.get_bool(key)
+        except (KeyError, GitError, ValueError):
+            return False
+
+    def gitflow_branch_base(self, branch: str) -> str:
+        """The branch that a Git Flow branch was started from, as recorded in the local config."""
+        try:
+            return self._local_config()[f"gitflow.branch.{branch}.base"] or ""
+        except KeyError:
+            return ""
+
+    def gitflow_set_branch_base(self, branch: str, base: str):
+        self._local_config()[f"gitflow.branch.{branch}.base"] = base
+
+    def gitflow_forget_branch(self, branch: str):
+        """
+        Remove the base recorded for a Git Flow branch, and the config section
+        that held it if nothing else is left in there. Other branches' entries
+        are untouched, even those whose names start with this one's.
+        """
+        local = self._local_config()
+        with _suppress(KeyError):
+            del local[f"gitflow.branch.{branch}.base"]
+        GitConfigHelper.scrub_empty_section(self.in_gitdir("config", common=True), "gitflow", f"branch.{branch}")
+
+    def is_ancestor(self, ancestor: Oid, descendant: Oid) -> bool:
+        """Like 'git merge-base --is-ancestor': a commit counts as its own ancestor."""
+        return ancestor == descendant or self.descendant_of(descendant, ancestor)
+
+    def compare_branch_with_remote(self, branch: str, remote: str) -> BranchComparison:
+        """
+        Compare a local branch with its namesake on a remote, as last fetched
+        (this doesn't fetch).
+        """
+        local_tip = self.branches.local[branch].target
+        remote_ref = self.references.get(f"{RefPrefix.REMOTES}{remote}/{branch}")
+        if remote_ref is None:
+            return BranchComparison.NO_REMOTE
+
+        remote_tip = remote_ref.peel(Commit).id
+        if remote_tip == local_tip:
+            return BranchComparison.EQUAL
+
+        ahead, behind = self.ahead_behind(local_tip, remote_tip)
+        if ahead and behind:
+            return BranchComparison.DIVERGED
+        elif behind:
+            return BranchComparison.BEHIND
+        else:
+            return BranchComparison.AHEAD
+
+    def gitflow_tag_merges(self, tag: str, branch_tip: Oid) -> bool:
+        """
+        Whether a tag points to a merge whose second parent is branch_tip, i.e.
+        the tag that finishing a release or hotfix puts on its merge into the
+        production branch.
+        """
+        ref = self.references.get(RefPrefix.TAGS + tag)
+        if ref is None:
+            return False
+        try:
+            commit = ref.peel(Commit)
+        except (GitError, ValueError):  # tag of something other than a commit
+            return False
+        return len(commit.parent_ids) >= 2 and commit.parent_ids[1] == branch_tip
+
+    def gitflow_merge_commit(self, branch_tip: Oid, target_tip: Oid) -> Oid | None:
+        """
+        The commit through which branch_tip entered the first-parent history of
+        target_tip: the merge commit that has branch_tip as a second parent, or
+        branch_tip itself if it got there without such a merge (fast-forward).
+        None if branch_tip isn't an ancestor of target_tip.
+        """
+        if not self.is_ancestor(branch_tip, target_tip):
+            return None
+
+        commit = self.peel_commit(target_tip)
+        while True:
+            if commit.id == branch_tip:
+                return branch_tip
+            parent_ids = commit.parent_ids
+            if branch_tip in parent_ids[1:]:
+                return commit.id
+            if not parent_ids or not self.is_ancestor(branch_tip, parent_ids[0]):
+                # It came in through some other merge
+                return branch_tip
+            commit = self.peel_commit(parent_ids[0])
 
     def get_reset_merge_file_list(self):
         self.index.read()

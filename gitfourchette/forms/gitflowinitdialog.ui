@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GitFlowInitDialog</class>
+ <widget class="QDialog" name="GitFlowInitDialog">
+  <property name="windowModality">
+   <enum>Qt::WindowModality::WindowModal</enum>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>480</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Initialize Git Flow</string>
+  </property>
+  <layout class="QFormLayout" name="formLayout">
+   <property name="fieldGrowthPolicy">
+    <enum>QFormLayout::FieldGrowthPolicy::ExpandingFieldsGrow</enum>
+   </property>
+   <item row="0" column="0">
+    <widget class="QLabel" name="masterLabel">
+     <property name="text">
+      <string>&amp;Production branch:</string>
+     </property>
+     <property name="buddy">
+      <cstring>masterComboBox</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QComboBox" name="masterComboBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="editable">
+      <bool>true</bool>
+     </property>
+     <property name="insertPolicy">
+      <enum>QComboBox::InsertPolicy::NoInsert</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="developLabel">
+     <property name="text">
+      <string>&amp;Development branch:</string>
+     </property>
+     <property name="buddy">
+      <cstring>developComboBox</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QComboBox" name="developComboBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="editable">
+      <bool>true</bool>
+     </property>
+     <property name="insertPolicy">
+      <enum>QComboBox::InsertPolicy::NoInsert</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QLabel" name="developInfoLabel">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QCheckBox" name="switchCheckBox">
+     <property name="text">
+      <string>S&amp;witch to the development branch</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="2">
+    <widget class="QGroupBox" name="prefixGroupBox">
+     <property name="title">
+      <string>Branch prefixes</string>
+     </property>
+     <layout class="QFormLayout" name="prefixFormLayout">
+      <property name="fieldGrowthPolicy">
+       <enum>QFormLayout::FieldGrowthPolicy::ExpandingFieldsGrow</enum>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="featureLabel">
+        <property name="text">
+         <string>&amp;Feature:</string>
+        </property>
+        <property name="buddy">
+         <cstring>featureEdit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="featureEdit"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="releaseLabel">
+        <property name="text">
+         <string>&amp;Release:</string>
+        </property>
+        <property name="buddy">
+         <cstring>releaseEdit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="releaseEdit"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="hotfixLabel">
+        <property name="text">
+         <string>&amp;Hotfix:</string>
+        </property>
+        <property name="buddy">
+         <cstring>hotfixEdit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="hotfixEdit"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="supportLabel">
+        <property name="text">
+         <string>&amp;Support:</string>
+        </property>
+        <property name="buddy">
+         <cstring>supportEdit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLineEdit" name="supportEdit"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="versionTagLabel">
+        <property name="text">
+         <string>&amp;Version tag prefix:</string>
+        </property>
+        <property name="buddy">
+         <cstring>versionTagEdit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QLineEdit" name="versionTagEdit">
+        <property name="placeholderText">
+         <string>(none)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="2">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>masterComboBox</tabstop>
+  <tabstop>developComboBox</tabstop>
+  <tabstop>switchCheckBox</tabstop>
+  <tabstop>featureEdit</tabstop>
+  <tabstop>releaseEdit</tabstop>
+  <tabstop>hotfixEdit</tabstop>
+  <tabstop>supportEdit</tabstop>
+  <tabstop>versionTagEdit</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>GitFlowInitDialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>240</x>
+     <y>380</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>240</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>GitFlowInitDialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>320</x>
+     <y>380</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>320</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

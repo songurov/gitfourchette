@@ -116,4 +116,8 @@ from gitfourchette.tasks.worktreetasks import (
     UnlockWorktree,
 )
 
+from gitfourchette.tasks.gitflowtasks import (
+    GitFlowInit,
+)
+
 from gitfourchette.tasks.taskbook import TaskBook

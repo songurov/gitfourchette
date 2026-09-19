@@ -18,6 +18,7 @@ from gitfourchette.exttools.toolprocess import ToolProcess
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.banner import Banner
 from gitfourchette.forms.processdialog import ProcessDialog
+from gitfourchette.forms.quicklaunch import QUICKLAUNCH_SEARCH_ONLY
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.graphview.graphview import GraphView
@@ -859,6 +860,10 @@ class RepoWidget(QWidget):
 
             ActionDef.SEPARATOR,
 
+            ActionDef(_("&Git Flow"), submenu=invoker.window().gitFlowMenu),
+
+            ActionDef.SEPARATOR,
+
             TaskBook.action(invoker, tasks.RecallCommit),
 
             ActionDef.SEPARATOR,
@@ -878,6 +883,17 @@ class RepoWidget(QWidget):
 
             TaskBook.action(invoker, tasks.EditRepoSettings),
         ]
+
+    def gitFlowMenuItems(self) -> list[ActionDef]:
+        """What Repo > Git Flow offers for this repo."""
+        cfg = self.repo.gitflow_config()
+
+        if cfg is None:
+            # A repo that doesn't use Git Flow sees this one item, and only in
+            # the menu: Quick Launch lists it once you type
+            return [TaskBook.action(self, tasks.GitFlowInit, properties={QUICKLAUNCH_SEARCH_ONLY: True})]
+
+        return []
 
     @CallbackAccumulator.deferredMethod(250)
     def scheduleFlushGpgVerificationQueue(self):
