@@ -269,9 +269,13 @@ def testNonFlowRepoShowsOnlyInitialize(tempDir, mainWindow):
     assert findMenuAction(mainWindow.menuBar(), "repo/git flow").menu() is mainWindow.gitFlowMenu
     assert flowMenuTitles(mainWindow) == ["Initialize Git Flow…"]
 
-    # The repo header in the sidebar has the same menu
+    # The repo header in the sidebar offers the same items, in a menu of its own:
+    # on macOS a native menu hangs under one parent item only, so borrowing the
+    # menu bar's could take it off Repo > Git Flow
     headerMenu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByKind(SidebarItem.WorkdirHeader))
-    assert findMenuAction(headerMenu, "git flow").menu() is mainWindow.gitFlowMenu
+    headerFlowMenu = findMenuAction(headerMenu, "git flow").menu()
+    assert headerFlowMenu is not mainWindow.gitFlowMenu
+    assert [stripAccelerators(a.text()) for a in headerFlowMenu.actions()] == ["Initialize Git Flow…"]
     headerMenu.close()
 
     # No Finish on a branch that merely looks like a feature, no Start on its folder
@@ -1609,3 +1613,4 @@ def testGitFlowIsTranslatedInForkLanguages(qapp):
         if context:
             entry = f'msgctxt "{context}"\n' + entry
         assert entry in template, f"not in the .pot: {msgid!r}"
+

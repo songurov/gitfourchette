@@ -860,7 +860,11 @@ class RepoWidget(QWidget):
 
             ActionDef.SEPARATOR,
 
-            ActionDef(_("&Git Flow"), submenu=invoker.window().gitFlowMenu),
+            # The menu bar keeps one live Git Flow menu for the repo in front.
+            # A context menu gets its own: on macOS a native menu hangs under
+            # one parent item only, so sharing it could take it off the menu bar.
+            ActionDef(_("&Git Flow"), submenu=(invoker.gitFlowMenu if invoker is invoker.window()
+                                               else proxy().gitFlowMenuItems())),
 
             ActionDef.SEPARATOR,
 
