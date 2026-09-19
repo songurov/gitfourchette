@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import gettext
 import textwrap
 
 import pytest
@@ -13,6 +14,29 @@ from gitfourchette.forms.prefsdialog import PrefsDialog
 from gitfourchette.nav import NavLocator
 from gitfourchette.toolbox.fontpicker import FontPicker
 from .util import *
+
+FORK_LANGUAGES = ["ro", "ru", "tr"]
+"""Languages this build translates itself. The others come from upstream."""
+
+
+class _MissingTranslation(gettext.NullTranslations):
+    MISSING = "<missing>"
+
+    def gettext(self, message):
+        return self.MISSING
+
+    def pgettext(self, context, message):
+        return self.MISSING
+
+
+def assertTranslatedInForkLanguages(*msgids: str, context=""):
+    for lang in FORK_LANGUAGES:
+        with open(QFile(f"assets:lang/{lang}.mo").fileName(), "rb") as moFile:
+            catalog = gettext.GNUTranslations(moFile)
+        catalog.add_fallback(_MissingTranslation())
+        for msgid in msgids:
+            text = catalog.pgettext(context, msgid) if context else catalog.gettext(msgid)
+            assert text not in ("", _MissingTranslation.MISSING), f"{lang}: {msgid!r} isn't translated"
 
 
 def testPrefsDialog(tempDir, mainWindow):
@@ -275,3 +299,41 @@ def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName,
         from gitfourchette import settings
         settings.prefs.language = ""
         GFApplication.instance().applyLanguagePref()
+
+
+def testNoRawPrefKeyLabels(mainWindow):
+    """No row of the dialog may show a pref's internal name instead of words."""
+    dlg = GFApplication.instance().openPrefsDialog()
+    keys = [w.objectName().removeprefix(PrefsDialog.ControlQObjectNamePrefix)
+            for w in dlg.findChildren(QWidget)
+            if w.objectName().startswith(PrefsDialog.ControlQObjectNamePrefix)]
+    captions = {label.text().removesuffix(":") for label in dlg.findChildren(QLabel)}
+    captions |= {checkBox.text() for checkBox in dlg.findChildren(QCheckBox)}
+    assert "compactUi" in keys
+    assert [key for key in keys if key in captions] == []
+    dlg.reject()
+
+
+def testDensityRowUsesTheToolbarWords(mainWindow):
+    toolbar = mainWindow.mainToolBar
+    toolbar.fillThemeMenu()
+    compactTip = findMenuAction(toolbar.themeMenu, "compact").toolTip()
+    compactTip = QTextDocumentFragment.fromHtml(compactTip).toPlainText()
+    assert compactTip == "Smaller text and icon-only toolbar buttons"
+
+    dlg = GFApplication.instance().openPrefsDialog("compactUi")
+    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_compactUi")
+    assert sorted(comboBox.itemText(i) for i in range(comboBox.count())) == ["Compact", "Normal"]
+    assert comboBox.currentText() == "Normal"
+    assert comboBox.toolTip() == compactTip
+    label: QLabel = next(label for label in dlg.findChildren(QLabel) if label.buddy() is comboBox)
+    assert label.text() == "Density:"
+
+    qcbSetIndex(comboBox, "compact")
+    dlg.accept()
+    try:
+        assert settings.prefs.compactUi
+    finally:
+        GFApplication.applyPrefs(compactUi=False)
+
+    assertTranslatedInForkLanguages("Density", "Smaller text and icon-only toolbar buttons")

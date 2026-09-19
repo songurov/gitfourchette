@@ -2118,9 +2118,9 @@ msgstr "Afișează textul butoanelor în bara de unelte"
 msgid "&Compact"
 msgstr "&Compact"
 
-#: forms/maintoolbar.py:203
-msgid "Icons only, for a narrower toolbar"
-msgstr "Doar pictograme, pentru o bară de unelte mai îngustă"
+#: forms/maintoolbar.py:203 trtables.py:394
+msgid "Smaller text and icon-only toolbar buttons"
+msgstr "Text mai mic și butoane doar cu pictograme în bara de unelte"
 
 #: forms/maintoolbar.py:220
 #, python-brace-format
@@ -7498,6 +7498,10 @@ msgstr "Reține până la # de depozite recente"
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
 msgstr "Când bara de meniu este ascunsă, apasă tasta Alt pentru a o afișa din nou."
+
+#: trtables.py:391
+msgid "Density"
+msgstr "Densitate"
 
 #: trtables.py:377
 msgid "Dinosaur on the Home page"

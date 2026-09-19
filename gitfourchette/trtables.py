@@ -343,7 +343,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
 
 
 def _prefKeyTable() -> dict[str, str]:
-    from gitfourchette.toolbox.textutils import paragraphs, tquo, escape
+    from gitfourchette.toolbox.textutils import paragraphs, tquo, escape, stripAccelerators
     from gitfourchette.exttools.usercommand import UserCommand
 
     sshAuthSock = os.environ.get("SSH_AUTH_SOCK", "")
@@ -387,6 +387,11 @@ def _prefKeyTable() -> dict[str, str]:
         "showToolBar": _("Show toolbar"),
         "showMenuBar": _("Show menu bar"),
         "showMenuBar_help": _("When the menu bar is hidden, press the Alt key to show it again."),
+        # Same words as the toolbar's menu, which offers the same choice
+        "compactUi": _("Density"),
+        "compactUi_false": stripAccelerators(_("&Normal")),
+        "compactUi_true": stripAccelerators(_("&Compact")),
+        "compactUi_help": _("Smaller text and icon-only toolbar buttons"),
         "homeMascot": _("Dinosaur on the Home page"),
         "homeMascot_help": _("A little dinosaur walks across the welcome text, fetching eggs for its nest. "
                              "It only moves while the Home page is on screen."),

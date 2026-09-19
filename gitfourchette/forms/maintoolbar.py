@@ -200,7 +200,7 @@ class MainToolBar(QToolBar):
                       tip=_("Show button labels in the toolbar")),
             ActionDef(_("&Compact"), lambda: self.setCompactRequested.emit(True),
                       checkState=1 if compact else -1, radioGroup="density",
-                      tip=_("Icons only, for a narrower toolbar")),
+                      tip=_("Smaller text and icon-only toolbar buttons")),
         ]
 
         self.themeMenu.clear()

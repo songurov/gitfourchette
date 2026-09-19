@@ -2119,9 +2119,9 @@ msgstr "Показывать подписи кнопок на панели ин�
 msgid "&Compact"
 msgstr "&Компактный"
 
-#: forms/maintoolbar.py:203
-msgid "Icons only, for a narrower toolbar"
-msgstr "Только значки, для более узкой панели инструментов"
+#: forms/maintoolbar.py:203 trtables.py:394
+msgid "Smaller text and icon-only toolbar buttons"
+msgstr "Более мелкий текст и кнопки панели инструментов только со значками"
 
 #: forms/maintoolbar.py:220
 #, python-brace-format
@@ -7499,6 +7499,10 @@ msgstr "Запоминать до # недавних репозиториев"
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
 msgstr "Когда строка меню скрыта, нажмите клавишу Alt, чтобы снова её показать."
+
+#: trtables.py:391
+msgid "Density"
+msgstr "Плотность"
 
 #: trtables.py:377
 msgid "Dinosaur on the Home page"

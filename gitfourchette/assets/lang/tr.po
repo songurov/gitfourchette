@@ -2086,9 +2086,9 @@ msgstr "Araç çubuğunda düğme etiketlerini göster"
 msgid "&Compact"
 msgstr "Ko&mpakt"
 
-#: forms/maintoolbar.py:203
-msgid "Icons only, for a narrower toolbar"
-msgstr "Daha dar bir araç çubuğu için yalnızca simgeler"
+#: forms/maintoolbar.py:203 trtables.py:394
+msgid "Smaller text and icon-only toolbar buttons"
+msgstr "Daha küçük metin ve yalnızca simgeli araç çubuğu düğmeleri"
 
 #: forms/maintoolbar.py:220
 #, python-brace-format
@@ -7412,6 +7412,10 @@ msgstr "En fazla # son depoyu hatırla"
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
 msgstr "Menü çubuğu gizliyken yeniden göstermek için Alt tuşuna basın."
+
+#: trtables.py:391
+msgid "Density"
+msgstr "Yoğunluk"
 
 #: trtables.py:377
 msgid "Dinosaur on the Home page"

@@ -2112,8 +2112,8 @@ msgstr ""
 msgid "&Compact"
 msgstr ""
 
-#: forms/maintoolbar.py:203
-msgid "Icons only, for a narrower toolbar"
+#: forms/maintoolbar.py:203 trtables.py:394
+msgid "Smaller text and icon-only toolbar buttons"
 msgstr ""
 
 #: forms/maintoolbar.py:220
@@ -7430,6 +7430,10 @@ msgstr ""
 
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
+msgstr ""
+
+#: trtables.py:391
+msgid "Density"
 msgstr ""
 
 #: trtables.py:377
