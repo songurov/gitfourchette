@@ -95,8 +95,7 @@ def testPrefsDialog(tempDir, mainWindow):
 
     # Change topo setting, and accept
     dlg = openPrefs()
-    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_chronologicalOrder")
-    qcbSetIndex(comboBox, "topological")
+    dlg.findChild(QRadioButton, "prefctl_chronologicalOrder_false").click()
     dlg.accept()
     acceptQMessageBox(mainWindow, "take effect.+reload")
 
@@ -104,7 +103,7 @@ def testPrefsDialog(tempDir, mainWindow):
 def testPrefsComboBoxWithPreview(tempDir, mainWindow):
     # Play with QComboBoxWithPreview (for coverage)
     dlg = GFApplication.instance().openPrefsDialog("shortTimeFormat")
-    comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_shortTimeFormat").findChild(QComboBox)
+    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_shortTimeFormat")
     comboBox.setFocus()
     QTest.keyClick(comboBox, Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier)
     QTest.qWait(0)
@@ -334,14 +333,15 @@ def testDensityRowUsesTheToolbarWords(mainWindow):
     assert compactTip == "Smaller text and icon-only toolbar buttons"
 
     dlg = GFApplication.instance().openPrefsDialog("compactUi")
-    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_compactUi")
-    assert sorted(comboBox.itemText(i) for i in range(comboBox.count())) == ["Compact", "Normal"]
-    assert comboBox.currentText() == "Normal"
-    assert comboBox.toolTip() == compactTip
-    label: QLabel = next(label for label in dlg.findChildren(QLabel) if label.buddy() is comboBox)
+    group: QWidget = dlg.findChild(QWidget, "prefctl_compactUi")
+    normal, compact = group.findChildren(QRadioButton)
+    assert (normal.text(), compact.text()) == ("Normal", "Compact")
+    assert normal.isChecked()
+    assert group.toolTip() == compactTip
+    label: QLabel = next(label for label in dlg.findChildren(QLabel) if label.buddy() is group)
     assert label.text() == "Density:"
 
-    qcbSetIndex(comboBox, "compact")
+    compact.click()
     dlg.accept()
     try:
         assert settings.prefs.compactUi
@@ -419,7 +419,7 @@ def testEveryCountIsABoundedSpinBox(mainWindow):
     controls = {w.objectName().removeprefix(PrefsDialog.ControlQObjectNamePrefix): w
                 for w in dlg.findChildren(QWidget)
                 if w.objectName().startswith(PrefsDialog.ControlQObjectNamePrefix)}
-    intKeys = [key for key in controls if type(getattr(settings.prefs, key)) is int]
+    intKeys = [key for key in controls if type(getattr(settings.prefs, key, None)) is int]
     assert {"maxTrashFiles", "recentCommitMessages", "maxRecentRepos"} <= set(intKeys)
 
     for key in intKeys:
@@ -477,7 +477,7 @@ def testSectionTitlesAndPreviewsAreNotDrawnDisabled(mainWindow):
             assert contrastRatio(title.palette().color(QPalette.ColorRole.WindowText), window) >= 7
 
         # The date format's sample is secondary text, readable at 4.5:1
-        preview: QLabel = dlg.findChild(QWidget, "prefctl_shortTimeFormat").findChild(QLabel)
+        preview: QLabel = dlg.findChild(QLabel, "prefnote_shortTimeFormat")
         preview.ensurePolished()
         assert preview.isEnabled()
         assert contrastRatio(preview.palette().color(QPalette.ColorRole.WindowText), window) >= 4.5
@@ -561,8 +561,7 @@ def testSshAgentChoiceReadsRightWithOrWithoutASystemAgent(mainWindow, monkeypatc
     trtables.retranslate(f"SSH_AUTH_SOCK={sshAuthSock}")  # Rebuild the tables for this environment
     try:
         dlg = GFApplication.instance().openPrefsDialog("ownSshAgent")
-        comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_ownSshAgent")
-        systemAgentChoice = comboBox.itemText(1)  # the False item
+        systemAgentChoice = dlg.findChild(QRadioButton, "prefctl_ownSshAgent_false").text()
         expected = "Use ssh-agent provided by the system" + ("" if sshAuthSock else " (not detected)")
         assert systemAgentChoice == expected
         dlg.reject()
@@ -710,4 +709,63 @@ def testDeepLinksOpenTheirPaneWithTheControlFocused(mainWindow, key):
     control = dlg.findChild(QWidget, f"prefctl_{key}")
     assert dlg.stackedWidget.currentWidget().isAncestorOf(control)
     waitUntilTrue(lambda: control is QApplication.focusWidget() or control.isAncestorOf(QApplication.focusWidget()))
+    dlg.reject()
+
+
+def testLabelsLineUpInOneRightAlignedColumnOnEveryPane(mainWindow):
+    """Like a Mac settings window: labels end at one x on every pane, controls start past it."""
+    dlg = GFApplication.instance().openPrefsDialog()
+    labelRightEdges = set()
+    fieldLeftEdges = set()
+    for page in range(dlg.stackedWidget.count()):
+        dlg.setCategory(page)
+        QTest.qWait(0)
+        for label in dlg.stackedWidget.widget(page).findChildren(QLabel):
+            if label.buddy() is None or not label.isVisible():
+                continue
+            labelRightEdges.add(label.mapTo(dlg, QPoint(label.width(), 0)).x())
+            fieldLeftEdges.add(label.buddy().mapTo(dlg, QPoint(0, 0)).x())
+        for checkBox in dlg.stackedWidget.widget(page).findChildren(QCheckBox):
+            if checkBox.isVisible():
+                fieldLeftEdges.add(checkBox.mapTo(dlg, QPoint(0, 0)).x())
+
+    assert len(labelRightEdges) == 1, labelRightEdges
+    labelColumnEnd = labelRightEdges.pop()
+    # Checkboxes too sit in the control column, not under the labels
+    assert min(fieldLeftEdges) >= labelColumnEnd + PrefsDialog.ColumnGap
+    dlg.reject()
+
+
+def testRadioChoicesAreNamedAfterTheirRowWithTheDefaultFirst(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog()
+    groups = {w.objectName().removeprefix("prefctl_"): w for w in dlg.findChildren(QWidget)
+              if w.objectName().startswith("prefctl_") and w.findChildren(QRadioButton)}
+    assert {"compactUi", "fileTreeView", "chronologicalOrder", "renderSvg", "commitFormPlacement", "ownSshAgent"} <= set(groups)
+
+    for key, group in groups.items():
+        label = next(label for label in dlg.findChildren(QLabel) if label.buddy() is group)
+        assert group.accessibleName() == label.text().removesuffix(":"), key
+        buttons = group.findChildren(QRadioButton)
+        assert [b.isChecked() for b in buttons].count(True) == 1, key
+        default = settings.Prefs.__dataclass_fields__[key].default
+        defaultName = default.name if isinstance(default, enum.Enum) else str(default).lower()
+        assert buttons[0].objectName() == f"prefctl_{key}_{defaultName}", key
+    dlg.reject()
+
+
+@pytest.mark.parametrize("macos", [True, False])
+def testNotesAreSecondaryTextButNeverTiny(mainWindow, monkeypatch, macos):
+    from gitfourchette.forms import prefsdialog
+    monkeypatch.setattr(prefsdialog, "MACOS", macos)
+
+    dlg = GFApplication.instance().openPrefsDialog()
+    notes = [label for label in dlg.findChildren(QLabel) if label.objectName().startswith("prefnote_")]
+    assert notes
+    appSize = QApplication.font().pointSizeF()
+    for note in notes:
+        assert note.property("class") == "secondary"
+        if macos:  # smaller, but not below 11 pt
+            assert note.font().pointSizeF() == max(appSize - 2, 11), note.objectName()
+        else:  # Desktop fonts are small already: the color alone sets notes apart
+            assert note.font().pointSizeF() == appSize, note.objectName()
     dlg.reject()

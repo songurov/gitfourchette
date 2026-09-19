@@ -35,6 +35,12 @@ class Row:
     that only makes sense while the parent is off.
     """
 
+    control: str = "auto"
+    "'auto' picks a control from the pref's type; 'radio' shows a choice as radio buttons."
+
+    note: str = ""
+    "trtables key of secondary text shown under the control."
+
     notOn: str = ""
     "Hide the row on this platform: 'macos', or 'frozen' (packaged builds)."
 
@@ -86,14 +92,14 @@ PANES: list[Pane] = [
         Row("language"),
         Row("qtStyle"),
         Row("pathDisplayStyle"),
-        Row("fileTreeView"),
-        Row("commitFormPlacement"),
+        Row("fileTreeView", control="radio"),
+        Row("commitFormPlacement", control="radio"),
         Row("recentCommitMessages"),
         Row("refSort"),
         Row("showToolBar"),
         Row("showStatusBar"),
         Row("showMenuBar", notOn="macos"),  # The menu bar is always there on macOS
-        Row("compactUi"),
+        Row("compactUi", control="radio"),
         Row("homeMascot"),
         Row("homeMascotFollowsCursor", parent="homeMascot"),
     ),
@@ -115,11 +121,11 @@ PANES: list[Pane] = [
     _pane(
         "imageDiff",
         Row("imageFileThresholdKB"),
-        Row("renderSvg"),
+        Row("renderSvg", control="radio"),
     ),
     _pane(
         "graph",
-        Row("chronologicalOrder"),
+        Row("chronologicalOrder", control="radio"),
         Row("graphRowLayout"),
         Row("graphRowHeight"),
         Row("refBoxMaxWidth"),
@@ -135,7 +141,7 @@ PANES: list[Pane] = [
     _pane(
         "git",
         Row("gitPath"),
-        Row("ownSshAgent"),
+        Row("ownSshAgent", control="radio"),
         Row("ownAskpass"),
         Row("lfsAware"),
     ),

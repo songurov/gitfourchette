@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from gitfourchette import prefsschema, trtables
+from gitfourchette import prefsschema, settings, trtables
 from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.exttools.toolpresets import ToolPresets
 from gitfourchette.exttools.usercommandsyntaxhighlighter import UserCommandSyntaxHighlighter
@@ -36,29 +36,51 @@ LANGUAGE_NAMES = {
 }
 
 
-def _boxWidget(layoutType: type[QVBoxLayout | QHBoxLayout], *controls) -> QWidget:
-    w = QWidget()
-    layout: QBoxLayout = layoutType(w)
-    layout.setSpacing(0)
-    layout.setContentsMargins(0, 0, 0, 0)
-    for control in controls:
-        layout.addWidget(control)
-    return w
+class _GridBuilder:
+    """
+    Appends rows to a grid of labels on the left and controls on the right.
+    The grid has no spacing of its own: gaps are empty rows and columns with
+    a size, so that each gap can be the size it needs, and a pane without
+    any labels still puts its controls in the control column.
+    """
 
+    LabelColumn = 0
+    FieldColumn = 2
 
-def vBoxWidget(*controls):
-    return _boxWidget(QVBoxLayout, *controls)
+    def __init__(self, grid: QGridLayout, labelColumnWidth: int, columnGap: int):
+        self.grid = grid
+        self.row = 0
+        grid.setContentsMargins(QMargins())
+        grid.setSpacing(0)
+        grid.setColumnMinimumWidth(self.LabelColumn, labelColumnWidth)
+        grid.setColumnMinimumWidth(1, columnGap)
+        grid.setColumnStretch(self.FieldColumn, 1)
 
+    def addGap(self, height: int):
+        self.grid.setRowMinimumHeight(self.row, height)
+        self.row += 1
 
-def hBoxWidget(*controls):
-    return _boxWidget(QHBoxLayout, *controls)
+    def addRow(self, label: QWidget | None, field: QWidget | QLayout):
+        if label is not None:
+            self.grid.addWidget(label, self.row, self.LabelColumn, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        if isinstance(field, QLayout):
+            self.grid.addLayout(field, self.row, self.FieldColumn)
+        else:
+            self.grid.addWidget(field, self.row, self.FieldColumn)
+        self.row += 1
 
+    def addSpanning(self, widget: QWidget):
+        self.grid.addWidget(widget, self.row, 0, 1, 3)
+        self.row += 1
 
-def makeshiftSpacer(height=1):
-    spacer = QWidget()
-    spacer.setEnabled(False)
-    spacer.setFixedSize(1, height)
-    return spacer
+    def addBeside(self, widget: QWidget, firstRow: int):
+        """Put a widget in the label column, level with the top of the rows added since firstRow."""
+        self.grid.addWidget(widget, firstRow, self.LabelColumn, self.row - firstRow, 1,
+                            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+
+    def addStretch(self):
+        self.grid.setRowStretch(self.row, 1)
+        self.row += 1
 
 
 def availableLocaleCodes() -> list[str]:
@@ -86,8 +108,36 @@ class PrefsDialog(QDialog):
     lastCategory = 0
 
     ControlQObjectNamePrefix = "prefctl_"
+    NoteQObjectNamePrefix = "prefnote_"
     LocCategoryHeaderSuffix = "_HEADER"
     LocSettingHelpSuffix = "_help"
+
+    PaneWidth = 640
+    "Width of a pane's content: labels, gap and controls."
+
+    LabelColumnMaxWidth = 220
+    "Labels wider than this wrap."
+
+    ColumnGap = 8
+    "Between a label and its control."
+
+    RowGap = 8
+    "Between two rows of a section."
+
+    CheckBoxRowGap = 4
+    "Between two checkboxes in a row: they read as one group."
+
+    NoteGap = 2
+    "Between a control and the note under it."
+
+    SectionGap = 10
+    "Above and below the hairline between two sections."
+
+    TitleGap = 6
+    "Between a title on its own row and the section's first row."
+
+    RadioGap = 16
+    "Between the radio buttons of one choice, when they fit on one row."
 
     @benchmark
     def __init__(self, parent: QWidget, focusOn: str = ""):
@@ -111,6 +161,9 @@ class PrefsDialog(QDialog):
         self.dependentRowWidgets: dict[str, list[QWidget]] = {}
         "Widgets of each row in dependencies, to enable or disable along with their parent."
 
+        self.labelColumnWidth = self.measureLabelColumn()
+        "One width for the label column of every pane, so that switching panes doesn't shift the controls."
+
         self.categoryList = QListWidget()
         self.categoryList.setWordWrap(True)
         self.categoryList.setUniformItemSizes(True)
@@ -121,10 +174,8 @@ class PrefsDialog(QDialog):
         self.categoryList.currentRowChanged.connect(self.onCategoryChanged)
         self.categoryList.setIconSize(QSize(24, 24))
 
-        self.categoryLabel = QLabel("CATEGORY")
-        tweakWidgetFont(self.categoryLabel, 130)
-
         self.stackedWidget = QStackedWidget()
+        self.stackedWidget.setFixedWidth(self.PaneWidth)
 
         buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Help)
         buttonBox.accepted.connect(self.accept)
@@ -140,14 +191,13 @@ class PrefsDialog(QDialog):
         tweakWidgetFont(self.guideBrowser, 90)
 
         layout = QGridLayout(self)
-        layout.addWidget(self.categoryList,     0, 0, 4, 1)
-        layout.addWidget(self.categoryLabel,    0, 1)
-        layout.addWidget(QFaintSeparator(),     1, 1)
-        layout.addWidget(self.stackedWidget,    2, 1)
-        layout.addWidget(self.guideBrowser,     0, 2, 4, 1)
+        layout.setHorizontalSpacing(20)
+        layout.addWidget(self.categoryList,     0, 0, 2, 1)
+        layout.addWidget(self.stackedWidget,    0, 1)
+        layout.addWidget(self.guideBrowser,     0, 2, 2, 1)
         self._fillControls(focusOn)
         self._bindDependencies()
-        layout.addWidget(buttonBox, 3, 1)  # Add buttonBox last so it comes last in tab order
+        layout.addWidget(buttonBox, 1, 1)  # Add buttonBox last so it comes last in tab order
 
         layout.setColumnStretch(0, 0)
         layout.setColumnStretch(1, 2)
@@ -162,40 +212,257 @@ class PrefsDialog(QDialog):
 
         self.setModal(True)
 
+    # -------------------------------------------------------------------------
+    # Layout
+
     def _fillControls(self, focusOn: str):
         for pane in prefsschema.PANES:
-            form = self._newCategoryForm(pane.id)
+            page = self._renderPane(pane)
 
-            for sectionIndex, section in enumerate(pane.sections):
-                if section.title:
-                    label = QLabel(trtables.prefKey(section.title))
-                    tweakWidgetFont(label, bold=True)  # A title, not an option that happens to be unavailable
-                    if form.count():  # add a spacer before the label
-                        form.addRow(makeshiftSpacer())
-                    form.addRow(label)
-                elif sectionIndex > 0:
-                    form.addRow(makeshiftSpacer())
+            self.categoryKeys.append(pane.id)
+            self.stackedWidget.addWidget(page)
+            self.categoryList.addItem(QListWidgetItem(stockIcon(f"prefs-{pane.id.lower()}"), trtables.prefKey(pane.id)))
 
-                for row in section.rows:
-                    if self.isRowHidden(row):
-                        continue
+            # If the setting we want to focus on is on this page, bring the page to the foreground
+            if focusOn and prefsschema.findPane(focusOn) == len(self.categoryKeys) - 1:
+                control = page.findChild(QWidget, self.ControlQObjectNamePrefix + focusOn)
+                if control is not None:
+                    self.setCategory(self.stackedWidget.indexOf(page))
+                    control.setFocus()
 
-                    if row.parent:
-                        self.dependencies[row.key] = (row.parent.removeprefix("!"), not row.parent.startswith("!"))
+    def visibleSections(self, pane: prefsschema.Pane) -> list[tuple[prefsschema.Section, list[prefsschema.Row]]]:
+        sections = []
+        for section in pane.sections:
+            rows = [row for row in section.rows if not self.isRowHidden(row)]
+            if rows:
+                sections.append((section, rows))
+        return sections
 
-                    # Add the control to the form layout, with a leading caption if any
-                    control, label, field = self._newRow(row)
-                    if label is not None:
-                        form.addRow(label, field)
-                    else:
-                        form.addRow(field)
+    def _renderPane(self, pane: prefsschema.Pane) -> QWidget:
+        """
+        Lay out one page: a label column shared by every page, right-aligned,
+        and the controls to its right. Sections are separated by a hairline.
+        A section's title sits in the label column beside its first row when
+        that row has no label of its own; otherwise it gets a row of its own.
+        """
+        page = QWidget(self)
+        page.setObjectName(f"prefspane_{pane.id}")
 
-                    # If the current key matches the setting we want to focus on,
-                    # bring this tab to the foreground
-                    if focusOn == row.key:
-                        categoryIndex = self.stackedWidget.indexOf(form.parentWidget())
-                        self.setCategory(categoryIndex)
-                        control.setFocus()
+        builder = _GridBuilder(QGridLayout(page), self.labelColumnWidth, self.ColumnGap)
+
+        headerText = trtables.prefKeyNoDefault(pane.id + self.LocCategoryHeaderSuffix)
+        if headerText:
+            header = self.makeNote(headerText.format(app=qAppName()), f"{pane.id}_HEADER")
+            header.setMaximumWidth(16777215)
+            builder.addSpanning(header)
+            builder.addGap(self.RowGap + self.SectionGap)
+
+        for sectionIndex, (section, rows) in enumerate(self.visibleSections(pane)):
+            if sectionIndex > 0:
+                builder.addGap(self.SectionGap)
+                builder.addSpanning(QFaintSeparator(page))
+                builder.addGap(self.SectionGap)
+            self._renderSection(builder, section, rows)
+
+        builder.addStretch()
+        return page
+
+    def _renderSection(self, builder: _GridBuilder, section: prefsschema.Section, rows: list[prefsschema.Row]):
+        titleBeside = None
+        if section.title:
+            title = self.makeTitle(section.title)
+            if self.rowLabelText(rows[0]):
+                builder.addSpanning(title)
+                builder.addGap(self.TitleGap)
+            else:
+                titleBeside = title
+
+        firstGridRow = builder.row
+        previousRow = None
+        for row in rows:
+            if previousRow is not None:
+                tight = self.isCheckBoxRow(previousRow) and self.isCheckBoxRow(row) and not previousRow.note
+                builder.addGap(self.CheckBoxRowGap if tight else self.RowGap)
+            self._renderRow(builder, row)
+            previousRow = row
+
+        if titleBeside is not None:
+            # Like a Mac settings window: the title leads its rows from the label column
+            builder.addBeside(titleBeside, firstGridRow)
+
+    def _renderRow(self, builder: _GridBuilder, row: prefsschema.Row):
+        key = row.key
+
+        if row.parent:
+            self.dependencies[key] = (row.parent.removeprefix("!"), not row.parent.startswith("!"))
+        isChild = key in self.dependencies
+
+        caption, suffix = self.rowCaption(row)
+        labelText = self.rowLabelText(row)
+
+        # Make the actual control widget
+        control = self.makeControlWidget(row, prefs.__dict__[key], caption)
+        note: QLabel | None = None
+        if isinstance(control, tuple):  # The control comes with its own live note
+            control, note = control
+        rowWidgets: list[QWidget] = [control]
+
+        # Name the control so that unit tests can find it
+        control.setObjectName(self.ControlQObjectNamePrefix + key)
+
+        # Tack an extra QLabel to the end if there's a suffix
+        if suffix:
+            rowWidgets.append(QLabel(suffix))
+
+        if row.toggle:
+            self.prependCheckBox(rowWidgets, row.toggle, caption)
+        elif key == "resetDontShowAgain":
+            rowWidgets.append(self.dontShowAgainCountLabel(control))
+
+        # Any help text? Then make a help button for it & set tooltip text on the main control
+        tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix)
+        hintButton = None
+        if tip:
+            tip = tip.format(app=qAppName())
+            control.setToolTip(tip)
+            hintButton = QHintButton(self, tip)
+            hintButton.makeReachable(stripAccelerators(" ".join(t for t in (caption, suffix) if t)))
+            # Keep rows tight, but never below the smallest clickable size
+            hintButton.setMaximumHeight(max(QHintButton.MinimumHitSize, 2 + hintButton.fontMetrics().height()))
+
+        # The field: the row's widgets side by side, at their natural size
+        field = QHBoxLayout()
+        field.setSpacing(6)
+        if isChild and not labelText and isinstance(rowWidgets[0], QCheckBox):
+            # Line up a dependent checkbox's text with its parent's text
+            field.addSpacing(self.checkBoxTextIndent(rowWidgets[0]))
+        for w in rowWidgets:
+            field.addWidget(w)
+        if hintButton is not None:
+            field.addWidget(hintButton)
+        if control.sizePolicy().horizontalPolicy() not in (QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding):
+            field.addStretch()
+
+        label = None
+        if labelText:
+            label = QLabel(labelText)
+            label.setBuddy(rowWidgets[0])
+            label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            if label.sizeHint().width() > self.LabelColumnMaxWidth:
+                label.setWordWrap(True)
+                label.setFixedWidth(self.LabelColumnMaxWidth)
+            if tip:
+                label.setToolTip(tip)
+
+        if isChild:
+            self.dependentRowWidgets[key] = ([label] if label else []) + rowWidgets
+
+        builder.addRow(label, field)
+
+        noteText = trtables.prefKeyNoDefault(row.note) if row.note else ""
+        if noteText and note is None:
+            note = self.makeNote(noteText, key)
+        if note is not None:
+            if not note.objectName():
+                note.setObjectName(self.NoteQObjectNamePrefix + key)
+            builder.addGap(self.NoteGap)
+            builder.addRow(None, note)
+            if isChild:
+                self.dependentRowWidgets[key].append(note)
+
+    def makeTitle(self, titleKey: str) -> QLabel:
+        title = QLabel(trtables.prefKey(titleKey))
+        title.setObjectName(f"preftitle_{titleKey}")
+        title.setFont(self.titleFont())  # A title, not an option that happens to be unavailable
+        title.setWordWrap(True)
+        title.setMaximumWidth(self.LabelColumnMaxWidth)
+        return title
+
+    def makeNote(self, text: str, key: str) -> QLabel:
+        """Secondary text under a control, wrapped at the control column."""
+        note = QLabel(text)
+        note.setObjectName(self.NoteQObjectNamePrefix + key)
+        note.setProperty("class", "secondary")  # Dimmed, but still readable
+        note.setWordWrap(True)
+        note.setTextFormat(Qt.TextFormat.AutoText)
+        note.setFont(self.noteFont())
+        note.setMaximumWidth(self.controlColumnWidth())
+        return note
+
+    @staticmethod
+    def noteFont() -> QFont:
+        """
+        Notes are secondary, so on macOS they're smaller, but never under 11 pt.
+        Desktop fonts elsewhere are 9-10 pt already: notes keep the app's size
+        there, and the dimmed color alone sets them apart.
+        """
+        font = QFont(QApplication.font())
+        size = QApplication.font().pointSizeF()
+        if MACOS:
+            size = max(size - 2, 11.0)
+        font.setPointSizeF(size)
+        return font
+
+    @staticmethod
+    def titleFont() -> QFont:
+        font = QFont(QApplication.font())
+        font.setBold(True)
+        return font
+
+    def controlColumnWidth(self) -> int:
+        return self.PaneWidth - self.labelColumnWidth - self.ColumnGap
+
+    @staticmethod
+    def checkBoxTextIndent(checkBox: QCheckBox) -> int:
+        style = checkBox.style()
+        return (style.pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth, None, checkBox)
+                + style.pixelMetric(QStyle.PixelMetric.PM_CheckBoxLabelSpacing, None, checkBox))
+
+    def measureLabelColumn(self) -> int:
+        """Width of the widest label or side title of any pane, up to LabelColumnMaxWidth."""
+        labelMetrics = QFontMetrics(QApplication.font())
+        titleMetrics = QFontMetrics(self.titleFont())
+        widest = 0
+        for pane in prefsschema.PANES:
+            for section, rows in self.visibleSections(pane):
+                if section.title and not self.rowLabelText(rows[0]):
+                    widest = max(widest, titleMetrics.horizontalAdvance(trtables.prefKey(section.title)))
+                for row in rows:
+                    text = self.rowLabelText(row)
+                    widest = max(widest, labelMetrics.horizontalAdvance(stripAccelerators(text)))
+        return min(widest + 2, self.LabelColumnMaxWidth)
+
+    def rowCaption(self, row: prefsschema.Row) -> tuple[str, str]:
+        """The row's caption, and the unit after its control, if any ('#' in the translated string)."""
+        suffix = ""
+        caption = trtables.prefKey(row.key)
+        if "#" in caption:
+            caption, suffix = caption.split("#")
+            caption = caption.rstrip()
+            suffix = suffix.lstrip()
+        return caption, suffix
+
+    def rowLabelText(self, row: prefsschema.Row) -> str:
+        """What the label column says for this row: empty if the control carries its own caption."""
+        caption, _suffix = self.rowCaption(row)
+        if not caption or row.toggle or row.key == "resetDontShowAgain" or self.isCheckBoxRow(row):
+            return ""  # The control carries the caption: a checkbox or a push button
+        return caption + _(":")
+
+    def isCheckBoxRow(self, row: prefsschema.Row) -> bool:
+        return (type(prefs.__dict__[row.key]) is bool
+                and row.control == "auto"
+                and row.key not in ("resetDontShowAgain", "colorblind")  # A button, a pop-up with color chips
+                and not self.boolChoiceNames(row.key))
+
+    @staticmethod
+    def boolChoiceNames(key: str) -> tuple[str, str]:
+        """Words for the True and False choices of a bool pref shown as a choice, not a checkbox."""
+        trueText = trtables.prefKeyNoDefault(key + "_true")
+        falseText = trtables.prefKeyNoDefault(key + "_false")
+        if trueText or falseText:
+            return trueText, falseText
+        return ()
 
     def _bindDependencies(self):
         for childKey, (parentKey, parentValue) in self.dependencies.items():
@@ -215,120 +482,6 @@ class PrefsDialog(QDialog):
         parent.checkStateChanged.connect(follow)
         follow(parent.checkState())  # Prime enabled/disabled state
 
-    def _newCategoryForm(self, category: str) -> QFormLayout:
-        formContainer = QWidget(self)
-
-        form = QFormLayout(formContainer)
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-
-        categoryName = trtables.prefKey(category)
-        categoryIcon = stockIcon(f"prefs-{category.lower()}")
-
-        self.categoryKeys.append(category)
-        self.stackedWidget.addWidget(formContainer)
-        self.categoryList.addItem(QListWidgetItem(categoryIcon, categoryName))
-
-        headerText = trtables.prefKeyNoDefault(category + self.LocCategoryHeaderSuffix)
-        if headerText:
-            headerText = headerText.format(app=qAppName())
-            explainer = QLabel(headerText)
-            explainer.setWordWrap(True)
-            explainer.setTextFormat(Qt.TextFormat.RichText)
-            tweakWidgetFont(explainer, 88)
-            form.addRow(explainer)
-
-        return form
-
-    def _newRow(self, row: prefsschema.Row) -> tuple[QWidget, QLabel | None, QWidget | QLayout]:
-        """
-        Build the widgets representing the given setting.
-        Return tuple: main control widget, label (if any), field to be inserted
-        into the QFormLayout.
-        """
-        key = row.key
-
-        # Get caption and suffix
-        suffix = ""
-        caption = trtables.prefKey(key)
-        if "#" in caption:
-            caption, suffix = caption.split("#")
-            caption = caption.rstrip()
-            suffix = suffix.lstrip()
-
-        # Get the value of this setting
-        prefValue = prefs.__dict__[key]
-
-        # Make the actual control widget
-        control = self.makeControlWidget(key, prefValue, caption)
-        rowWidgets = [control]
-
-        # Name the control so that unit tests can find it
-        control.setObjectName(self.ControlQObjectNamePrefix + key)
-
-        # Tack an extra QLabel to the end if there's a suffix
-        if suffix:
-            rowWidgets.append(QLabel(suffix))
-
-        if row.toggle:
-            self.prependCheckBox(rowWidgets, row.toggle, caption)
-        elif key == "resetDontShowAgain":
-            rowWidgets.append(self.dontShowAgainCountLabel(control))
-
-        # Any help text? Then make a help button for it & set tooltip text on the main control
-        tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix)
-        if tip:
-            tip = tip.format(app=qAppName())
-            control.setToolTip(tip)
-            hintButton = QHintButton(self, tip)
-            hintButton.makeReachable(stripAccelerators(" ".join(t for t in (caption, suffix) if t)))
-            # Keep rows tight, but never below the smallest clickable size
-            hintButton.setMaximumHeight(max(QHintButton.MinimumHitSize, 2 + hintButton.fontMetrics().height()))
-            rowWidgets.append(hintButton)
-
-        # Gather what to add to the form as a single item.
-        # If we have more than a single widget to add to the form, lay them out in a row.
-        formField: QWidget | QLayout
-        if len(rowWidgets) == 1:
-            formField = control
-        else:
-            rowLayout = QHBoxLayout()
-            for w in rowWidgets:
-                rowLayout.addWidget(w)
-            if control.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Minimum:
-                # Stick help button to right edge of non-expanding widget
-                rowLayout.addStretch()
-            formField = rowLayout
-
-        isChild = key in self.dependencies
-        if isChild:
-            self.dependentRowWidgets[key] = [w for w in rowWidgets if not isinstance(w, QHintButton)]
-
-        # No caption (or the control carries it), make field span entire row
-        if not caption or isinstance(rowWidgets[0], QCheckBox | QPushButton):
-            if isChild and isinstance(rowWidgets[0], QCheckBox):
-                # Line up a dependent checkbox's text with its parent's text
-                style = rowWidgets[0].style()
-                indent = (style.pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth, None, rowWidgets[0])
-                          + style.pixelMetric(QStyle.PixelMetric.PM_CheckBoxLabelSpacing, None, rowWidgets[0]))
-                indentedLayout = QHBoxLayout()
-                indentedLayout.addSpacing(indent)
-                if isinstance(formField, QLayout):
-                    indentedLayout.addLayout(formField)
-                else:
-                    indentedLayout.addWidget(formField)
-                formField = indentedLayout
-            return control, None, formField
-
-        # There's a leading caption, so add it as the label in the row
-        caption += _(":")
-        label = QLabel(caption)
-        label.setBuddy(rowWidgets[0])
-        if tip:
-            label.setToolTip(tip)
-        if isChild:
-            self.dependentRowWidgets[key].insert(0, label)
-        return control, label, formField
-
     def setCategory(self, row: int):
         self.categoryList.setCurrentRow(row)
 
@@ -338,7 +491,6 @@ class PrefsDialog(QDialog):
         categoryGuide = trtables.prefKeyNoDefault(f"{categoryKey}_guide")
 
         self.stackedWidget.setCurrentIndex(row)
-        self.categoryLabel.setText(categoryName)
 
         self.toggleGuideBrowser(False)
         if categoryGuide:
@@ -387,10 +539,13 @@ class PrefsDialog(QDialog):
         assert not row.notOn, f"unknown platform {row.notOn}"
         return False
 
-    def makeControlWidget(self, key: str, value, caption: str) -> QWidget:
+    def makeControlWidget(self, row: prefsschema.Row, value, caption: str) -> QWidget | tuple[QWidget, QLabel]:
+        key = row.key
         valueType = type(value)
 
-        if key == "language":
+        if row.control == "radio":
+            return self.radioControl(key, value, caption)
+        elif key == "language":
             return self.languageControl(key, value)
         elif key == "qtStyle":
             return self.qtStyleControl(key, value)
@@ -464,9 +619,9 @@ class PrefsDialog(QDialog):
             # A count without a range of its own still gets a spin box: never negative, never free text
             return self.boundedIntControl(key, value, 0, 999_999)
         elif valueType is bool:
-            trueText = trtables.prefKeyNoDefault(key + "_true")
-            falseText = trtables.prefKeyNoDefault(key + "_false")
-            if trueText or falseText:
+            choiceNames = self.boolChoiceNames(key)
+            if choiceNames:
+                trueText, falseText = choiceNames
                 return self.boolComboBoxControl(key, value, trueName=trueText, falseName=falseText)
             else:
                 return self.boolCheckBoxControl(key, value, caption)
@@ -619,6 +774,51 @@ class PrefsDialog(QDialog):
         control.checkStateChanged.connect(lambda state, k=prefKey: self.assign(k, state == Qt.CheckState.Checked))
         return control
 
+    def radioChoices(self, prefKey: str, prefValue) -> list[tuple[str, Any, str]]:
+        """(caption, value, object name suffix) of each choice, the default choice first."""
+        default = settings.Prefs.__dataclass_fields__[prefKey].default
+        if type(prefValue) is bool:
+            trueText, falseText = self.boolChoiceNames(prefKey)
+            choices = [(trueText, True, "true"), (falseText, False, "false")]
+        else:
+            choices = [(trtables.enum(member), member, member.name) for member in type(prefValue)]
+            choices = [choice for choice in choices if choice[0]]
+        choices.sort(key=lambda choice: choice[1] != default)
+        return choices
+
+    def radioControl(self, prefKey: str, prefValue, caption: str) -> QWidget:
+        """
+        One radio button per choice, on one row when they fit in the control
+        column, stacked otherwise.
+        """
+        group = QWidget(self)
+        group.setAccessibleName(stripAccelerators(caption))
+        buttonGroup = QButtonGroup(group)
+
+        buttons = []
+        for text, value, nameSuffix in self.radioChoices(prefKey, prefValue):
+            button = QRadioButton(text, group)
+            button.setObjectName(f"{self.ControlQObjectNamePrefix}{prefKey}_{nameSuffix}")
+            button.setChecked(value == prefValue)
+            button.toggled.connect(lambda checked, v=value: checked and self.assign(prefKey, v))
+            buttonGroup.addButton(button)
+            buttons.append(button)
+
+        oneRowWidth = sum(b.sizeHint().width() for b in buttons) + self.RadioGap * (len(buttons) - 1)
+        layout: QBoxLayout
+        if oneRowWidth <= self.controlColumnWidth():
+            layout = QHBoxLayout(group)
+            layout.setSpacing(self.RadioGap)
+        else:
+            layout = QVBoxLayout(group)
+            layout.setSpacing(4)
+        layout.setContentsMargins(QMargins())
+        for button in buttons:
+            layout.addWidget(button)
+
+        group.setFocusProxy(next(b for b in buttons if b.isChecked()) if any(b.isChecked() for b in buttons) else buttons[0])
+        return group
+
     def enumControl(self, prefKey, prefValue, enumType, previewCallback=None) -> QComboBox | QComboBoxWithPreview:
         control: QComboBox | QComboBoxWithPreview
         if previewCallback:
@@ -732,7 +932,6 @@ class PrefsDialog(QDialog):
     def dateFormatControl(self, prefKey, prefValue, presets):
         currentDate = QDateTime.currentDateTime()
         sampleDate = QDateTime(QDate(currentDate.date().year(), 1, 30), QTime(9, 45))
-        bogusTime = "Wednesday, December 99, 9999 99:99:99 AM"
 
         def genPreview(f):
             return QLocale().toString(sampleDate, f)
@@ -741,10 +940,7 @@ class PrefsDialog(QDialog):
             preview.setText(genPreview(text))
             self.assign(prefKey, text)
 
-        preview = QLabel(bogusTime)
-        preview.setProperty("class", "secondary")  # Dimmed, but still readable
-        preview.setMaximumWidth(preview.fontMetrics().horizontalAdvance(bogusTime))
-        preview.setText(genPreview(prefValue))
+        preview = self.makeNote(genPreview(prefValue), prefKey)
 
         control = QComboBoxWithPreview(self)
         control.setEditable(True)
@@ -756,7 +952,7 @@ class PrefsDialog(QDialog):
         control.setEditText(prefValue)
         control.editTextChanged.connect(onEditTextChanged)
 
-        return vBoxWidget(control, preview)
+        return control, preview
 
     @benchmark
     def syntaxHighlightingControl(self, prefKey, prefValue):

@@ -605,6 +605,19 @@ PrefsDialog QPlainTextEdit {
     border-color: ${controlBorder};
 }
 
+/* Settings' pop-up menus are one button, like a Mac pop-up button: a chevron
+   pair, no separate drop-down box. */
+PrefsDialog QComboBox::drop-down {
+    border-left: none;
+    width: 18px;
+}
+
+PrefsDialog QComboBox::down-arrow {
+    image: url(assets:icons/qss-updown.svg);
+    width: 8px;
+    height: 12px;
+}
+
 SearchBar QLineEdit {
     border: 1px solid ${border};
     border-radius: ${outerRadius};
