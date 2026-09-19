@@ -291,13 +291,15 @@ class AiChatDialog(QDialog):
 
     def prepareGuidance(self):
         paths = set()
-        revision = self.branchRange[1] if self.branchRange else self.commits[0] if self.commits else "HEAD"
+        diffs = []
+        # Uncommitted changes are compared against HEAD; look up its commit id,
+        # since the repo's object lookup doesn't resolve reference names.
+        revision = self.branchRange[1] if self.branchRange else self.commits[0] if self.commits else str(self.repo.head_commit_id)
         if self.worktreePaths:
             paths.update(self.worktreePaths)
         elif self.branchRange:
             diffs = [self.repo[self.branchRange[0]].tree.diff_to_tree(self.repo[revision].tree)]
         else:
-            diffs = []
             for sha in self.commits:
                 commit = self.repo[sha]
                 diffs.append(commit.parents[0].tree.diff_to_tree(commit.tree) if commit.parents else commit.tree.diff_to_tree())

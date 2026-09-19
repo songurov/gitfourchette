@@ -363,6 +363,30 @@ def testWorktreePrompt():
     assert "Ce s-a schimbat?" in prompt
 
 
+def testAskAboutUncommittedChanges(aiDialog, monkeypatch):
+    # Project rules are included by default, so they must be gathered for
+    # uncommitted files too, against the tree that HEAD points to
+    fakeCli(monkeypatch, """
+import sys, json
+prompt = sys.stdin.read()
+assert 'master.txt' in prompt and 'diff --git' in prompt and 'Local guidance.' in prompt
+print(json.dumps({'type': 'item.completed', 'item': {'id': '1', 'type': 'agent_message', 'text': 'answer'}}))
+print(json.dumps({'type': 'result', 'result': 'answer'}))
+""")
+    repo = aiDialog.repo
+    writeFile(f"{repo.workdir}/master.txt", "uncommitted change\n")
+    writeFile(f"{repo.workdir}/AGENTS.md", "Local guidance.")
+    dlg = AiChatDialog(repo, [], aiDialog, worktreePaths=["master.txt"])
+    dlg.show()
+    assert dlg.rulesCheck.isChecked()
+    dlg.input.setPlainText("What changed?")
+    dlg.send()
+    waitUntilTrue(lambda: dlg.process is None)
+    assert dlg.messages[-1]["content"] == "answer"
+    assert "Local working tree:AGENTS.md" in dlg.guidanceSources
+    dlg.reject()
+
+
 def testBranchReviewWithoutNewCommits(aiDialog):
     repo = aiDialog.repo
     repo.references.create("refs/heads/same-tip", repo.head.target)
