@@ -73,6 +73,10 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
+        # On macOS, paint the title bar as part of the window, so that it and the
+        # toolbar read as one surface. First thing: this sets window flags.
+        self.macTitleBar = MacTitleBar(self) if MACOS and MacTitleBar.isSupported() else None
+
         self.welcomeStack = QStackedWidget(self)
         self.setCentralWidget(self.welcomeStack)
 

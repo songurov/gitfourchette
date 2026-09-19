@@ -27,6 +27,7 @@ from .gitutils import (
     signatureQDateTime,
     signatureDateFormat,
 )
+from .mactitlebar import MacTitleBar, titleBarDoubleClickAction
 from .memoryindicator import MemoryIndicator
 from .messageboxes import (
     MessageBoxIconName, excMessageBox, asyncMessageBox,

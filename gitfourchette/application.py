@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import textwrap
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -592,12 +593,22 @@ class GFApplication(QApplication):
         from gitfourchette.syntax.colorscheme import ColorScheme
         from gitfourchette.toolbox import mixColors, iconbank
         from gitfourchette.toolbox.appstyle import AppStyle
-        from gitfourchette.themes import ThemeColors
+        from gitfourchette.themes import ThemeColors, pinnedColorScheme
 
         effectiveStyle = settings.prefs.qtStyle
 
         if not effectiveStyle:
             effectiveStyle = self.platformDefaultStyleName
+
+        # On macOS, whatever Qt doesn't paint (the title bar's text and buttons,
+        # native menus and dialogs) takes the app's appearance, not our palette.
+        # Pin that appearance to the theme's mode, or a light theme would sit
+        # under a dark title bar whenever the system is dark. This goes first:
+        # a theme with no mode reads the system's scheme below, so an earlier
+        # pin must have been lifted by then.
+        if MACOS:
+            with suppress(AttributeError):  # QStyleHints.setColorScheme needs Qt 6.8+
+                QGuiApplication.styleHints().setColorScheme(pinnedColorScheme(effectiveStyle))
 
         # See if it's a custom theme
         accent = self.platformStandardAccent

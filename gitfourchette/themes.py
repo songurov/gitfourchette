@@ -62,6 +62,24 @@ def isDarkStyle(styleName: str) -> bool:
         return False
 
 
+def pinnedColorScheme(styleName: str) -> Qt.ColorScheme:
+    """
+    The color scheme that this style string pins the app to.
+
+    Only the built-in theme carries a mode ("gitfourchette-builtin,dark").
+    Anything else, including the built-in theme without a mode, follows the
+    system, which Qt spells ColorScheme.Unknown.
+    """
+    tokens = styleName.split(",")
+    if tokens[0] != ThemeName.BuiltIn:
+        return Qt.ColorScheme.Unknown
+    if "dark" in tokens[1:]:
+        return Qt.ColorScheme.Dark
+    if "light" in tokens[1:]:
+        return Qt.ColorScheme.Light
+    return Qt.ColorScheme.Unknown
+
+
 def withThemeMode(styleName: str, dark: bool) -> str:
     """
     Return `styleName` pinned to light or dark.
