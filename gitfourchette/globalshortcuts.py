@@ -20,6 +20,7 @@ class GlobalShortcuts:
     openRepoFolder: MultiShortcut = NO_SHORTCUT
     openTerminal: MultiShortcut = NO_SHORTCUT
     quickLaunch: MultiShortcut = NO_SHORTCUT
+    toggleSidebar: MultiShortcut = NO_SHORTCUT
 
     stageHotkeys: ClassVar = [Qt.Key.Key_Return, Qt.Key.Key_Enter]  # Return: main keys; Enter: on keypad
     discardHotkeys: ClassVar = [Qt.Key.Key_Delete, Qt.Key.Key_Backspace]
@@ -45,5 +46,7 @@ class GlobalShortcuts:
         # Meta+P is Super+P (Cmd+P already pushes). Desktops that grab Super+P
         # for themselves still leave Ctrl+Shift+A, a well-known "find action" key.
         cls.quickLaunch = makeMultiShortcut("Meta+P", "Ctrl+Shift+A")
+        # Control-Command-S, as in the Mac's own apps
+        cls.toggleSidebar = makeMultiShortcut("Ctrl+Meta+S" if MACOS else "F9")
 
         cls._initialized = True

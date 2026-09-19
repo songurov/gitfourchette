@@ -3916,6 +3916,10 @@ msgstr "&Hızlı Başlat…"
 msgid "Show status bar"
 msgstr "Durum çubuğunu göster"
 
+#: mainwindow.py:362
+msgid "Show sidebar"
+msgstr "Kenar çubuğunu göster"
+
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"
 msgstr "Menü çubuğunu göster"

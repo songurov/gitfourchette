@@ -150,6 +150,10 @@ class RepoWidget(QWidget):
 
         sideSplitter.addWidget(sidebarContainer)
         sideSplitter.addWidget(centralSplitter)
+        # The splitter doesn't let the sidebar collapse, so hiding it is how
+        # View > Show Sidebar gives its room to the graph and the diff
+        self.sidebarContainer = sidebarContainer
+        sidebarContainer.setVisible(settings.prefs.showSidebar)
         setDefaultSplitterSizes(sideSplitter, [self.defaultSidebarWidth(), 500])
         sideSplitter.setStretchFactor(0, 0)  # don't auto-stretch sidebar when resizing window
         sideSplitter.setStretchFactor(1, 1)

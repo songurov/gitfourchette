@@ -404,6 +404,7 @@ def _prefKeyTable() -> dict[str, str]:
         "compactUi_help": _("Smaller text and icon-only toolbar buttons"),
         "language": _("Language"),
         "showToolBar": _("Show toolbar"),
+        "showSidebar": _("Show sidebar"),
         "showStatusBar": _("Show status bar"),
         "showMenuBar": _("Show menu bar"),
         "showMenuBar_help": _("When the menu bar is hidden, press the Alt key to show it again."),

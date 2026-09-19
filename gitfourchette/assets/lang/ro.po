@@ -3960,6 +3960,10 @@ msgstr "&Lansare rapidă…"
 msgid "Show status bar"
 msgstr "Afișează bara de stare"
 
+#: mainwindow.py:362
+msgid "Show sidebar"
+msgstr "Afișează bara laterală"
+
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"
 msgstr "Afișează bara de meniu"

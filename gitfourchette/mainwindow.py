@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
 
     recentMenu: QMenu
     workspaceMenu: QMenu
+    showSidebarAction: QAction
     showStatusBarAction: QAction
     showMenuBarAction: QAction
 
@@ -372,6 +373,10 @@ class MainWindow(QMainWindow):
                       objectName=QUICKLAUNCH_ACTION_NAME,
                       tip=_("Type a few letters of any command, repo or workspace, and press Enter")),
             ActionDef.SEPARATOR,
+            ActionDef(englishTitleCase(_("Show sidebar")), self.toggleSidebar,
+                      checkState=1 if settings.prefs.showSidebar else -1,
+                      shortcuts=GlobalShortcuts.toggleSidebar,
+                      objectName="ShowSidebarAction"),
             self.mainToolBar.toggleViewAction(),
             ActionDef(englishTitleCase(_("Show status bar")), self.toggleStatusBar, checkState=-1,
                       objectName="ShowStatusBarAction", properties=WITHOUT_REPO),
@@ -415,6 +420,7 @@ class MainWindow(QMainWindow):
         )
 
         self.mainToolBar.toggleViewAction().setProperty(WORKS_WITHOUT_REPO, True)
+        self.showSidebarAction = viewMenu.findChild(QAction, "ShowSidebarAction")
         self.showStatusBarAction = viewMenu.findChild(QAction, "ShowStatusBarAction")
         self.showMenuBarAction = viewMenu.findChild(QAction, "ShowMenuBarAction")
         self.showMenuBarAction.setVisible(not MACOS)
@@ -1247,6 +1253,9 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------------
     # View menu
 
+    def toggleSidebar(self) -> None:
+        GFApplication.applyPrefs(showSidebar=not settings.prefs.showSidebar)
+
     def toggleStatusBar(self) -> None:
         GFApplication.applyPrefs(showStatusBar=not settings.prefs.showStatusBar)
 
@@ -1722,6 +1731,10 @@ class MainWindow(QMainWindow):
         self.statusBar2.enableMemoryIndicator(APP_DEBUG)
         self.mainToolBar.setVisible(settings.prefs.showToolBar)
         self.showStatusBarAction.setChecked(settings.prefs.showStatusBar)
+        self.showSidebarAction.setChecked(settings.prefs.showSidebar)
+        for widget in self.tabs.widgets():
+            if isinstance(widget, RepoWidget):
+                widget.sidebarContainer.setVisible(settings.prefs.showSidebar)
         self.showMenuBarAction.setChecked(settings.prefs.showMenuBar)
 
     def onApplyPrefs(self, changedKeys: set[str], quiet: bool = False) -> None:

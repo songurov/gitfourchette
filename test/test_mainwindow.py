@@ -239,3 +239,39 @@ def testToolbarCustomization(tempDir, mainWindow):
 
     triggerContextMenuAction(tb, "show toolbar")
     assert not tb.isVisible()
+
+
+def testShowSidebarHidesTheSidebarInEveryTab(tempDir, mainWindow):
+    from gitfourchette import settings
+    from gitfourchette.settings import Prefs
+
+    rw1 = mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo1"))
+    rw2 = mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo2"))
+    action = findMenuAction(mainWindow.menuBar(), "view/show sidebar")
+    assert action.isChecked()
+    assert rw2.sidebar.isVisible()
+    assert action.shortcut().matches(QKeySequence("Ctrl+Meta+S" if MACOS else "F9")) \
+           == QKeySequence.SequenceMatch.ExactMatch
+
+    triggerMenuAction(mainWindow.menuBar(), "view/show sidebar")
+    assert not action.isChecked()
+    # The tab in front and the one behind it
+    assert rw2.sidebarContainer.isHidden()
+    assert rw1.sidebarContainer.isHidden()
+    # The graph and the diff take the room
+    QTest.qWait(0)
+    assert rw2.centralSplitter.geometry().left() == 0
+    # A tab opened afterwards follows suit
+    rw3 = mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo3"))
+    assert rw3.sidebarContainer.isHidden()
+
+    # It's a pref, so the next launch starts without the sidebar too
+    settings.prefs.write(force=True)
+    reloaded = Prefs()
+    reloaded.load()
+    assert not reloaded.showSidebar
+
+    triggerMenuAction(mainWindow.menuBar(), "view/show sidebar")
+    assert action.isChecked()
+    assert all(rw.sidebarContainer.isVisibleTo(rw) for rw in (rw1, rw2, rw3))
+    assert rw3.sidebar.isVisible()

@@ -108,6 +108,7 @@ PANES: list[Pane] = [
             Row("language"),
             # Also in the View menu; kept here so that a hidden menu bar can always come back
             Row("showToolBar"),
+            Row("showSidebar"),
             Row("showStatusBar"),
             Row("showMenuBar", notOn="macos"),  # The menu bar is always there on macOS
         ),
