@@ -302,6 +302,7 @@ class CodeView(QPlainTextEdit):
         DiffTextFormats.refresh(scheme, settings.prefs.colorblind)
 
         self.highlighter.setColorScheme(scheme)
+        self.recolorDocument()
         self.highlighter.rehighlight()
 
         # See selection-background-color in .qss asset.
@@ -311,6 +312,13 @@ class CodeView(QPlainTextEdit):
         # Had better luck setting colors with a stylesheet than via setPalette().
         styleSheet = scheme.basicQss(self)
         self.setStyleSheet(styleSheet)
+
+    def recolorDocument(self):
+        """
+        Bring colors that the document itself holds in line with the current
+        DiffTextFormats (see DiffView). The highlighter goes over the whole
+        document right after this.
+        """
 
     def refreshWordWrap(self):
         if settings.prefs.wordWrap:

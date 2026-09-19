@@ -36,11 +36,12 @@ class DiffView(CodeView):
     selectionActionable = Signal(bool)
     visibilityChanged = Signal(bool)
     documentReplaced = Signal(object)
+    documentRecolored = Signal(object)
 
     lineData: list[LineData]
     currentLocator: NavLocator
     currentDelta: GitDelta
-    currentDiffDocument: DiffDocument | None
+    currentDiffDocument: DiffDocument | None = None  # CodeView.__init__ sets the colors before our __init__ runs
     repo: Repo | None
 
     def __init__(self, parent=None):
@@ -198,6 +199,9 @@ class DiffView(CodeView):
         self.currentDiffDocument = newDoc
         self.lineData = newDoc.lineData
 
+        # The document was built on a worker thread: the theme may have changed since
+        newDoc.recolor()
+
         newDoc.document.setParent(self)
         self.setDocument(newDoc.document)
         self.highlighter.setDiffDocument(newDoc)
@@ -221,6 +225,19 @@ class DiffView(CodeView):
         # Now restore cursor/scrollbar positions
         self.restorePosition(locator)
         self.documentReplaced.emit(newDoc)
+
+    def recolorDocument(self):  # override
+        diffDocument = self.currentDiffDocument
+        if diffDocument is None:
+            return
+
+        # Keep the highlighter out of it: it would go over every line we touch,
+        # and it goes over the whole document right after (see setColorScheme)
+        with QSignalBlockerContext(diffDocument.document):
+            recolored = diffDocument.recolor()
+
+        if recolored:
+            self.documentRecolored.emit(diffDocument)
 
     # ---------------------------------------------
     # Context menu

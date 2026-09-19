@@ -797,6 +797,7 @@ class DiffArea(QWidget):
 
         sideBySideDiff = SideBySideDiffView(self)
         diff.documentReplaced.connect(sideBySideDiff.replaceDocument)
+        diff.documentRecolored.connect(sideBySideDiff.recolor)
 
         diffPresentationStack = QStackedWidget(self)
         diffPresentationStack.addWidget(diffViewContainer)

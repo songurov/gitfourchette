@@ -13,9 +13,13 @@ class SideBySideDiffView(QWidget):
     pendingDocument: DiffDocument | None
     "The diff to present the next time this view is shown."
 
+    shownDocument: DiffDocument | None
+    "The diff on display."
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.pendingDocument = None
+        self.shownDocument = None
         self.oldView = self._makeView()
         self.newView = self._makeView()
 
@@ -87,23 +91,29 @@ class SideBySideDiffView(QWidget):
                     newRows.append(filler)
         return oldRows, newRows
 
-    @staticmethod
-    def _fill(view: QPlainTextEdit, rows):
+    @classmethod
+    def _fill(cls, view: QPlainTextEdit, rows):
         # Put all the text in at once, then format only the blocks that need it,
         # in one edit block. Inserting row by row relaid the document out after
         # every line: seconds for a long diff.
         view.setPlainText("\n".join(text for text, _blockFormat in rows))
-        document = view.document()
+        cls._paint(view.document(), rows)
+        view.moveCursor(QTextCursor.MoveOperation.Start)
+
+    @staticmethod
+    def _paint(document: QTextDocument, rows, plainFormat: QTextBlockFormat | None = None):
+        """Set the rows' block formats; rows without one get plainFormat, if given."""
         cursor = QTextCursor(document)
         cursor.beginEditBlock()
         block = document.firstBlock()
         for _text, blockFormat in rows:
+            if blockFormat is None:
+                blockFormat = plainFormat
             if blockFormat is not None:
                 cursor.setPosition(block.position())
                 cursor.setBlockFormat(blockFormat)
             block = block.next()
         cursor.endEditBlock()
-        view.moveCursor(QTextCursor.MoveOperation.Start)
 
     def replaceDocument(self, document: DiffDocument):
         # Build the presentation only when someone looks at it (see showEvent)
@@ -120,6 +130,21 @@ class SideBySideDiffView(QWidget):
         self.pendingDocument = None
         if document is None:
             return
+        self.shownDocument = document
         oldRows, newRows = self._alignedRows(document.lineData)
         self._fill(self.oldView, oldRows)
         self._fill(self.newView, newRows)
+
+    def recolor(self, document: DiffDocument):
+        """
+        Paint the rows again in the current colors after a switch between light
+        and dark. The text and the scroll position stay put.
+        """
+        # A diff still waiting to be shown will be built in the current colors
+        if document is not self.shownDocument:
+            return
+        oldRows, newRows = self._alignedRows(document.lineData)
+        # A row that was painted in the old colors may have no color now (filler rows)
+        plainFormat = QTextBlockFormat()
+        self._paint(self.oldView.document(), oldRows, plainFormat)
+        self._paint(self.newView.document(), newRows, plainFormat)

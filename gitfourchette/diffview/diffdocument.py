@@ -127,8 +127,29 @@ class DiffTextFormats:
     hunkCF = QTextCharFormat()
     warningCF = QTextCharFormat()
 
+    generation = 0
+    """
+    Goes up each time refresh() changes the colors. A document holds copies
+    of the formats it was built with; one built in an older generation must be
+    painted again (see DiffDocument.recolor).
+    """
+
+    _madeFrom: tuple = ()
+    "What the formats were last made from."
+
     @classmethod
     def refresh(cls, scheme: ColorScheme, colorblind: bool):
+        # Every code view calls this whenever any setting changes. Only a new
+        # look (light or dark, another syntax scheme, the colorblind palette)
+        # makes new formats, and has every open diff painted again.
+        madeFrom = (colorblind, *(
+            None if color is None else color.rgba()
+            for color in (scheme.backgroundColor, scheme.diffAdd, scheme.diffDel, scheme.diffFiller, scheme.diffHunkFg)))
+        if madeFrom == cls._madeFrom:
+            return
+        cls._madeFrom = madeFrom
+        cls.generation += 1
+
         bgColor = scheme.backgroundColor
 
         # Base del/add backgrounds.
@@ -202,6 +223,9 @@ class DiffDocument:
     # Syntax highlighting
     oldLexJob: LexJob | None = None
     newLexJob: LexJob | None = None
+
+    formatGeneration: int = 0
+    "The DiffTextFormats.generation that the lines are painted in."
 
     class VeryLongLinesError(ValueError):
         pass
@@ -331,7 +355,8 @@ class DiffDocument:
         diffDocument = DiffDocument(document=textDocument, lineData=lineData,
                                     pluses=pluses, minuses=minuses,
                                     maxLine=max(newLine, oldLine),
-                                    oldHash=oldHash, newHash=newHash)
+                                    oldHash=oldHash, newHash=newHash,
+                                    formatGeneration=DiffTextFormats.generation)
 
         # Begin batching text insertions for performance.
         # This prevents Qt from recomputing the document's layout after every line insertion.
@@ -349,6 +374,17 @@ class DiffDocument:
 
         return diffDocument
 
+    @staticmethod
+    def _lineFormats(origin: str) -> tuple[QTextBlockFormat | None, QTextCharFormat | None]:
+        """A line's block and character formats; None where it keeps the document's own."""
+        if not origin:  # Hunk header
+            return DiffTextFormats.hunkBF, DiffTextFormats.hunkCF
+        if origin == '+':
+            return DiffTextFormats.addBF, None
+        if origin == '-':
+            return DiffTextFormats.delBF, None
+        return None, None
+
     @benchmark
     def buildTextDocument(self, cursor: QTextCursor):
         assert self.document.isEmpty()
@@ -360,18 +396,10 @@ class DiffDocument:
 
         for ld in self.lineData:
             # Decide block format & character format
-            origin = ld.origin
-            if not origin:
-                bf = DiffTextFormats.hunkBF
-                cf = DiffTextFormats.hunkCF
-            elif origin == '+':
-                bf = DiffTextFormats.addBF
-                cf = defaultCF
-            elif origin == '-':
-                bf = DiffTextFormats.delBF
-                cf = defaultCF
-            else:
+            bf, cf = self._lineFormats(ld.origin)
+            if bf is None:
                 bf = defaultBF
+            if cf is None:
                 cf = defaultCF
 
             # Process line ending
@@ -454,6 +482,61 @@ class DiffDocument:
                 oldBlockEnd = blockEnd
 
         assert not doppelgangerBlocksQueue, "should've consumed all doppelganger matching blocks!"
+
+    def recolor(self) -> bool:
+        """
+        Paint the lines again in the current DiffTextFormats, after a switch
+        between light and dark for instance. The document holds copies of the
+        formats it was built with, so new colors don't reach it on their own.
+        The text stays as it is, and so do a view's cursor and scroll position.
+
+        Returns False if the lines were painted in the current colors already.
+        """
+        if self.formatGeneration == DiffTextFormats.generation:
+            return False
+        self.formatGeneration = DiffTextFormats.generation
+
+        if self.document.isEmpty():  # Cleared by its view, nothing to paint
+            return False
+
+        # Nobody undoes a diff's colors: don't pile up a step for every line
+        self.document.setUndoRedoEnabled(False)
+        self._paintLines()
+        return True
+
+    @benchmark
+    def _paintLines(self):
+        plainCF = QTextCharFormat()
+        keepAnchor = QTextCursor.MoveMode.KeepAnchor
+        cursor = QTextCursor(self.document)
+        cursor.beginEditBlock()
+
+        for ld in self.lineData:
+            blockFormat, charFormat = self._lineFormats(ld.origin)
+            textEnd = ld.cursorEnd - ld.trailerLength
+
+            if blockFormat is not None:
+                cursor.setPosition(ld.cursorStart)
+                cursor.setBlockFormat(blockFormat)
+
+            if charFormat is not None:  # Hunk header
+                cursor.setPosition(ld.cursorStart)
+                cursor.setBlockCharFormat(charFormat)
+                cursor.setPosition(textEnd, keepAnchor)
+                cursor.setCharFormat(charFormat)
+            elif ld.doppelganger >= 0:
+                # Wipe the old emphasis, formatDoppelgangerDiffs puts it back below
+                cursor.setPosition(ld.cursorStart)
+                cursor.setPosition(textEnd, keepAnchor)
+                cursor.setCharFormat(plainCF)
+
+            if ld.trailerLength:
+                cursor.setPosition(textEnd)
+                cursor.setPosition(ld.cursorEnd, keepAnchor)
+                cursor.setCharFormat(DiffTextFormats.warningCF)
+
+        self.formatDoppelgangerDiffs(cursor)
+        cursor.endEditBlock()
 
 
 def _invertMatchingBlocks(blockList: list[difflib.Match], useA: bool) -> Iterator[tuple[int, int]]:

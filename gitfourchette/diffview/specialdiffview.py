@@ -9,6 +9,7 @@ from gitfourchette.application import GFApplication
 from gitfourchette.diffview.specialdiff import SpecialDiffError, ImageDelta
 from gitfourchette.localization import *
 from gitfourchette.qt import *
+from gitfourchette.syntax import ColorScheme
 from gitfourchette.toolbox import stockIcon, escape, DocumentLinks, contrastRatio, mixColors
 
 
@@ -31,10 +32,18 @@ class SpecialDiffView(QTextBrowser):
 
     documentLinks: DocumentLinks | None
 
+    shownPage: SpecialDiffError | ImageDelta | None
+    "What's on display, to draw again in a new theme's colors."
+
+    lastScheme: ColorScheme | None
+    "The syntax scheme in use the last time the prefs were applied."
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.documentLinks = None
         self.centered = False
+        self.shownPage = None
+        self.lastScheme = None
         self.anchorClicked.connect(self.onAnchorClicked)
         GFApplication.instance().restyle.connect(self.refreshPrefs)
         GFApplication.instance().prefsChanged.connect(self.refreshPrefs)
@@ -45,6 +54,27 @@ class SpecialDiffView(QTextBrowser):
         styleSheet = scheme.basicQss(self)
         self.setStyleSheet(styleSheet)
         self.htmlHeader = "<html><style>a { font-weight: bold; }</style>" + settings.prefs.addDelColorsStyleTag()
+
+        # Every new theme comes with a new scheme. The page on display was drawn
+        # in the old colors (its dimmed details and icon, the frame around an
+        # image's difference): draw it again.
+        schemeChanged = self.lastScheme is not None and scheme is not self.lastScheme
+        self.lastScheme = scheme
+        if schemeChanged and self.shownPage is not None:
+            self.redisplay()
+
+    def redisplay(self):
+        page = self.shownPage
+        scroll = self.verticalScrollBar().value()
+        if isinstance(page, ImageDelta):
+            self.displayImageDelta(page)
+        else:
+            self.displaySpecialDiffError(page)
+        self.verticalScrollBar().setValue(scroll)
+
+    def clear(self):  # override
+        self.shownPage = None
+        super().clear()
 
     def onAnchorClicked(self, link: QUrl):
         if self.documentLinks is not None and self.documentLinks.processLink(link):
@@ -72,6 +102,7 @@ class SpecialDiffView(QTextBrowser):
         return palette.color(QPalette.ColorRole.Text), palette.color(QPalette.ColorRole.Base)
 
     def displaySpecialDiffError(self, err: SpecialDiffError):
+        self.shownPage = err
         document = QTextDocument(self)
         document.setObjectName("DiffErrorDocument")
 
@@ -148,6 +179,7 @@ class SpecialDiffView(QTextBrowser):
         them. Looking at one at a time tells you nothing about a small edit.
         """
 
+        self.shownPage = delta
         sides = [file for file in (delta.old, delta.new) if file.image is not None]
         difference = delta.differenceImage()
         showLfsStatus = delta.old.deltaFile.lfs or delta.new.deltaFile.lfs
