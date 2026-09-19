@@ -304,6 +304,55 @@ def testPaletteRenders(tempDir, mainWindow):
     palette.close()
 
 
+def testLongPathLeavesTheRepoNameWhole(tempDir, mainWindow):
+    """A path wider than the row gives way to the repo's name, which says what the row is."""
+
+    class RecordingPainter(QPainter):
+        def __init__(self, device):
+            super().__init__(device)
+            self.texts = []
+
+        def drawText(self, *args):
+            self.texts.append(args)
+            super().drawText(*args)
+
+    parent = os.path.join(tempDir.name, *["a-rather-long-folder-name"] * 8)
+    os.makedirs(parent)
+    mainWindow.openRepo(unpackRepo(parent, renameTo="alpha"))
+    palette = openPalette(mainWindow)
+    query(palette, "alpha")
+    entry = palette.currentEntry()
+    assert entry.title == "alpha"
+
+    view = palette.listView
+    index = view.currentIndex()
+    option = QStyleOptionViewItem()
+    view.initViewItemOption(option)
+    option.rect = view.visualRect(index)
+    metrics = QFontMetrics(option.font)
+    assert metrics.horizontalAdvance(entry.detail) > option.rect.width(), "the path should be wider than the row"
+
+    image = QImage(view.viewport().size(), QImage.Format.Format_ARGB32)
+    painter = RecordingPainter(image)
+    view.itemDelegate().paint(painter, option, index)
+    painter.end()
+    (textRect, _flags, title), (_textRect, _flags, detail) = painter.texts
+
+    assert title == "alpha"
+    # The path loses its middle, keeping where it starts and the repo's own folder
+    assert detail != entry.detail
+    assert detail.startswith(entry.detail[:4])
+    assert detail.endswith(os.sep + "alpha")
+    # Side by side, apart
+    assert metrics.horizontalAdvance(title) + metrics.horizontalAdvance("M") + metrics.horizontalAdvance(detail) \
+           <= textRect.width()
+
+    # What fits, like a shortcut, is drawn as it is
+    fit = view.itemDelegate().fitTitleAndDetail(metrics, textRect.width(), "Push Branch…", "Ctrl+P")
+    assert fit == ("Push Branch…", "Ctrl+P")
+    palette.close()
+
+
 HOME_COMMANDS = {"Open Repository…", "Clone Repository…", "New Repository…", "Settings…", "Quit",
                  "Fetch All Repositories", "Rescan Repositories", "Open Trash…", "Show Toolbar"}
 REPO_COMMANDS = {"Push Branch…", "Pull Remote Branch…", "New Local Branch…", "Stash Changes…", "Find…",

@@ -132,6 +132,26 @@ def menuBarEntries(menuBar: QMenuBar, skip: Iterable[QMenu] = (), withoutRepo: b
 class _EntryDelegate(QStyledItemDelegate):
     """Title, then the detail in a dimmer color; section headers in bold."""
 
+    DetailShare = 0.45
+    """How much of a row a detail may always claim, however long the title."""
+
+    @classmethod
+    def fitTitleAndDetail(cls, metrics: QFontMetrics, width: int, title: str, detail: str) -> tuple[str, str]:
+        """
+        Share a row between the title and the detail, a gap apart.
+
+        The title says what the row is, so it comes first. The detail (often a
+        path) gets the room the title leaves, and never less than DetailShare of
+        the row; if it's still too long, it loses its middle, keeping both ends.
+        """
+        if not detail:
+            return metrics.elidedText(title, Qt.TextElideMode.ElideRight, width), ""
+        gap = metrics.horizontalAdvance("M")
+        detailRoom = max(width - gap - metrics.horizontalAdvance(title), int(width * cls.DetailShare))
+        detail = metrics.elidedText(detail, Qt.TextElideMode.ElideMiddle, detailRoom)
+        titleRoom = max(0, width - gap - metrics.horizontalAdvance(detail))
+        return metrics.elidedText(title, Qt.TextElideMode.ElideRight, titleRoom), detail
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
         detail = index.data(_DetailRole) or ""
         isHeader = bool(index.data(_IsHeaderRole))
@@ -157,9 +177,7 @@ class _EntryDelegate(QStyledItemDelegate):
         painter.setPen(opt.palette.color(colorGroup, QPalette.ColorRole.PlaceholderText if isHeader else textRole))
 
         metrics = QFontMetrics(font)
-        detailWidth = metrics.horizontalAdvance(detail) if detail else 0
-        titleWidth = max(0, textRect.width() - (detailWidth + metrics.horizontalAdvance("M") if detail else 0))
-        elidedTitle = metrics.elidedText(title, Qt.TextElideMode.ElideRight, titleWidth)
+        elidedTitle, detail = self.fitTitleAndDetail(metrics, textRect.width(), title, detail)
         align = Qt.AlignmentFlag.AlignVCenter
         painter.drawText(textRect, align | Qt.AlignmentFlag.AlignLeft, elidedTitle)
 
