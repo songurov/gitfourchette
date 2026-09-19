@@ -3872,6 +3872,10 @@ msgstr "&Быстрый запуск…"
 msgid "Show status bar"
 msgstr "Показать строку состояния"
 
+#: mainwindow.py:362
+msgid "Show sidebar"
+msgstr "Показать боковую панель"
+
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"
 msgstr "Показать строку меню"

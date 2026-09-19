@@ -238,6 +238,8 @@ class Prefs(PrefsFile):
     smoothScroll                : bool                  = True
     toolBarButtonStyle          : Qt.ToolButtonStyle    = Qt.ToolButtonStyle.ToolButtonTextBesideIcon
     toolBarIconSize             : int                   = 16
+    showSidebar                 : bool                  = True
+    """View > Show Sidebar, for every repo tab at once."""
     defaultCloneLocation        : str                   = ""
     dontShowAgain               : list[str]             = dataclasses.field(default_factory=list)
     donatePrompt                : int                   = 0

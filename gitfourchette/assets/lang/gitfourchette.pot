@@ -3934,6 +3934,10 @@ msgstr ""
 msgid "Show status bar"
 msgstr ""
 
+#: mainwindow.py:362
+msgid "Show sidebar"
+msgstr ""
+
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"
 msgstr ""
