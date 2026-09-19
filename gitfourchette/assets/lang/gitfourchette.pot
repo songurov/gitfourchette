@@ -7717,6 +7717,16 @@ msgstr ""
 msgid "Purple"
 msgstr ""
 
+#: trtables.py:332
+#, python-brace-format
+msgid "{app} Modern"
+msgstr ""
+
+#: trtables.py:333
+#, python-brace-format
+msgid "{app} Neutral"
+msgstr ""
+
 #: trtables.py:328
 msgid "Do not ignore whitespace changes"
 msgstr ""

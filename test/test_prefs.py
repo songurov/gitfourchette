@@ -373,14 +373,16 @@ def testDensityRowUsesTheToolbarWords(mainWindow):
 def _themeStrings():
     """Every qtStyle string the app writes for the built-in theme: the toolbar's
     light/dark switch (withThemeMode) and the Settings variant picker."""
-    from gitfourchette.themes import ThemeName, ThemeAccent, withThemeMode
+    from gitfourchette.themes import ThemeName, ThemeAccent, ThemeVariant, withThemeMode
     written = {str(ThemeName.BuiltIn)}  # "System colors"
-    for engine in ["", "Fusion", ThemeName.BuiltIn]:
-        for mode in ["", "light", "dark"]:
-            for accent in ["", *ThemeAccent]:
-                styleName = ",".join(t for t in [engine, mode, accent] if t)
-                for dark in [False, True]:
-                    written.add(withThemeMode(styleName, dark))
+    for variant in ThemeVariant:
+        written.add(",".join(t for t in [ThemeName.BuiltIn, variant] if t))
+        for engine in ["", "Fusion", ThemeName.BuiltIn]:
+            for mode in ["", "light", "dark"]:
+                for accent in ["", *ThemeAccent]:
+                    styleName = ",".join(t for t in [engine, mode, variant, accent] if t)
+                    for dark in [False, True]:
+                        written.add(withThemeMode(styleName, dark))
     return sorted(written)
 
 
@@ -414,6 +416,44 @@ def testThemePickerShowsEveryThemeTheAppWrites(mainWindow):
         variantPicker.activated.emit(variantPicker.currentIndex())
         assert dlg.prefDiff == {}, styleName
         dlg.reject()
+
+
+def testThemePickerOffersNeutral(mainWindow):
+    from gitfourchette.themes import NEUTRAL_DARK, ThemeName
+
+    GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark,#e93d58")
+    try:
+        dlg = GFApplication.instance().openPrefsDialog("qtStyle")
+        group: QWidget = dlg.findChild(QWidget, "prefctl_qtStyle")
+        stylePicker, variantPicker = group.findChildren(QComboBox)
+        assert stylePicker.currentText() == f"{APP_DISPLAY_NAME} Modern"
+
+        # Another look keeps the mode and the accent
+        qcbSetIndex(stylePicker, "Neutral")
+        assert variantPicker.isVisible()
+        assert variantPicker.currentText() == "Dark Red"
+        assert dlg.prefDiff == {"qtStyle": f"{ThemeName.BuiltIn},dark,neutral,#e93d58"}
+
+        # The accent chips show the look's own background
+        chip = variantPicker.itemIcon(variantPicker.currentIndex()).pixmap(16, 16).toImage()
+        assert chip.pixelColor(2, 8).name() == NEUTRAL_DARK.bg
+
+        dlg.accept()
+        assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark,neutral,#e93d58"
+        assert mainWindow.palette().color(QPalette.ColorRole.Window).name() == NEUTRAL_DARK.bg
+
+        # And back to Modern, still dark red
+        dlg = GFApplication.instance().openPrefsDialog("qtStyle")
+        group = dlg.findChild(QWidget, "prefctl_qtStyle")
+        stylePicker, variantPicker = group.findChildren(QComboBox)
+        assert stylePicker.currentText() == f"{APP_DISPLAY_NAME} Neutral"
+        qcbSetIndex(stylePicker, "Modern")
+        assert dlg.prefDiff == {"qtStyle": f"{ThemeName.BuiltIn},dark,#e93d58"}
+        dlg.reject()
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+    assertTranslatedInForkLanguages("{app} Modern", "{app} Neutral")
 
 
 def testThemePickerKeepsTheToolbarsDarkPin(mainWindow):

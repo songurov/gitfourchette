@@ -21,7 +21,8 @@ from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, PrefEffects, prefs
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
-from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent, formatStyle, parseStyle
+from gitfourchette.themes import (
+    StyleParts, ThemeAccent, ThemeColors, ThemeName, ThemeVariant, formatStyle, parseStyle)
 from gitfourchette.toolbox import *
 from gitfourchette.toolbox.reducemotion import systemReducesMotion
 
@@ -1309,14 +1310,23 @@ class PrefsDialog(QDialog):
         return control
 
     def qtStyleControl(self, prefKey, prefValue):
-        currentStyleName = parseStyle(prefValue).engine
+        current = parseStyle(prefValue)
         control = QComboBox(self)
-        variantPicker = self._customThemeVariantPickerControl(prefValue)
+        variantPicker = QComboBox(self)  # Light or dark, and the accent
+        variantPicker.setIconSize(QSize(16, 16))
+        enforceComboBoxMaxVisibleItems(variantPicker, 32)
+        self._fillCustomThemeVariantPicker(variantPicker, current)
+
+        def look(styleName: str):
+            engine, _mode, _accent, variant = parseStyle(styleName)
+            return engine, variant
 
         separator = ("", "")
         defaultStyle = (_p("system default theme setting", "System default"), "")
         nativeStyles = [(name, name) for name in QStyleFactory.keys()]  # noqa: SIM118
-        customStyles = [(trtables.enum(theme), str(theme)) for theme in ThemeName]
+        # Each look of the built-in theme is a style of its own in this list
+        customStyles = [(trtables.enum(variant), formatStyle(ThemeName.BuiltIn, variant=variant))
+                        for variant in ThemeVariant]
         nativeStyles.sort()
         customStyles.sort()
 
@@ -1326,17 +1336,20 @@ class PrefsDialog(QDialog):
                 control.insertSeparator(control.count())
             else:
                 control.addItem(caption, userData=styleName)
-                if styleName == currentStyleName:
+                if look(styleName) == look(prefValue):
                     control.setCurrentIndex(control.count() - 1)
 
         def onPickStyle():
             i = control.currentIndex()
             newValue = control.itemData(i, Qt.ItemDataRole.UserRole)
-            if newValue in ThemeName:
+            engine, _mode, _accent, variant = parseStyle(newValue)
+            if engine in ThemeName:
                 variantPicker.setVisible(True)
-                accentIndex = variantPicker.currentIndex()
-                accentName = variantPicker.itemData(accentIndex)
-                newValue = accentName
+                # Another look keeps the light/dark and accent picked so far
+                picked = parseStyle(variantPicker.currentData())
+                if picked.variant != variant:
+                    self._fillCustomThemeVariantPicker(variantPicker, picked._replace(variant=variant))
+                newValue = variantPicker.currentData()
             else:
                 variantPicker.setVisible(False)
             if parseStyle(newValue) == parseStyle(prefValue):
@@ -1345,7 +1358,7 @@ class PrefsDialog(QDialog):
 
         control.activated.connect(onPickStyle)
         variantPicker.activated.connect(onPickStyle)
-        variantPicker.setVisible(currentStyleName in ThemeName)
+        variantPicker.setVisible(current.engine in ThemeName)
 
         group = QWidget(self)
         layout = QHBoxLayout(group)
@@ -1354,18 +1367,17 @@ class PrefsDialog(QDialog):
         layout.addWidget(variantPicker)
         return group
 
-    def _customThemeVariantPickerControl(self, prefValue: str) -> QComboBox:
-        picker = QComboBox(self)
-        picker.setIconSize(QSize(16, 16))
-        enforceComboBoxMaxVisibleItems(picker, 32)
-
-        # Compare parsed values, so that any spelling of the current theme finds its item
-        currentVariant = parseStyle(prefValue)
+    @staticmethod
+    def _fillCustomThemeVariantPicker(picker: QComboBox, current: StyleParts):
+        """Offer light, dark and every accent in the built-in theme's current look."""
+        picker.clear()
+        variant = current.variant
 
         def addVariant(icon: QIcon, caption: str, mode: str = "", accent: str = ""):
-            value = formatStyle(ThemeName.BuiltIn, mode, accent)
+            value = formatStyle(ThemeName.BuiltIn, mode, accent, variant)
             picker.addItem(icon, caption, value)
-            if parseStyle(value) == currentVariant:
+            # Compare parsed values, so that any spelling of the current theme finds its item
+            if parseStyle(value)[1:] == current[1:]:
                 picker.setCurrentIndex(picker.count() - 1)
 
         addVariant(stockIcon("light-dark-toggle"), _("System colors"))
@@ -1374,7 +1386,7 @@ class PrefsDialog(QDialog):
             picker.insertSeparator(picker.count())
 
             mode = "dark" if dark else "light"
-            theme = ThemeColors.resolveTheme(formatStyle(ThemeName.BuiltIn, mode))
+            theme = ThemeColors.resolveTheme(formatStyle(ThemeName.BuiltIn, mode, variant=variant))
 
             # Light or dark with the system's accent: what the toolbar's Theme menu picks
             modeCaption = stripAccelerators(_("&Dark") if dark else _("&Light"))
@@ -1385,8 +1397,6 @@ class PrefsDialog(QDialog):
                 caption = _("Dark {color}") if dark else _( "Light {color}")
                 caption = caption.format(color=trtables.enum(accent))
                 addVariant(icon, caption, mode, accent)
-
-        return picker
 
     def dateFormatControl(self, prefKey, prefValue, presets):
         currentDate = QDateTime.currentDateTime()

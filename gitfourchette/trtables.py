@@ -120,7 +120,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         RefSort,
         TabBarClick,
     )
-    from gitfourchette.themes import ThemeAccent, ThemeName
+    from gitfourchette.themes import ThemeAccent, ThemeVariant
     from gitfourchette.toolbox import PatchPurpose, PathDisplayStyle, AuthorDisplayStyle
     from gitfourchette.repomodel import GpgStatus
 
@@ -328,8 +328,9 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         ThemeAccent.Purple: _("Purple"),
     }
 
-    table[ThemeName] = {
-        ThemeName.BuiltIn: APP_DISPLAY_NAME,
+    table[ThemeVariant] = {
+        ThemeVariant.Modern: _("{app} Modern", app=APP_DISPLAY_NAME),
+        ThemeVariant.Neutral: _("{app} Neutral", app=APP_DISPLAY_NAME),
     }
 
     table[WhitespaceMode] = {

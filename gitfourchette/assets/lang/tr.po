@@ -7695,6 +7695,16 @@ msgstr "Çivit"
 msgid "Purple"
 msgstr "Mor"
 
+#: trtables.py:332
+#, python-brace-format
+msgid "{app} Modern"
+msgstr "{app} Modern"
+
+#: trtables.py:333
+#, python-brace-format
+msgid "{app} Neutral"
+msgstr "{app} Nötr"
+
 #: trtables.py:328
 msgid "Do not ignore whitespace changes"
 msgstr "Boşluk değişikliklerini yok sayma"

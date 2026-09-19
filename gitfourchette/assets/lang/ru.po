@@ -7375,6 +7375,16 @@ msgstr "Индиго"
 msgid "Purple"
 msgstr "Фиолетовый"
 
+#: trtables.py:332
+#, python-brace-format
+msgid "{app} Modern"
+msgstr "{app} Современная"
+
+#: trtables.py:333
+#, python-brace-format
+msgid "{app} Neutral"
+msgstr "{app} Нейтральная"
+
 #: trtables.py:328
 msgid "Do not ignore whitespace changes"
 msgstr "Не игнорировать изменения пробелов"

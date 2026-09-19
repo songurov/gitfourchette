@@ -7783,6 +7783,16 @@ msgstr "Indigo"
 msgid "Purple"
 msgstr "Mov"
 
+#: trtables.py:332
+#, python-brace-format
+msgid "{app} Modern"
+msgstr "{app} Modern"
+
+#: trtables.py:333
+#, python-brace-format
+msgid "{app} Neutral"
+msgstr "{app} Neutru"
+
 #: trtables.py:328
 msgid "Do not ignore whitespace changes"
 msgstr "Nu ignora modificările de spații albe"
