@@ -2063,6 +2063,15 @@ msgctxt "toolbar"
 msgid "Quick Launch"
 msgstr "Hızlı Başlat"
 
+#: forms/maintoolbar.py:82
+msgctxt "toolbar"
+msgid "Sidebar"
+msgstr "Kenar çubuğu"
+
+#: forms/maintoolbar.py:83
+msgid "Show or hide the sidebar"
+msgstr "Kenar çubuğunu göster veya gizle"
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr "Herhangi bir komutun, deponun veya çalışma alanının birkaç harfini yazıp Enter'a basın"

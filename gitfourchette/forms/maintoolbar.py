@@ -4,15 +4,34 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import dataclasses
 from collections.abc import Iterable
 
 from gitfourchette import settings
 from gitfourchette import tasks
+from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.qt import *
 from gitfourchette.tasks import TaskBook
-from gitfourchette.themes import activeTheme
+from gitfourchette.themes import ToolbarLayout, activeTheme
 from gitfourchette.toolbox import *
+
+
+@dataclasses.dataclass
+class ToolbarArrangement:
+    """The main toolbar's buttons in one ToolbarLayout."""
+
+    actions: list[QAction]
+    "Everything on the bar, in order, separators and spacers included."
+
+    repoScoped: list[QAction]
+    "What needs a repo, hidden on Home."
+
+    homeOnly: list[QAction]
+    "What stands in for the repo buttons on Home."
+
+    icons: dict[QAction, str]
+    "Icons that this layout draws differently from another one."
 
 
 class MainToolBar(QToolBar):
@@ -38,6 +57,9 @@ class MainToolBar(QToolBar):
         self.userCommandActions: list[QAction] = []
         self.darkTheme = False
         self.iconColorTable = ""
+        self.repoOpen = False
+        self.arrangementName = ""
+        self.repoButton: QToolButton | None = None
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onCustomContextMenuRequested)
@@ -46,8 +68,24 @@ class MainToolBar(QToolBar):
         self.toolButtonStyleChanged.connect(self.onToolButtonStyleChanged)
         self.iconSizeChanged.connect(self.onIconSizeChanged)
 
-        self.backAction = TaskBook.toolbarAction(self, tasks.JumpBack).toQAction(self)
-        self.forwardAction = TaskBook.toolbarAction(self, tasks.JumpForward).toQAction(self)
+        # The bar shows the same actions as the menus, minus their shortcuts:
+        # the menu's copy owns the key, or both would claim it.
+        def toolbarAction(actionDef: ActionDef) -> QAction:
+            action = actionDef.toQAction(self)
+            action.setShortcut("")
+            return action
+
+        def taskAction(taskClass) -> QAction:
+            return toolbarAction(TaskBook.toolbarAction(self, taskClass))
+
+        # MainWindow connects this one to View > Show Sidebar, which owns the key
+        self.sidebarAction = toolbarAction(ActionDef(
+            _p("toolbar", "Sidebar"), icon="sidebar-left",
+            shortcuts=GlobalShortcuts.toggleSidebar,
+            tip=_("Show or hide the sidebar")))
+
+        self.backAction = taskAction(tasks.JumpBack)
+        self.forwardAction = taskAction(tasks.JumpForward)
 
         # Home has no repo in front of you, so the repo buttons step aside. These
         # take their place: the ways into a repo. MainWindow connects them.
@@ -63,13 +101,15 @@ class MainToolBar(QToolBar):
         self.quickLaunchAction = ActionDef(
             _p("toolbar", "Quick Launch"), icon="edit-find",
             tip=_("Type a few letters of any command, repo or workspace, and press Enter")).toQAction(self)
-        homeSeparator = QAction(self)
-        homeSeparator.setSeparator(True)
-        self.homeActions = [self.openRepoAction, self.cloneRepoAction, self.newRepoAction,
-                            homeSeparator, self.quickLaunchAction]
 
-        self.workdirAction = TaskBook.toolbarAction(self, tasks.JumpToUncommittedChanges).toQAction(self)
-        self.headAction = TaskBook.toolbarAction(self, tasks.JumpToHEAD).toQAction(self)
+        self.workdirAction = taskAction(tasks.JumpToUncommittedChanges)
+        self.headAction = taskAction(tasks.JumpToHEAD)
+
+        self.stashAction = taskAction(tasks.NewStash)
+        self.branchAction = taskAction(tasks.NewBranchFromHead)
+        self.fetchAction = taskAction(tasks.FetchRemotes)
+        self.pullAction = taskAction(tasks.PullBranch)
+        self.pushAction = taskAction(tasks.PushBranch)
 
         # One button for every "take this repo somewhere else": the file
         # manager, a terminal, an editor. Its menu is filled by MainWindow,
@@ -101,49 +141,180 @@ class MainToolBar(QToolBar):
         self.themeMenu.aboutToShow.connect(self.fillThemeMenu)
         self.themeAction.setMenu(self.themeMenu)
 
-        self.settingsAction = ActionDef(
+        self.settingsAction = toolbarAction(ActionDef(
             _("Settings"), self.openPrefs, icon="git-settings",
             shortcuts=QKeySequence.StandardKey.Preferences,
-            tip=_("Configure {app}", app=qAppName())
-        ).toQAction(self)
+            tip=_("Configure {app}", app=qAppName())))
 
-        defs = [
-            *self.homeActions,
+        self.arrangements = {
+            ToolbarLayout.Classic: self.classicArrangement(),
+            ToolbarLayout.Centered: self.centeredArrangement(),
+        }
+
+        # The workspace button has no action of its own: clicking it opens the list.
+        self.setWorkspaceName("")
+
+        # No repo is open until one is: start with the repo-only buttons hidden,
+        # since onTabCurrentWidgetChanged doesn't fire on a tab-less launch.
+        self.applyCompact(settings.prefs.compactUi)
+
+        self.updateNavButtons()
+
+    def separatorAction(self) -> QAction:
+        action = QAction(self)
+        action.setSeparator(True)
+        return action
+
+    def spacerAction(self, width: int = 0) -> QWidgetAction:
+        """Room between two groups: all there is to spare, or a fixed width."""
+        spacer = QWidget()
+        if width:
+            spacer.setFixedWidth(width)
+        else:
+            spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        action = QWidgetAction(self)
+        action.setDefaultWidget(spacer)
+        return action
+
+    def classicArrangement(self) -> ToolbarArrangement:
+        homeSeparator = self.separatorAction()
+        homeOnly = [self.openRepoAction, self.cloneRepoAction, self.newRepoAction,
+                    homeSeparator, self.quickLaunchAction]
+        leftSpacer = self.spacerAction()
+
+        actions = [
+            *homeOnly,
             self.backAction,
             self.forwardAction,
             self.workdirAction,
             self.headAction,
-            ActionDef.SEPARATOR,
+            self.separatorAction(),
 
-            TaskBook.toolbarAction(self, tasks.NewStash),
-            TaskBook.toolbarAction(self, tasks.NewBranchFromHead),
-            ActionDef.SEPARATOR,
-            TaskBook.toolbarAction(self, tasks.FetchRemotes),
-            TaskBook.toolbarAction(self, tasks.PullBranch),
-            TaskBook.toolbarAction(self, tasks.PushBranch),
-            ActionDef.SPACER,
+            self.stashAction,
+            self.branchAction,
+            self.separatorAction(),
+            self.fetchAction,
+            self.pullAction,
+            self.pushAction,
+            leftSpacer,
 
             self.repoAction,
-            ActionDef.SPACER,
+            self.spacerAction(),
 
             self.openInAction,
             self.themeAction,
             self.workspaceAction,
 
-            ActionDef.SEPARATOR,
+            self.separatorAction(),
             self.settingsAction,
         ]
-        ActionDef.addToQToolBar(self, *defs)
 
         # Everything up to the spacer needs a repo - the nav arrows, the jump
         # buttons, stash/branch/fetch/pull/push - and so does "Open In". Taken
         # as a slice of the bar so separators travel with them and none is left
         # stranded. The spacer itself stays, so the right-hand group keeps its
         # place instead of sliding left on Home.
-        allActions = self.actions()
-        spacerIndex = next(i for i, a in enumerate(allActions) if isinstance(a, QWidgetAction))
-        self.repoScopedActions = [a for a in allActions[:spacerIndex] if a not in self.homeActions]
-        self.repoScopedActions += [self.openInAction, self.repoAction]
+        repoScoped = [a for a in actions[:actions.index(leftSpacer)] if a not in homeOnly]
+        repoScoped += [self.openInAction, self.repoAction]
+
+        icons = {
+            self.quickLaunchAction: "edit-find",
+            self.openInAction: "terminal",
+            self.stashAction: TaskBook.icons[tasks.NewStash],
+            self.workdirAction: TaskBook.icons[tasks.JumpToUncommittedChanges],
+            self.headAction: TaskBook.icons[tasks.JumpToHEAD],
+        }
+        return ToolbarArrangement(actions, repoScoped, homeOnly, icons)
+
+    def centeredArrangement(self) -> ToolbarArrangement:
+        """
+        Where you go first (the sidebar, Quick Launch), then what you do to the
+        repo (fetch, pull, push, stash), with the repo in the middle of the bar.
+        Back, forward and Settings aren't on the bar: they have their menu
+        items, keys and mouse buttons.
+        """
+        sidebarGap = self.spacerAction(12)
+        syncGap = self.spacerAction(14)
+        stashGap = self.spacerAction(14)
+        syncSeparators = [self.separatorAction(), self.separatorAction()]
+        homeOnly = [self.openRepoAction, self.cloneRepoAction, self.newRepoAction]
+
+        actions = [
+            self.spacerAction(6),
+            self.sidebarAction,
+            sidebarGap,
+            self.quickLaunchAction,
+            *homeOnly,
+            syncGap,
+            self.fetchAction,
+            syncSeparators[0],
+            self.pullAction,
+            syncSeparators[1],
+            self.pushAction,
+            stashGap,
+            self.stashAction,
+            self.spacerAction(),
+
+            self.repoAction,
+            self.branchAction,
+            self.spacerAction(),
+
+            # Until the sidebar has rows that go to the working directory and
+            # to HEAD, these two wait on the right, out of the way of the
+            # buttons that act on the repo.
+            self.workdirAction,
+            self.headAction,
+            self.openInAction,
+            self.themeAction,
+            self.workspaceAction,
+            self.spacerAction(6),
+        ]
+
+        repoScoped = [
+            self.sidebarAction, sidebarGap, syncGap,
+            self.fetchAction, *syncSeparators, self.pullAction, self.pushAction, stashGap,
+            self.stashAction,
+            self.repoAction, self.branchAction,
+            self.workdirAction, self.headAction,
+            self.openInAction,
+        ]
+
+        icons = {
+            self.quickLaunchAction: "quick-launch",
+            self.openInAction: "open-in",
+            self.stashAction: "git-stash",
+            self.workdirAction: "sidebar-local-changes",
+            self.headAction: "sidebar-all-commits",
+        }
+        return ToolbarArrangement(actions, repoScoped, homeOnly, icons)
+
+    @property
+    def homeActions(self) -> list[QAction]:
+        return self.arrangements[self.arrangementName].homeOnly
+
+    @property
+    def repoScopedActions(self) -> list[QAction]:
+        return self.arrangements[self.arrangementName].repoScoped
+
+    def arrange(self, name: str):
+        """Lay the bar out in a ToolbarLayout, if it isn't already."""
+        if name == self.arrangementName:
+            return
+
+        arrangement = self.arrangements[name]
+        self.arrangementName = name
+
+        # The bar makes a new button for each action added back
+        self.clear()
+        for action, iconId in arrangement.icons.items():
+            action.setProperty(ActionDef.IconProperty, iconId)
+            action.setIcon(stockIcon(iconId, self.iconColorTable))
+        self.addActions(arrangement.actions)
+
+        for action in self.themeAction, self.openInAction, self.workspaceAction:
+            button = self.widgetForAction(action)
+            assert isinstance(button, QToolButton)
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         repoButton = self.widgetForAction(self.repoAction)
         assert isinstance(repoButton, QToolButton)
@@ -152,27 +323,12 @@ class MainToolBar(QToolBar):
         repoButton.setObjectName("GFToolbarRepoButton")
         self.repoButton = repoButton
 
-        themeButton = self.widgetForAction(self.themeAction)
-        assert isinstance(themeButton, QToolButton)
-        themeButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        sidebarButton = self.widgetForAction(self.sidebarAction)
+        if sidebarButton is not None:
+            sidebarButton.setObjectName("GFToolbarSidebarButton")
 
-        openInButton = self.widgetForAction(self.openInAction)
-        assert isinstance(openInButton, QToolButton)
-        openInButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-
-        # The workspace button has no action of its own: clicking it opens the list.
-        workspaceButton = self.widgetForAction(self.workspaceAction)
-        assert isinstance(workspaceButton, QToolButton)
-        workspaceButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.setWorkspaceName("")
-
-        # No repo is open until one is: start with the repo-only buttons hidden,
-        # since onTabCurrentWidgetChanged doesn't fire on a tab-less launch.
-        self.setRepoScopedActionsVisible(False)
-
-        self.applyCompact(settings.prefs.compactUi)
-
-        self.updateNavButtons()
+        self.setToolButtonStyle(self.toolButtonStyle())
+        self.setRepoScopedActionsVisible(self.repoOpen)
 
     def setRepoScopedActionsVisible(self, visible: bool):
         """
@@ -181,6 +337,7 @@ class MainToolBar(QToolBar):
         On Home there is nothing to stash, no branch to push and no folder to
         reveal; offering them is an invitation to click something that can't work.
         """
+        self.repoOpen = visible
         for action in self.repoScopedActions:
             action.setVisible(visible)
         for action in self.homeActions:
@@ -235,12 +392,15 @@ class MainToolBar(QToolBar):
         icons over short dim labels.
         """
         theme = activeTheme()
+        self.arrange(theme.toolbarLayout if theme else ToolbarLayout.Classic)
+        toggleQssProperty(self, "compact", compact)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly if compact
                                 else Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         size = 14 if compact else (theme.toolbarIconSize if theme else 22)
         self.setIconSize(QSize(size, size))
         # The middle block keeps its text in both shapes: it's the label, not a button
-        self.repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        if self.repoButton is not None:
+            self.repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
         # Each button gets its font directly: under a style sheet, a font set on
         # the toolbar doesn't reach its buttons. QFont() follows the app's again.
@@ -286,18 +446,24 @@ class MainToolBar(QToolBar):
 
         super().setToolButtonStyle(style)
 
+        iconOnly = []
+
         # Hide back/forward button text with ToolButtonTextBesideIcon
         if style != Qt.ToolButtonStyle.ToolButtonTextOnly:
-            for navAction in (self.backAction, self.forwardAction):
-                navButton = self.widgetForAction(navAction)
-                assert isinstance(navButton, QToolButton)
-                navButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            iconOnly += [self.backAction, self.forwardAction]
 
         if style == Qt.ToolButtonStyle.ToolButtonTextBesideIcon:
-            for navAction in (self.headAction, self.workdirAction, self.settingsAction):
-                navButton = self.widgetForAction(navAction)
-                assert isinstance(navButton, QToolButton)
-                navButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            iconOnly += [self.headAction, self.workdirAction, self.settingsAction, self.sidebarAction]
+
+        # The sidebar toggle has no label, like the window buttons it sits next
+        # to. Under the icons, a blank one keeps its icon on the same line as
+        # its neighbors' icons; with text only, it needs its name.
+        self.sidebarAction.setIconText(" " if style == Qt.ToolButtonStyle.ToolButtonTextUnderIcon else "")
+
+        for action in iconOnly:
+            button = self.widgetForAction(action)
+            if isinstance(button, QToolButton):  # it may not be on the bar in this layout
+                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
     def onCustomContextMenuRequested(self, localPoint: QPoint):
         globalPoint = self.mapToGlobal(localPoint)
