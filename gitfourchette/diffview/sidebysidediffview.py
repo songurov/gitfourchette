@@ -10,8 +10,12 @@ from gitfourchette.qt import *
 class SideBySideDiffView(QWidget):
     """Aligned old/new presentation of a unified DiffDocument."""
 
+    pendingDocument: DiffDocument | None
+    "The diff to present the next time this view is shown."
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.pendingDocument = None
         self.oldView = self._makeView()
         self.newView = self._makeView()
 
@@ -82,17 +86,37 @@ class SideBySideDiffView(QWidget):
 
     @staticmethod
     def _fill(view: QPlainTextEdit, rows):
-        view.clear()
-        cursor = view.textCursor()
-        for index, (text, blockFormat) in enumerate(rows):
-            if index:
-                cursor.insertBlock()
-            cursor.setBlockFormat(blockFormat or QTextBlockFormat())
-            cursor.insertText(text)
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-        view.setTextCursor(cursor)
+        # Put all the text in at once, then format only the blocks that need it,
+        # in one edit block. Inserting row by row relaid the document out after
+        # every line: seconds for a long diff.
+        view.setPlainText("\n".join(text for text, _blockFormat in rows))
+        document = view.document()
+        cursor = QTextCursor(document)
+        cursor.beginEditBlock()
+        block = document.firstBlock()
+        for _text, blockFormat in rows:
+            if blockFormat is not None:
+                cursor.setPosition(block.position())
+                cursor.setBlockFormat(blockFormat)
+            block = block.next()
+        cursor.endEditBlock()
+        view.moveCursor(QTextCursor.MoveOperation.Start)
 
     def replaceDocument(self, document: DiffDocument):
+        # Build the presentation only when someone looks at it (see showEvent)
+        self.pendingDocument = document
+        if self.isVisible():
+            self._showPendingDocument()
+
+    def showEvent(self, event: QShowEvent):
+        super().showEvent(event)
+        self._showPendingDocument()
+
+    def _showPendingDocument(self):
+        document = self.pendingDocument
+        self.pendingDocument = None
+        if document is None:
+            return
         oldRows, newRows = self._alignedRows(document.lineData)
         self._fill(self.oldView, oldRows)
         self._fill(self.newView, newRows)

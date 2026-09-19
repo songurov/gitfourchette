@@ -143,6 +143,34 @@ def testSideBySideDiff(tempDir, mainWindow):
     assert rw.diffArea.diffPresentationStack.currentWidget() is not side
 
 
+def testSideBySideDiffIsOnlyBuiltWhenShown(tempDir, mainWindow):
+    # Building the side-by-side presentation costs as much as the diff itself,
+    # so nobody who doesn't look at it should pay for it
+    from gitfourchette.diffview.diffdocument import DiffTextFormats
+
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/SideBySide.txt", "new line A\nnew line B\n")
+    writeFile(f"{wd}/Later.txt", "later line\n")
+    rw = mainWindow.openRepo(wd)
+    side = rw.diffArea.sideBySideDiffView
+
+    rw.jump(NavLocator.inUnstaged("SideBySide.txt"), check=True)
+    assert not side.newView.toPlainText()
+
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    assert "new line A" in side.newView.toPlainText()
+    block = side.newView.document().find("new line A").block()
+    assert block.blockFormat().background() == DiffTextFormats.addBF.background()
+    header = side.newView.document().firstBlock()
+    assert header.text().lstrip().startswith("@@")
+    assert header.blockFormat().background() == DiffTextFormats.hunkBF.background()
+
+    # While it's shown, it follows the diff
+    rw.jump(NavLocator.inUnstaged("Later.txt"), check=True)
+    assert "later line" in side.newView.toPlainText()
+    assert "new line A" not in side.newView.toPlainText()
+
+
 @pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with this test, but Qt 6 is fine")
 def testDiffViewStageAllLinesThenJumpToNextFile(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
