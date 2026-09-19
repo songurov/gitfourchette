@@ -70,7 +70,10 @@ def testTabOverflow(tempDir, mainWindow, request, pills):
     assert mainWindow.tabs.currentIndex() == 2
 
     if pills:
-        assert tabWidget.tabScrollArea.height() == 28  # the track keeps its height
+        # The "+" stays in reach, right of the overflow button, and the track keeps its height
+        assert tabWidget.newTabButton.isVisible()
+        assert tabWidget.newTabButton.geometry().left() > tabWidget.overflowButton.geometry().right()
+        assert tabWidget.tabScrollArea.height() == 28
 
 
 def testTabOverflowSingleTab(tempDir, mainWindow):
@@ -209,6 +212,7 @@ def testNeutralTabsArePillsWithTheStatusAtTheRightEnd(tempDir, mainWindow, neutr
     assert not isinstance(tabBar.tabButton(0, Left), QTabBar2CloseButton)
     assert tabBar.font().pointSizeF() == QApplication.font().pointSizeF()
     assert not tabWidget.topWidget.lineColor.isValid()
+    assert not tabWidget.newTabButton.isVisible()
 
     # And back
     GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
@@ -364,3 +368,84 @@ def testPillTabSeparatorsSkipTheLitTabs(tempDir, mainWindow, neutralTheme):
     tabWidget.setCurrentIndex(0)
     hoverTab(tabBar, 0)
     assert separators() == [2, 3]
+
+
+# -----------------------------------------------------------------------------
+# The round "+" after pill tabs
+
+def openNewTabMenuAction(mainWindow, pattern: str):
+    tabWidget = mainWindow.tabs
+    tabWidget.newTabButton.click()
+    menu = tabWidget.newTabMenu
+    assert menu.isVisible()
+    triggerMenuAction(menu, pattern)
+    menu.close()
+
+
+def testNewTabButtonFollowsTheTrack(tempDir, mainWindow, neutralTheme):
+    mainWindow.openRepo(unpackRepo(tempDir, renameTo="first"))
+    tabWidget = mainWindow.tabs
+    button = tabWidget.newTabButton
+    assert button.isVisible()
+    assert button.size() == QSize(28, 28)  # as tall as the track, and round
+    assert button.geometry().left() > tabWidget.tabScrollArea.geometry().right()
+    assert button.geometry().top() == tabWidget.tabScrollArea.geometry().top()
+
+    # Nothing of the sort with the usual tabs
+    GFApplication.applyPrefs(qtStyle="gitfourchette-builtin,dark")
+    assert not button.isVisible()
+    waitUntilTrue(lambda: tabWidget.topWidget.height() == tabWidget.tabs.height())
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    assert button.isVisible()
+
+    # A lone tab that autoHideTabs hides takes the "+" and the band's room along
+    GFApplication.applyPrefs(autoHideTabs=True)
+    assert not tabWidget.tabs.isVisibleTo(tabWidget)
+    assert not button.isVisible()
+    waitUntilTrue(lambda: tabWidget.topWidget.height() == 0)
+    mainWindow.openRepo(unpackRepo(tempDir, renameTo="second"))
+    assert button.isVisible()
+    waitUntilTrue(lambda: tabWidget.topWidget.height() == 28 + 8)
+
+
+def testNewTabButtonMenu(tempDir, mainWindow, neutralTheme):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    tabWidget = mainWindow.tabs
+    tabWidget.newTabButton.click()
+    menu = tabWidget.newTabMenu
+    assert menu.isVisible()
+    texts = [stripAccelerators(a.text()) for a in menu.actions() if not a.isSeparator()]
+    assert texts == ["Open Repository…", "Clone Repository…", "New Repository…",
+                     "Open Recent", "Workspace", "Home"]
+    # The same lists as the File menu's
+    assert findMenuAction(menu, "open recent").menu() is mainWindow.recentMenu
+    assert findMenuAction(menu, "workspace").menu() is mainWindow.workspaceMenu
+    menu.close()
+    assert tabWidget.newTabButton.toolTip() == "Open, clone or create a repository"
+    assertTranslatedInForkLanguages("Open, clone or create a repository")
+
+    openNewTabMenuAction(mainWindow, "clone repository")
+    dlg = findQDialog(mainWindow, "clone")
+    assert dlg.ui.urlEdit.currentText() == ""
+    dlg.reject()
+
+
+def testNewTabButtonOpensCreatesAndGoesHome(tempDir, mainWindow, neutralTheme):
+    mainWindow.openRepo(unpackRepo(tempDir, renameTo="first"))
+    other = unpackRepo(tempDir, renameTo="other")
+
+    openNewTabMenuAction(mainWindow, "open repository")
+    acceptQFileDialog(mainWindow, "open", other)
+    assert mainWindow.tabs.count() == 2
+    assert os.path.samefile(other, mainWindow.currentRepoWidget().workdir)
+
+    fresh = os.path.realpath(tempDir.name + "/fresh")
+    os.makedirs(fresh)
+    openNewTabMenuAction(mainWindow, "new repository")
+    acceptQFileDialog(mainWindow, "new repo", fresh)
+    assert mainWindow.tabs.count() == 3
+    assert fresh == os.path.normpath(mainWindow.currentRepoWidget().repo.workdir)
+
+    # Home is Home: every tab closes
+    openNewTabMenuAction(mainWindow, "home")
+    assert mainWindow.tabs.count() == 0

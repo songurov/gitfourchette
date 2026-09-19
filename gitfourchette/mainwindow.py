@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self.tabs.tabContextMenuRequested.connect(self.onTabContextMenu)
         self.tabs.tabMiddleClicked.connect(self.onTabMiddleClicked)
         self.tabs.tabDoubleClicked.connect(self.onTabDoubleClicked)
+        self.tabs.newTabMenu.aboutToShow.connect(self.fillNewTabMenu)
 
         self.welcomeWidget = WelcomeWidget(self)
         self.welcomeWidget.newRepo.connect(self.newRepo)
@@ -610,6 +611,32 @@ class MainWindow(QMainWindow):
                 _("Clear List"), self.onClearRecentMenu, "edit-clear-history",
                 tip=_("Clear the list of recently opened repositories"),
             ))
+
+    def fillNewTabMenu(self) -> None:
+        """
+        The round "+" after the tabs (Neutral theme): the File menu's ways of
+        bringing up another repo, and Home, which closes them all.
+        """
+        self.tabs.newTabMenu.clear()
+        ActionDef.addToQMenu(
+            self.tabs.newTabMenu,
+            ActionDef(_("&Open Repository…"), self.openDialog, icon="folder-open",
+                      tip=_("Open a Git repo on your machine")),
+            ActionDef(_("C&lone Repository…"), self.cloneDialog, icon="folder-download",
+                      tip=_("Download a Git repo and open it")),
+            ActionDef(_("&New Repository…"), self.newRepo, icon="folder-new",
+                      tip=_("Create an empty Git repo")),
+            ActionDef.SEPARATOR,
+            ActionDef(_("Open &Recent"), icon="folder-open-recent",
+                      tip=_("List of recently opened Git repos"),
+                      submenu=self.recentMenu),
+            ActionDef(_("&Workspace"), icon="folder-open-recent",
+                      tip=_("Named sets of repos you switch between"),
+                      submenu=self.workspaceMenu),
+            ActionDef.SEPARATOR,
+            ActionDef(_("&Home"), lambda: self.switchToWorkspace(""), icon="git-home",
+                      tip=_("Every repo on this machine, and nothing open")),
+        )
 
     def onSetDarkTheme(self, dark: bool) -> None:
         from gitfourchette.themes import withThemeMode

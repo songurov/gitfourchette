@@ -208,7 +208,8 @@ class ThemeColors:
     pillTabs: bool = False
     """
     Repo tabs as pills on a track: each tab shows its close button at its left
-    end while the pointer is over it, and its status at its right end.
+    end while the pointer is over it and its status at its right end, and a
+    round "+" button follows the track.
     """
     tabTrackRadius: int = 7
     "Roundness of the track under the tabs (with pillTabs)."
@@ -238,6 +239,10 @@ class ThemeColors:
     "The rounded ends of the current tab's pill, which are its edge's shadow side (with pillTabs)."
     tabSeparator: str = ""
     "Short lines between two tabs that are neither current nor under the pointer (with pillTabs)."
+    newTabButton: str = ""
+    "The round \"+\" button after the tabs (with pillTabs)."
+    newTabButtonEdge: str = ""
+    newTabButtonShade: str = ""
 
     iconSet: str = ""
     "Subfolder of assets:icons whose redraws replace the icons of the same name."
@@ -342,6 +347,9 @@ class ThemeColors:
         self.tabActiveText      = self.tabActiveText or self.text
         self.tabPillShade       = self.tabPillShade or self.tabPillEdge
         self.tabSeparator       = self.tabSeparator or self.tabTrackEdge
+        self.newTabButton       = self.newTabButton or self.tabPill
+        self.newTabButtonEdge   = self.newTabButtonEdge or self.tabPillEdge
+        self.newTabButtonShade  = self.newTabButtonShade or self.newTabButtonEdge
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
@@ -536,6 +544,9 @@ NEUTRAL_DARK = ThemeColors(
     tabActiveText      = "#ebebeb",
     tabPillShade       = "#303030",
     tabSeparator       = "#4e4e4e",
+    newTabButton       = "#444444",
+    newTabButtonEdge   = "#6c6c6c",
+    newTabButtonShade  = "#1a1a1a",
     iconSet            = "neutral",
     toolbarIconColor   = "#e9e9e9",
     codeBg             = "#242424",

@@ -6784,6 +6784,10 @@ msgstr "Помощь: {setting}"
 msgid "List all tabs"
 msgstr "Список всех вкладок"
 
+#: toolbox/qtabwidget2.py:505
+msgid "Open, clone or create a repository"
+msgstr "Открыть, клонировать или создать репозиторий"
+
 #: toolbox/textutils.py:60
 #, python-brace-format
 msgid "“{0}”"

@@ -727,6 +727,20 @@ ${neutralOnly}QTabWidget2 QToolButton#QTW2CloseButton:hover {
     background: ${hover};
 }
 
+/* The round "+" after the tabs */
+${neutralOnly}QTabWidget2 QToolButton#QTW2NewTabButton {
+    background: ${newTabButton};
+    border: 1px solid;
+    border-color: ${newTabButtonEdge} ${newTabButtonShade};
+    border-radius: 14px;
+    padding: 0px;
+}
+
+${neutralOnly}QTabWidget2 QToolButton#QTW2NewTabButton:hover,
+${neutralOnly}QTabWidget2 QToolButton#QTW2NewTabButton:pressed {
+    background: ${tabPillEdge};
+}
+
 /* Check boxes a little larger, as on the Mac. Only the size: the drawing stays the style's own. */
 ${neutralOnly}QCheckBox::indicator {
     width: 16px;

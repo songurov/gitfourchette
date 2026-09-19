@@ -7192,6 +7192,10 @@ msgstr "Ajutor: {setting}"
 msgid "List all tabs"
 msgstr "Listează toate filele"
 
+#: toolbox/qtabwidget2.py:505
+msgid "Open, clone or create a repository"
+msgstr "Deschide, clonează sau creează un depozit"
+
 #: toolbox/textutils.py:60
 #, python-brace-format
 msgid "“{0}”"

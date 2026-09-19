@@ -7104,6 +7104,10 @@ msgstr "Yardım: {setting}"
 msgid "List all tabs"
 msgstr "Tüm sekmeleri listele"
 
+#: toolbox/qtabwidget2.py:505
+msgid "Open, clone or create a repository"
+msgstr "Depo aç, klonla veya oluştur"
+
 #: toolbox/textutils.py:60
 #, python-brace-format
 msgid "“{0}”"

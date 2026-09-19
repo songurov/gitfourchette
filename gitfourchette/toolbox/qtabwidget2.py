@@ -437,8 +437,11 @@ class QTabWidget2(QWidget):
 
     UrgentPropertyName = "QTabBar2_UrgentFlag"
 
+    PillTrackHeight = 28
+    "Height of the track under pill tabs, and of the round \"+\" button after it."
+
     PillBandMargins = (8, 0, 8, 8)
-    "Room around the pill tabs' track (left, top, right, bottom); the line under it takes the bottom pixel."
+    "Room around the track and the \"+\" button (left, top, right, bottom); the line under them takes the bottom pixel."
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -492,6 +495,21 @@ class QTabWidget2(QWidget):
         self._pillTheme = None
         "The theme that asks for pill tabs, while they're on."
 
+        # The round "+" after the tabs, with pill tabs only. Whoever owns the
+        # tabs fills its menu (newTabMenu.aboutToShow).
+        self.newTabButton = QToolButton(self)
+        self.newTabButton.setObjectName("QTW2NewTabButton")
+        self.newTabButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.newTabButton.setFixedSize(QTabWidget2.PillTrackHeight, QTabWidget2.PillTrackHeight)
+        self.newTabButton.setIconSize(QSize(16, 16))
+        self.newTabButton.setToolTip(_("Open, clone or create a repository"))
+        self.newTabButton.clicked.connect(self.onNewTabButtonClicked)
+        self.newTabButton.hide()
+
+        self.newTabMenu = QMenu(self)
+        self.newTabMenu.setObjectName("QTW2NewTabMenu")
+        self.newTabMenu.setToolTipsVisible(True)
+
         topWidget = QTabWidget2Band(self)
         self.topWidget = topWidget
         topLayout = QHBoxLayout(topWidget)
@@ -500,6 +518,7 @@ class QTabWidget2(QWidget):
         topLayout.setContentsMargins(0, 0, 0, 0)
         topLayout.addWidget(self.tabScrollArea)
         topLayout.addWidget(self.overflowButton)
+        topLayout.addWidget(self.newTabButton)
         self.tabs.visibilityChanged.connect(self._layOutBand)
 
         layout = QVBoxLayout(self)
@@ -561,6 +580,8 @@ class QTabWidget2(QWidget):
         if theme is not None:
             self.tabs.separatorColor = QColor(theme.tabSeparator)
             self.tabs.setLabelPointDrop(theme.tabLabelDrop)
+            iconColor = f"gray={theme.toolbarIconColor}" if theme.toolbarIconColor else ""
+            self.newTabButton.setIcon(stockIcon("tab-new", iconColor))
         else:
             self.tabs.separatorColor = QColor()
             self.tabs.setLabelPointDrop(0)
@@ -569,15 +590,20 @@ class QTabWidget2(QWidget):
 
     def _layOutBand(self):
         """
-        Room around the pill tabs' track and a line under it, as long as the
-        tabs show (autoHideTabs hides a lone tab).
+        Room around the pill tabs' track, the "+" after it and a line under
+        both, as long as the tabs show (autoHideTabs hides a lone tab).
         """
         theme = self._pillTheme
         band = theme is not None and self.tabs.isVisibleTo(self)
         self.topLayout.setContentsMargins(*(QTabWidget2.PillBandMargins if band else (0, 0, 0, 0)))
         self.topLayout.setSpacing(8 if theme is not None else 2)
         self.topWidget.lineColor = QColor(theme.border) if band else QColor()
+        self.newTabButton.setVisible(band)
         self.topWidget.update()
+
+    def onNewTabButtonClicked(self):
+        pos = self.newTabButton.mapToGlobal(QPoint(0, self.newTabButton.height()))
+        self.newTabMenu.popup(pos)
 
     def onCustomContextMenuRequested(self, localPoint: QPoint):
         globalPoint = self.tabs.mapToGlobal(localPoint)
