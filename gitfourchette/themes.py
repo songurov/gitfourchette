@@ -42,6 +42,13 @@ class ThemeVariant(enum.StrEnum):
     Neutral = "neutral"
 
 
+DEFAULT_VARIANT = ThemeVariant.Neutral
+"""
+The look this build starts in. Prefs written before it had variants move to it
+once (see Prefs.migrate); after that, Modern stays available in Settings.
+"""
+
+
 class ThemeAccent(enum.StrEnum):
     Blue = "#3daee9"
     Cyan = "#00d3b8"
@@ -96,6 +103,10 @@ def formatStyle(engine: str, mode: str = "", accent: str = "", variant: str = Th
     return ",".join(t for t in (engine, mode, variant, accent) if t)
 
 
+DEFAULT_BUILTIN_STYLE = formatStyle(ThemeName.BuiltIn, variant=DEFAULT_VARIANT)
+"The built-in theme in the default look, light or dark as the system is."
+
+
 def isDarkStyle(styleName: str) -> bool:
     """
     Whether this style string asks for a dark palette.
@@ -144,15 +155,16 @@ def withThemeMode(styleName: str, dark: bool) -> str:
     Return `styleName` pinned to light or dark.
 
     Only the built-in theme has a mode to set, so asking a native Qt style to
-    go dark switches to the built-in theme - which is the honest reading of
-    "make it dark" when the current style has no say in the matter. The accent
-    and the variant stay: Neutral Light becomes Neutral Dark, not Modern Dark.
+    go dark switches to the built-in theme, in its default look - which is the
+    honest reading of "make it dark" when the current style has no say in the
+    matter. The accent and the variant stay: Neutral Light becomes Neutral
+    Dark, not Modern Dark.
     """
     mode = "dark" if dark else "light"
     engine, _mode, accent, variant = parseStyle(styleName)
 
     if engine != ThemeName.BuiltIn:
-        return formatStyle(ThemeName.BuiltIn, mode)
+        return formatStyle(ThemeName.BuiltIn, mode, variant=DEFAULT_VARIANT)
 
     return formatStyle(engine, mode, accent, variant)
 

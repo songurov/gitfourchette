@@ -266,6 +266,7 @@ HIDDEN: dict[str, str] = {
     "dontShowAgain": "internal list; resetDontShowAgain clears it",
     "donatePrompt": "internal counter",
     "refSortClearTimestamp": "internal state written when refSort changes",
+    "migrations": "internal record of one-time preference migrations already done",
 }
 "Prefs fields that Settings doesn't show, and why."
 

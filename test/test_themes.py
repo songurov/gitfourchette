@@ -277,3 +277,105 @@ def testNeutralToolbarHasSmallBrightIconsOverShortDimLabels(mainWindow):
         }
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+class _PrefsFile:
+    """A prefs.json of our own, written as an earlier build would have."""
+
+    def __init__(self):
+        from gitfourchette.settings import Prefs
+
+        class OldPrefs(Prefs):
+            _filename = "prefs-neutral-migration-test.json"
+
+        self.prefsClass = OldPrefs
+        self.path = Path(OldPrefs().getParentDir(), OldPrefs._filename)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def load(self, content: dict | None):
+        import json
+        if content is None:
+            self.path.unlink(missing_ok=True)
+        else:
+            self.path.write_text(json.dumps(content), encoding="utf-8")
+        prefs = self.prefsClass()
+        prefs.load()
+        return prefs
+
+    def written(self, prefs) -> dict:
+        import json
+        prefs.write()
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(["before", "after"], [
+    (f"{BUILTIN},dark", f"{BUILTIN},dark,neutral"),  # the toolbar's Theme > Dark
+    (f"{BUILTIN},light", f"{BUILTIN},light,neutral"),
+    (f"{BUILTIN}", f"{BUILTIN},neutral"),  # System colors
+    (f"{BUILTIN},light,#e93d58", f"{BUILTIN},light,neutral,#e93d58"),
+    (f"{BUILTIN},dark,neutral", f"{BUILTIN},dark,neutral"),
+    ("Fusion", "Fusion"),  # a native style was picked on purpose
+    ("", ""),  # System default: that's Neutral already
+])
+def testEarlierPrefsMoveToNeutral(mainWindow, before, after):
+    file = _PrefsFile()
+    try:
+        prefs = file.load({"qtStyle": before, "tabSpaces": 8})
+        assert prefs.qtStyle == after
+        assert prefs.tabSpaces == 8
+        assert prefs.migrations == ["neutralTheme"]
+    finally:
+        file.path.unlink()
+
+
+def testTheOwnersPrefsMoveToNeutralDarkOnlyOnce(mainWindow):
+    file = _PrefsFile()
+    try:
+        # prefs.json as this build's owner had it before Neutral
+        prefs = file.load({
+            "qtStyle": "gitfourchette-builtin,dark",
+            "commitFormPlacement": "bottom-bar",
+            "toolBarButtonStyle": 3,
+            "toolBarIconSize": 22,
+            "_version": "1.11.0",
+        })
+        assert prefs.qtStyle == f"{BUILTIN},dark,neutral"
+        assert prefs.commitFormPlacement == "bottom-bar"
+        assert prefs.isDirty(), "the move must be saved"
+        saved = file.written(prefs)
+        assert saved["qtStyle"] == f"{BUILTIN},dark,neutral"
+        assert saved["migrations"] == ["neutralTheme"]
+
+        # Going back to Modern afterwards sticks
+        prefs.qtStyle = f"{BUILTIN},dark"
+        prefs.setDirty()
+        saved = file.written(prefs)
+        prefs = file.load(saved)
+        assert prefs.qtStyle == f"{BUILTIN},dark"
+        assert not prefs.isDirty()
+    finally:
+        file.path.unlink()
+
+
+def testFreshPrefsStartInNeutralFollowingTheSystem(mainWindow, monkeypatch):
+    from gitfourchette import application
+    from gitfourchette.themes import pinnedColorScheme
+
+    file = _PrefsFile()
+    prefs = file.load(None)
+    assert prefs.qtStyle == ""  # System default
+    assert prefs.migrations == ["neutralTheme"]  # nothing to move, now or later
+    assert not prefs.isDirty()
+
+    # Offscreen tests keep the boot style; elsewhere, System default means Neutral
+    assert GFApplication.defaultStyleName("fusion") == ""
+    monkeypatch.setattr(application, "OFFSCREEN", False)
+    monkeypatch.setattr(application, "KDE", False)
+    styleName = GFApplication.defaultStyleName("macos")
+    assert ThemeColors.resolveTheme(styleName).variant == ThemeVariant.Neutral
+    assert pinnedColorScheme(styleName) == Qt.ColorScheme.Unknown, "light or dark as the system is"
+
+
+def testToolbarDarkFromANativeStyleAdoptsNeutral():
+    assert withThemeMode("", True) == f"{BUILTIN},dark,neutral"
+    assert withThemeMode("Fusion", False) == f"{BUILTIN},light,neutral"

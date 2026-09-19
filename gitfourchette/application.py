@@ -115,22 +115,9 @@ class GFApplication(QApplication):
             self.setWindowIcon(QIcon("assets:icons/gitfourchette.png"))
 
         # Get system default style & palette before applying further styling
-        from gitfourchette.themes import ThemeName
         bootStyleName = self.style().objectName().lower()
         self.platformStandardAccent = self.palette().accent().color()
-        if APP_TESTMODE and OFFSCREEN:
-            # Don't force-set Qt style at the start of every offscreen test.
-            # Don't touch default (Fusion) for pixel-perfect accuracy.
-            assert bootStyleName == "fusion"
-            self.platformDefaultStyleName = ""
-        elif KDE and bootStyleName != "fusion":  # pragma: no cover
-            # On KDE, be a good citizen and stick to system-provided theme
-            # (unless we don't have anything better than Fusion, e.g. in the
-            # AppImage's embedded Qt libraries)
-            self.platformDefaultStyleName = bootStyleName
-        else:  # pragma: no cover
-            # On other platforms, default to a custom theme.
-            self.platformDefaultStyleName = ThemeName.BuiltIn
+        self.platformDefaultStyleName = self.defaultStyleName(bootStyleName)
 
         # Install translators for system language
         # (for command line parser to display localized text)
@@ -169,6 +156,25 @@ class GFApplication(QApplication):
         self.commandLinePaths = commandLinePaths
 
     # -------------------------------------------------------------------------
+
+    @staticmethod
+    def defaultStyleName(bootStyleName: str) -> str:
+        """The style that an empty Prefs.qtStyle ("System default") stands for."""
+        from gitfourchette.themes import DEFAULT_BUILTIN_STYLE
+        if APP_TESTMODE and OFFSCREEN:
+            # Don't force-set Qt style at the start of every offscreen test.
+            # Don't touch default (Fusion) for pixel-perfect accuracy.
+            assert bootStyleName == "fusion"
+            return ""
+        elif KDE and bootStyleName != "fusion":  # pragma: no cover
+            # On KDE, be a good citizen and stick to system-provided theme
+            # (unless we don't have anything better than Fusion, e.g. in the
+            # AppImage's embedded Qt libraries)
+            return bootStyleName
+        else:
+            # On other platforms, default to our own theme, in this build's
+            # default look, light or dark as the system is.
+            return DEFAULT_BUILTIN_STYLE
 
     @staticmethod
     def nameMacAppFromSource(argv: list[str]) -> list[str]:

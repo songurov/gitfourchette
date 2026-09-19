@@ -459,18 +459,19 @@ def testThemePickerOffersNeutral(mainWindow):
 def testThemePickerKeepsTheToolbarsDarkPin(mainWindow):
     from gitfourchette.themes import ThemeName
 
-    mainWindow.onSetDarkTheme(True)  # the toolbar's Theme > Dark
-    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark"
+    mainWindow.onSetDarkTheme(True)  # the toolbar's Theme > Dark, from System default
+    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark,neutral"
 
     dlg = GFApplication.instance().openPrefsDialog("qtStyle")
     group: QWidget = dlg.findChild(QWidget, "prefctl_qtStyle")
     stylePicker, variantPicker = group.findChildren(QComboBox)
+    assert stylePicker.currentText() == f"{APP_DISPLAY_NAME} Neutral"
     assert variantPicker.currentText() == "Dark"
 
     stylePicker.activated.emit(stylePicker.currentIndex())
     assert dlg.prefDiff == {}
     dlg.accept()
-    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark"
+    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark,neutral"
 
 
 def testEveryCountIsABoundedSpinBox(mainWindow):

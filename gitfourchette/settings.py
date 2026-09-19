@@ -234,13 +234,47 @@ class Prefs(PrefsFile):
     dontShowAgain               : list[str]             = dataclasses.field(default_factory=list)
     donatePrompt                : int                   = 0
     refSortClearTimestamp       : int                   = 0
+    migrations                  : list[str]             = dataclasses.field(default_factory=list)
+    """One-time changes (see Prefs.migrate) already made to these prefs."""
 
     def load(self) -> bool:
         loaded = super().load()
         # The diff toolbar used to offer 0 context lines; bring such a value back in range
         low, high = CONTEXT_LINES_RANGE
         self.contextLines = min(max(self.contextLines, low), high)
+        self.migrate(fresh=not loaded)
         return loaded
+
+    def migrate(self, fresh: bool):
+        """
+        Make one-time changes to prefs written by an earlier build.
+
+        Each change runs once: its name is added to `migrations`, which is saved
+        with the rest, so a choice made afterwards (say, going back to Modern)
+        is never undone. Fresh prefs have nothing to change, so they start out
+        with every name in; if nothing else ever gets saved, the next launch is
+        fresh again, which comes to the same.
+        """
+        for name, change in [("neutralTheme", self._moveBuiltInThemeToDefaultLook)]:
+            if name in self.migrations:
+                continue
+            if not fresh:
+                change()
+                self.setDirty()
+            self.migrations.append(name)
+
+    def _moveBuiltInThemeToDefaultLook(self):
+        """
+        The built-in theme's default look became Neutral. Someone who had the
+        built-in theme (then Modern, the only look) moves to Neutral once, in the
+        same mode and with the same accent. A native Qt style stays: it was
+        picked on purpose. An empty qtStyle ("System default") needs no change,
+        since it now stands for Neutral anyway.
+        """
+        from gitfourchette.themes import DEFAULT_VARIANT, ThemeName, ThemeVariant, formatStyle, parseStyle
+        engine, mode, accent, variant = parseStyle(self.qtStyle)
+        if engine == ThemeName.BuiltIn and variant == ThemeVariant.Modern:
+            self.qtStyle = formatStyle(engine, mode, accent, DEFAULT_VARIANT)
 
     @property
     def listViewScrollMode(self) -> QAbstractItemView.ScrollMode:
