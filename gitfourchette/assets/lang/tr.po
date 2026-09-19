@@ -2312,10 +2312,6 @@ msgstr "Kapalı"
 msgid "Red and green"
 msgstr "Kırmızı ve yeşil"
 
-#: forms/prefsdialog.py:731
-msgid "Colorblind-friendly"
-msgstr "Renk körlüğüne uygun"
-
 #: forms/protocolbutton.py:19
 msgid "Change URL protocol"
 msgstr "URL protokolünü değiştir"
@@ -7355,22 +7351,6 @@ msgstr "Geçersiz imza"
 msgid "Failed to start verification process"
 msgstr "Doğrulama süreci başlatılamadı"
 
-#: trtables.py:196
-msgid "Truncate long ref names"
-msgstr "Uzun referans adlarını kısalt"
-
-#: trtables.py:197
-msgid "Show full ref names"
-msgstr "Tam referans adlarını göster"
-
-#: trtables.py:201
-msgid "Hash, graph, refs, message"
-msgstr "Hash, grafik, referanslar, ileti"
-
-#: trtables.py:202
-msgid "Graph, refs, message (aligned)"
-msgstr "Grafik, referanslar, ileti (hizalı)"
-
 #: trtables.py:206
 msgctxt "row spacing"
 msgid "Cramped"
@@ -7757,35 +7737,15 @@ msgctxt "Prefs"
 msgid "General"
 msgstr "Genel"
 
-#: trtables.py:355
-msgctxt "Prefs"
-msgid "Code"
-msgstr "Kod"
-
-#: trtables.py:356
-msgctxt "Prefs"
-msgid "Images"
-msgstr "Görseller"
-
 #: trtables.py:357
 msgctxt "Prefs"
 msgid "Tabs"
 msgstr "Sekmeler"
 
-#: trtables.py:358
-msgctxt "Prefs"
-msgid "Commit History"
-msgstr "İşleme Geçmişi"
-
 #: trtables.py:359
 msgctxt "Prefs"
 msgid "Trash"
 msgstr "Çöp Kutusu"
-
-#: trtables.py:360
-msgctxt "Prefs"
-msgid "Git Integration"
-msgstr "Git Entegrasyonu"
 
 #: trtables.py:361
 msgctxt "Prefs"
@@ -7797,34 +7757,9 @@ msgctxt "Prefs"
 msgid "Advanced"
 msgstr "Gelişmiş"
 
-#: trtables.py:363
-msgctxt "Prefs"
-msgid "Custom Commands"
-msgstr "Özel Komutlar"
-
 #: trtables.py:365
 msgid "Language"
 msgstr "Dil"
-
-#: trtables.py:366
-msgid "Qt style"
-msgstr "Qt stili"
-
-#: trtables.py:367
-msgid "Shorten hashes to # characters"
-msgstr "Hash değerlerini # karaktere kısalt"
-
-#: trtables.py:368
-msgid "Date/time format"
-msgstr "Tarih/saat biçimi"
-
-#: trtables.py:371
-msgid "Author display style"
-msgstr "Yazar görüntüleme biçimi"
-
-#: trtables.py:372
-msgid "Remember up to # recent repositories"
-msgstr "En fazla # son depoyu hatırla"
 
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
@@ -7834,34 +7769,14 @@ msgstr "Menü çubuğu gizliyken yeniden göstermek için Alt tuşuna basın."
 msgid "Density"
 msgstr "Yoğunluk"
 
-#: trtables.py:377
-msgid "Dinosaur on the Home page"
-msgstr "Ana Sayfa'daki dinozor"
-
 #: trtables.py:378
 msgid "A little dinosaur walks across the welcome text, fetching eggs for its nest. It only moves while the Home page is on screen."
 msgstr "Küçük bir dinozor, yuvası için yumurta toplayarak karşılama metninin üzerinde yürür. Yalnızca Ana Sayfa ekrandayken hareket eder."
-
-#: trtables.py:380
-msgid "Dinosaur looks at the mouse pointer"
-msgstr "Dinozor fare işaretçisine bakar"
-
-#: trtables.py:381
-msgid "Restore all “don’t show this again” messages"
-msgstr "Tüm “bunu bir daha gösterme” iletilerini geri getir"
-
-#: trtables.py:382
-msgid "Allow third-party Pygments plugins"
-msgstr "Üçüncü taraf Pygments eklentilerine izin ver"
 
 #: trtables.py:383
 #, python-brace-format
 msgid "Let {app} load third-party Pygments plugins installed on your system. These plugins extend syntax highlighting with new languages and color schemes. <b>May incur significant slowdowns.</b>"
 msgstr "{app} uygulamasının sisteminizde kurulu üçüncü taraf Pygments eklentilerini yüklemesine izin verin. Bu eklentiler sözdizimi vurgulamayı yeni diller ve renk şemalarıyla genişletir. <b>Belirgin yavaşlamalara neden olabilir.</b>"
-
-#: trtables.py:386
-msgid "Sort branches && tags by"
-msgstr "Dal && etiket sıralaması"
 
 #: trtables.py:388
 msgid "The default sorting mode for local branches, remote branches, and tags in the sidebar."
@@ -7874,10 +7789,6 @@ msgstr "Bu ayarı her depo için ayrıca düzenlemek üzere kenar çubuğunda Da
 #: trtables.py:392
 msgid "Font"
 msgstr "Yazı tipi"
-
-#: trtables.py:393
-msgid "One tab is # spaces"
-msgstr "Bir sekme karakteri # boşluk genişliğinde"
 
 #: trtables.py:395
 msgid "Show whole file"
@@ -7903,22 +7814,6 @@ msgstr "En fazla # KB boyutundaki görselleri yükle"
 msgid "Syntax highlighting"
 msgstr "Sözdizimi vurgulama"
 
-#: trtables.py:401
-msgid "Word wrap"
-msgstr "Sözcük kaydırma"
-
-#: trtables.py:402
-msgid "Show alien line endings (CRLF)"
-msgstr "Yabancı satır sonlarını göster (CRLF)"
-
-#: trtables.py:403
-msgid "Show whitespace symbols"
-msgstr "Boşluk simgelerini göster"
-
-#: trtables.py:404
-msgid "Whitespace diffs"
-msgstr "Boşluk farkları"
-
 #: trtables.py:406
 msgid "How whitespace changes are shown in diffs."
 msgstr "Boşluk değişikliklerinin farklarda nasıl gösterileceği."
@@ -7926,10 +7821,6 @@ msgstr "Boşluk değişikliklerinin farklarda nasıl gösterileceği."
 #: trtables.py:407
 msgid "This setting only affects how diffs are displayed. Operations that handle patches (export, apply, revert, etc.) still honor all whitespace changes."
 msgstr "Bu ayar yalnızca farkların nasıl görüntülendiğini etkiler. Yamalarla çalışan işlemler (dışa aktarma, uygulama, geri alma vb.) tüm boşluk değişikliklerini yine de dikkate alır."
-
-#: trtables.py:409
-msgid "“-/+” colors"
-msgstr "“-/+” renkleri"
 
 #: trtables.py:410
 msgid "Background colors for deleted (-) and added (+) lines."
@@ -7939,33 +7830,9 @@ msgstr "Silinen (-) ve eklenen (+) satırların arka plan renkleri."
 msgid "SVG files"
 msgstr "SVG dosyaları"
 
-#: trtables.py:412
-msgid "Display as text"
-msgstr "Metin olarak görüntüle"
-
-#: trtables.py:413
-msgid "Display as images"
-msgstr "Görsel olarak görüntüle"
-
-#: trtables.py:415
-msgid "Show tab close button"
-msgstr "Sekme kapatma düğmesini göster"
-
-#: trtables.py:416
-msgid "Expand tabs to available width"
-msgstr "Sekmeleri kullanılabilir genişliğe yay"
-
-#: trtables.py:417
-msgid "Auto-hide tabs if only one repo is open"
-msgstr "Yalnızca bir depo açıksa sekmeleri otomatik gizle"
-
 #: trtables.py:419
 msgid "Sort commits"
 msgstr "İşlemeleri sırala"
-
-#: trtables.py:420
-msgid "Chronologically"
-msgstr "Kronolojik olarak"
 
 #: trtables.py:421
 msgid "Topologically"
@@ -7983,21 +7850,9 @@ msgstr "<b>Topolojik mod</b> grafiği okumayı kolaylaştırır. Bir dal içinde
 msgid "Row layout"
 msgstr "Satır düzeni"
 
-#: trtables.py:432
-msgid "<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the commit hash, and the ref indicators sit between the graph and the commit message."
-msgstr "<b>Hash, grafik, referanslar, ileti</b> klasik düzendir: her satır işlemenin hash değeriyle başlar ve referans göstergeleri grafik ile işleme iletisi arasında yer alır."
-
-#: trtables.py:434
-msgid "<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Ref indicators lead the message column, and the hash moves to the right, next to the author."
-msgstr "<b>Grafik, referanslar, ileti</b> düzeni grafiğe ayrı bir sütun verir; böylece grafik herhangi bir satırda ne kadar kalabalık olursa olsun işleme iletileri hizalı kalır. Referans göstergeleri ileti sütununun başında yer alır ve hash değeri sağa, yazarın yanına taşınır."
-
 #: trtables.py:438
 msgid "Show author avatars"
 msgstr "Yazar avatarlarını göster"
-
-#: trtables.py:439
-msgid "Download author pictures"
-msgstr "Yazar resimlerini indir"
 
 #: trtables.py:441
 msgid "Look up each author’s picture on GitHub or Gravatar. This sends their email address to a third party, so it is off until you ask for it. Without it, authors get a chip with their initials, computed on your machine."
@@ -8011,14 +7866,6 @@ msgstr "Yazarın baş harflerini içeren, rengi e-posta adresinden türetilen bi
 msgid "Row spacing"
 msgstr "Satır aralığı"
 
-#: trtables.py:448
-msgid "Avoid gaps between branches in the graph"
-msgstr "Grafikte dallar arasında boşluk bırakma"
-
-#: trtables.py:449
-msgid "Mark author/committer signature differences"
-msgstr "Yazar/işleyen imza farklılıklarını işaretle"
-
 #: trtables.py:451
 msgid "The commit history displays information about a commit’s <b>author</b>—their name and the date at which they made the commit. But in some cases, a commit might have been revised by someone else than the original author—this person is called the <b>committer</b>."
 msgstr "İşleme geçmişi, bir işlemenin <b>yazarı</b> hakkında bilgi gösterir: adı ve işlemeyi yaptığı tarih. Ancak bazı durumlarda bir işleme, asıl yazardan başka biri tarafından düzeltilmiş olabilir; bu kişiye <b>işleyen</b> (committer) denir."
@@ -8031,29 +7878,13 @@ msgstr "Bu seçeneği işaretlerseniz, herhangi bir işlemede yazarın adı ve/v
 msgid "Note that you can always hover over the author’s name or date to obtain detailed information about the author and the committer."
 msgstr "Yazar ve işleyen hakkında ayrıntılı bilgi almak için fareyi her zaman yazarın adının veya tarihin üzerine getirebileceğinizi unutmayın."
 
-#: trtables.py:460
-msgid "Load up to # commits in the history"
-msgstr "Geçmişte en fazla # işleme yükle"
-
 #: trtables.py:461
 msgid "Set to 0 to always load the full commit history."
 msgstr "Her zaman tüm işleme geçmişini yüklemek için 0 olarak ayarlayın."
 
-#: trtables.py:462
-msgid "Draw rows using alternating background colors"
-msgstr "Satırları dönüşümlü arka plan renkleriyle çiz"
-
-#: trtables.py:463
-msgid "Ref indicators"
-msgstr "Referans göstergeleri"
-
 #: trtables.py:464
 msgid "You can always hover over an indicator to display the full name of the ref."
 msgstr "Referansın tam adını görmek için fareyi her zaman bir göstergenin üzerine getirebilirsiniz."
-
-#: trtables.py:465
-msgid "Verify signed commits on the fly"
-msgstr "İmzalı işlemeleri anında doğrula"
 
 #: trtables.py:467
 #, python-brace-format
@@ -8063,27 +7894,6 @@ msgstr "İşlemeler görünüme kaydırıldıkça imzalarını doğrulamak için
 #: trtables.py:469
 msgid "(No seal = Commit isn’t signed)"
 msgstr "(Mühür yok = İşleme imzalı değil)"
-
-#: trtables.py:471
-msgid "The trash keeps up to # discarded patches"
-msgstr "Çöp kutusu en fazla # atılmış yama saklar"
-
-#: trtables.py:472
-msgid "Patches bigger than # KB won’t be salvaged"
-msgstr "# KB boyutundan büyük yamalar kurtarılmaz"
-
-#: trtables.py:474
-#, python-brace-format
-msgid "When you discard changes from the working directory, {app} keeps a temporary copy in a hidden “trash” folder. This gives you a last resort to rescue changes that you have discarded by mistake. You can look around this trash folder via <i>“Help &rarr; Open Trash”</i>."
-msgstr "Çalışma dizinindeki değişiklikleri attığınızda {app}, bunların geçici bir kopyasını gizli bir “çöp kutusu” klasöründe tutar. Bu, yanlışlıkla attığınız değişiklikleri kurtarmak için size son bir çare sunar. Bu çöp kutusu klasörüne <i>“Yardım &rarr; Çöp Kutusunu Aç”</i> üzerinden göz atabilirsiniz."
-
-#: trtables.py:478
-msgid "Logging verbosity"
-msgstr "Günlük ayrıntı düzeyi"
-
-#: trtables.py:479
-msgid "Auto-refresh when app regains focus"
-msgstr "Uygulama yeniden odaklandığında otomatik yenile"
 
 #: trtables.py:481
 #, python-brace-format
@@ -8099,22 +7909,6 @@ msgstr "Bunu kapatırsanız, bu yenilemeyi elle yapmak için {key} tuşuna basma
 msgid "We strongly recommend to keep this setting enabled."
 msgstr "Bu ayarı etkin tutmanızı önemle tavsiye ederiz."
 
-#: trtables.py:487
-msgid "Auto-fetch remotes every # minutes"
-msgstr "Uzak depoları her # dakikada bir otomatik getir"
-
-#: trtables.py:488
-msgid "Animation effects in sidebar"
-msgstr "Kenar çubuğunda animasyon efektleri"
-
-#: trtables.py:489
-msgid "Smooth scrolling (where applicable)"
-msgstr "Yumuşak kaydırma (uygun olduğunda)"
-
-#: trtables.py:490
-msgid "Preferred Qt binding"
-msgstr "Tercih edilen Qt bağlayıcısı"
-
 #: trtables.py:492
 #, python-brace-format
 msgid "After restarting, {app} will use this Qt binding if available."
@@ -8123,10 +7917,6 @@ msgstr "Yeniden başlatıldıktan sonra {app}, mevcutsa bu Qt bağlayıcısını
 #: trtables.py:493
 msgid "You can also pass the name of a Qt binding via the “QT_API” environment variable."
 msgstr "Bir Qt bağlayıcısının adını “QT_API” ortam değişkeniyle de iletebilirsiniz."
-
-#: trtables.py:495
-msgid "Use condensed fonts"
-msgstr "Dar yazı tipleri kullan"
 
 #: trtables.py:497
 msgid "When a branch name or author name is too long to fit in its allotted space, condense the font before truncating the text."
@@ -8177,11 +7967,6 @@ msgstr "Terminal başlatıldıktan sonra çalıştırılacak komut"
 msgid "The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that enters your working directory and optionally starts one of your Custom Commands."
 msgstr "{0} yer tutucusu zorunludur. Otomatik olarak, çalışma dizininize giren ve isteğe bağlı olarak Özel Komutlarınızdan birini başlatan bir sarmalayıcı betikle değiştirilir."
 
-#: trtables.py:523
-#, python-brace-format
-msgid "Have OpenSSH ask for passphrases via {app}"
-msgstr "OpenSSH parolaları {app} aracılığıyla sorsun"
-
 #: trtables.py:525
 #, python-brace-format
 msgid "Tick this to have OpenSSH use {app} to ask for passphrases."
@@ -8192,19 +7977,6 @@ msgstr "OpenSSH'nin parola sorarken {app} uygulamasını kullanmasını istiyors
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr "{0} ortam değişkeninde başka bir program ayarladıysanız (örneğin {1}) bunun işaretini kaldırın."
 
-#: trtables.py:547
-msgid "Use ssh-agent provided by the system"
-msgstr "Sistemin sağladığı ssh-agent'ı kullan"
-
-#: trtables.py:548
-msgid "Use ssh-agent provided by the system (not detected)"
-msgstr "Sistemin sağladığı ssh-agent'ı kullan (algılanmadı)"
-
-#: trtables.py:529
-#, python-brace-format
-msgid "Have {app} manage its own ssh-agent"
-msgstr "{app} kendi ssh-agent'ını yönetsin"
-
 #: trtables.py:531
 msgid "“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. Some Linux distributions set up an ssh-agent for you."
 msgstr "“ssh-agent”, aynı parolayı tekrar tekrar yazmak zorunda kalmamanız için SSH kimlik bilgilerinizi saklayabilir. Bazı Linux dağıtımları sizin için bir ssh-agent kurar."
@@ -8214,10 +7986,6 @@ msgstr "“ssh-agent”, aynı parolayı tekrar tekrar yazmak zorunda kalmamanı
 msgid "You can also have {app} start its own instance of ssh-agent for the duration of your session and have it remember passphrases."
 msgstr "Ayrıca {app} uygulamasının oturumunuz boyunca kendi ssh-agent örneğini başlatmasını ve parolaları hatırlamasını sağlayabilirsiniz."
 
-#: trtables.py:537
-msgid "Parse LFS pointers"
-msgstr "LFS işaretçilerini ayrıştır"
-
 #: trtables.py:539
 msgid "Tick this to display the real contents from LFS files."
 msgstr "LFS dosyalarının gerçek içeriğini görüntülemek için bunu işaretleyin."
@@ -8225,54 +7993,6 @@ msgstr "LFS dosyalarının gerçek içeriğini görüntülemek için bunu işare
 #: trtables.py:540
 msgid "Untick to display the raw text in LFS pointers."
 msgstr "LFS işaretçilerindeki ham metni görüntülemek için işareti kaldırın."
-
-#: trtables.py:543
-msgid "Mouse Shortcuts"
-msgstr "Fare Kısayolları"
-
-#: trtables.py:544
-msgid "Tip: If your mouse has side buttons, you can use them to navigate back/forward in the repo."
-msgstr "İpucu: Farenizde yan düğmeler varsa, depoda geri/ileri gitmek için bunları kullanabilirsiniz."
-
-#: trtables.py:545
-msgid "Repository tabs:"
-msgstr "Depo sekmeleri:"
-
-#: trtables.py:546
-msgid "Double-click tab"
-msgstr "Sekmeye çift tıklama"
-
-#: trtables.py:547
-msgid "Middle-click tab"
-msgstr "Sekmeye orta tıklama"
-
-#: trtables.py:548
-msgid "File lists:"
-msgstr "Dosya listeleri:"
-
-#: trtables.py:549
-msgid "Double-click file"
-msgstr "Dosyaya çift tıklama"
-
-#: trtables.py:550
-msgid "Middle-click file"
-msgstr "Dosyaya orta tıklama"
-
-#: trtables.py:551
-msgid "Diff view:"
-msgstr "Fark görünümü:"
-
-#: trtables.py:552
-msgid "Middle-click selection"
-msgstr "Seçime orta tıklama"
-
-#: trtables.py:553
-msgid "Stage/unstage selected lines"
-msgstr "Seçili satırları hazırla/hazırlıktan çıkar"
-
-#: trtables.py:558
-msgid "Ask for confirmation before running any command"
-msgstr "Herhangi bir komutu çalıştırmadan önce onay iste"
 
 #: trtables.py:560
 #, python-brace-format
@@ -8380,3 +8100,436 @@ msgstr ""
 #, python-brace-format
 msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
 msgstr "Aşağıdaki örneği kopyalayıp metin kutusuna yapıştırabilirsiniz. Komutlarınız ardından menü çubuğundaki {menu} menüsünde görünür."
+
+#: forms/prefsdialog.py:1029
+msgid "lines around each change"
+msgstr "satır (her değişikliğin çevresinde)"
+
+#: forms/prefsdialog.py:1031
+msgid "Whole file"
+msgstr "Dosyanın tamamı"
+
+#: forms/prefsdialog.py:769
+msgctxt "a limit of zero means no limit"
+msgid "No limit"
+msgstr "Sınır yok"
+
+#: trtables.py:197
+msgid "Shorten long names"
+msgstr "Uzun adları kısalt"
+
+#: trtables.py:198
+msgid "Full names"
+msgstr "Tam adlar"
+
+#: trtables.py:202
+msgid "In the files panel"
+msgstr "Dosya panelinde"
+
+#: trtables.py:203
+msgid "Along the bottom"
+msgstr "Alt kısım boyunca"
+
+#: trtables.py:207
+msgid "Hash first"
+msgstr "Önce hash"
+
+#: trtables.py:208
+msgid "Graph first"
+msgstr "Önce grafik"
+
+#: trtables.py:145
+msgctxt "Prefs"
+msgid "Diff"
+msgstr "Fark"
+
+#: trtables.py:365
+msgctxt "Prefs"
+msgid "History"
+msgstr "Geçmiş"
+
+#: trtables.py:114
+msgctxt "Prefs"
+msgid "Commit"
+msgstr "İşleme"
+
+#: trtables.py:3
+msgctxt "Prefs"
+msgid "Git"
+msgstr "Git"
+
+#: trtables.py:368
+msgctxt "Prefs"
+msgid "Integration"
+msgstr "Entegrasyon"
+
+#: trtables.py:22
+msgctxt "Prefs"
+msgid "Commands"
+msgstr "Komutlar"
+
+#: trtables.py:373
+msgctxt "Prefs"
+msgid "Appearance"
+msgstr "Görünüm"
+
+#: trtables.py:374
+msgctxt "Prefs"
+msgid "Repositories"
+msgstr "Depolar"
+
+#: trtables.py:376
+msgctxt "Prefs"
+msgid "Background Activity"
+msgstr "Arka Plan Etkinliği"
+
+#: trtables.py:377
+msgctxt "Prefs"
+msgid "Home Page"
+msgstr "Ana Sayfa"
+
+#: trtables.py:378
+msgctxt "Prefs"
+msgid "Diff View"
+msgstr "Fark Görünümü"
+
+#: trtables.py:379
+msgctxt "Prefs"
+msgid "Content"
+msgstr "İçerik"
+
+#: trtables.py:380
+msgctxt "Prefs"
+msgid "Large Files and Images"
+msgstr "Büyük Dosyalar ve Görseller"
+
+#: trtables.py:381
+msgctxt "Prefs"
+msgid "Sorting"
+msgstr "Sıralama"
+
+#: trtables.py:116
+msgctxt "Prefs"
+msgid "Graph"
+msgstr "Grafik"
+
+#: trtables.py:383
+msgctxt "Prefs"
+msgid "Commit Rows"
+msgstr "İşleme Satırları"
+
+#: trtables.py:384
+msgctxt "Prefs"
+msgid "Signatures"
+msgstr "İmzalar"
+
+#: trtables.py:385
+msgctxt "Prefs"
+msgid "Commit Form"
+msgstr "İşleme Formu"
+
+#: trtables.py:386
+msgctxt "Prefs"
+msgid "File Lists"
+msgstr "Dosya Listeleri"
+
+#: trtables.py:387
+msgctxt "Prefs"
+msgid "Git Executable"
+msgstr "Git Yürütülebilir Dosyası"
+
+#: trtables.py:349
+msgctxt "Prefs"
+msgid "SSH"
+msgstr "SSH"
+
+#: trtables.py:391
+msgctxt "Prefs"
+msgid "Interface"
+msgstr "Arayüz"
+
+#: trtables.py:392
+msgctxt "Prefs"
+msgid "Troubleshooting"
+msgstr "Sorun Giderme"
+
+#: trtables.py:373
+msgid "Appearance"
+msgstr "Görünüm"
+
+#: trtables.py:406
+msgid "Recent repositories"
+msgstr "Son depolar"
+
+#: trtables.py:407
+msgid "Show close buttons on tabs"
+msgstr "Sekmelerde kapatma düğmelerini göster"
+
+#: trtables.py:408
+msgid "Stretch tabs to fill the tab bar"
+msgstr "Sekmeleri sekme çubuğunu dolduracak şekilde genişlet"
+
+#: trtables.py:409
+msgid "Hide the tab bar when only one repository is open"
+msgstr "Yalnızca bir depo açıkken sekme çubuğunu gizle"
+
+#: trtables.py:410
+msgid "Double-click a tab"
+msgstr "Sekmeye çift tıklama"
+
+#: trtables.py:411
+msgid "Middle-click a tab"
+msgstr "Sekmeye orta tıklama"
+
+#: trtables.py:412
+msgid "Fetch remotes automatically every # minutes"
+msgstr "Uzak depoları her # dakikada bir otomatik getir"
+
+#: trtables.py:413
+#, python-brace-format
+msgid "Refresh when {app} becomes active"
+msgstr "{app} etkin olduğunda yenile"
+
+#: trtables.py:414
+#, python-brace-format
+msgid "When this is off, press {key} to see changes made outside the app."
+msgstr "Bu kapalıyken, uygulama dışında yapılan değişiklikleri görmek için {key} tuşuna basın."
+
+#: trtables.py:422
+msgid "Show the dinosaur on the Home page"
+msgstr "Ana Sayfa'da dinozoru göster"
+
+#: trtables.py:425
+msgid "Follow the pointer with its eyes"
+msgstr "Gözleriyle işaretçiyi takip etsin"
+
+#: trtables.py:430
+msgid "Line colors"
+msgstr "Satır renkleri"
+
+#: trtables.py:432
+msgid "Teal and orange (colorblind-friendly)"
+msgstr "Camgöbeği ve turuncu (renk körlüğüne uygun)"
+
+#: trtables.py:434
+msgid "Tab width # spaces"
+msgstr "Sekme genişliği # boşluk"
+
+#: trtables.py:118
+msgid "Layout"
+msgstr "Düzen"
+
+#: trtables.py:442
+msgid "Unified"
+msgstr "Birleşik"
+
+#: trtables.py:443
+msgid "Side by side"
+msgstr "Yan yana"
+
+#: trtables.py:444
+msgid "Whitespace changes"
+msgstr "Boşluk değişiklikleri"
+
+#: trtables.py:445
+msgid "Only changes what the diff shows."
+msgstr "Yalnızca farkın gösterdiğini değiştirir."
+
+#: trtables.py:450
+msgid "Wrap long lines"
+msgstr "Uzun satırları kaydır"
+
+#: trtables.py:451
+msgid "Show whitespace characters"
+msgstr "Boşluk karakterlerini göster"
+
+#: trtables.py:452
+msgid "Highlight Windows line endings (CRLF)"
+msgstr "Windows satır sonlarını vurgula (CRLF)"
+
+#: trtables.py:453
+msgid "Middle-click stages or unstages the selected lines"
+msgstr "Orta tıklama seçili satırları hazırlar veya hazırlıktan çıkarır"
+
+#: trtables.py:457
+msgid "Show as image"
+msgstr "Görsel olarak göster"
+
+#: trtables.py:458
+msgid "Show as text"
+msgstr "Metin olarak göster"
+
+#: trtables.py:462
+msgid "By date"
+msgstr "Tarihe göre"
+
+#: trtables.py:472
+msgid "Sort branches and tags"
+msgstr "Dalları ve etiketleri sırala"
+
+#: trtables.py:473
+msgid "Changing this resets the order you picked in each repository."
+msgstr "Bunu değiştirmek, her depoda seçtiğiniz sıralamayı sıfırlar."
+
+#: trtables.py:480
+msgid "<b>Hash first</b> is the classic layout: every row opens with the commit hash, and the branch labels sit between the graph and the commit message."
+msgstr "<b>Önce hash</b> klasik düzendir: her satır işlemenin hash değeriyle başlar, dal etiketleri grafik ile işleme iletisi arasında yer alır."
+
+#: trtables.py:482
+msgid "<b>Graph first</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Branch labels lead the message column, and the hash moves to the right, next to the author."
+msgstr "<b>Önce grafik</b> grafiğe kendi sütununu verir; böylece grafik bir satırda ne kadar yoğun olursa olsun işleme iletileri hizalı kalır. Dal etiketleri ileti sütununun başında yer alır ve hash değeri sağa, yazarın yanına taşınır."
+
+#: trtables.py:487
+msgid "Avoid gaps between branches"
+msgstr "Dallar arasında boşluk bırakma"
+
+#: trtables.py:488
+msgid "Alternate row backgrounds"
+msgstr "Satır arka planlarını dönüşümlü yap"
+
+#: trtables.py:489
+msgid "Load up to # commits"
+msgstr "En fazla # işleme yükle"
+
+#: trtables.py:483
+msgid "Branch labels"
+msgstr "Dal etiketleri"
+
+#: trtables.py:498
+msgid "Download pictures from GitHub and Gravatar"
+msgstr "GitHub ve Gravatar'dan resim indir"
+
+#: trtables.py:499
+msgid "Sends authors’ email addresses to these services."
+msgstr "Yazarların e-posta adreslerini bu hizmetlere gönderir."
+
+#: trtables.py:504
+msgid "Date format"
+msgstr "Tarih biçimi"
+
+#: trtables.py:506
+msgid "Hash length # characters"
+msgstr "Hash uzunluğu # karakter"
+
+#: trtables.py:507
+msgid "Mark commits whose author and committer differ (*)"
+msgstr "Yazarı ve işleyeni farklı olan işlemeleri işaretle (*)"
+
+#: trtables.py:518
+msgid "Verify signatures as commits scroll into view"
+msgstr "İşlemeler görünüme kaydıkça imzaları doğrula"
+
+#: trtables.py:519
+msgid "Can slow down scrolling in large repositories."
+msgstr "Büyük depolarda kaydırmayı yavaşlatabilir."
+
+#: trtables.py:526
+msgid "Commit form"
+msgstr "İşleme formu"
+
+#: trtables.py:527
+msgid "Recent messages"
+msgstr "Son iletiler"
+
+#: trtables.py:528
+msgid "Offered in the commit message box."
+msgstr "İşleme iletisi kutusunda önerilir."
+
+#: trtables.py:529
+msgid "Show files as"
+msgstr "Dosyaları göster"
+
+#: trtables.py:529
+msgid "Tree"
+msgstr "Ağaç"
+
+#: trtables.py:115
+msgid "List"
+msgstr "Liste"
+
+#: trtables.py:255
+msgid "Paths"
+msgstr "Yollar"
+
+#: trtables.py:533
+msgid "Double-click a file"
+msgstr "Dosyaya çift tıklama"
+
+#: trtables.py:534
+msgid "Middle-click a file"
+msgstr "Dosyaya orta tıklama"
+
+#: trtables.py:538
+msgid "Show LFS file contents instead of pointers"
+msgstr "İşaretçiler yerine LFS dosya içeriğini göster"
+
+#: trtables.py:539
+msgid "When this is off, diffs show the pointer text stored in Git."
+msgstr "Bu kapalıyken farklar, Git'te saklanan işaretçi metnini gösterir."
+
+#: trtables.py:545
+msgid "Use the system agent"
+msgstr "Sistem aracısını kullan"
+
+#: trtables.py:546
+#, python-brace-format
+msgid "Let {app} start its own"
+msgstr "{app} kendi aracısını başlatsın"
+
+#: trtables.py:547
+msgid "System agent detected."
+msgstr "Sistem aracısı algılandı."
+
+#: trtables.py:547
+msgid "No system agent detected."
+msgstr "Sistem aracısı algılanmadı."
+
+#: trtables.py:555
+#, python-brace-format
+msgid "Ask for SSH passphrases in {app}"
+msgstr "SSH parolalarını {app} içinde sor"
+
+#: trtables.py:587
+msgid "Ask before running a command"
+msgstr "Bir komutu çalıştırmadan önce sor"
+
+#: trtables.py:595
+msgid "Keep up to # discarded changes"
+msgstr "En fazla # atılmış değişiklik sakla"
+
+#: trtables.py:596
+#, python-brace-format
+msgid "When you discard changes, {app} keeps a copy in a trash folder, so you can get them back."
+msgstr "Değişiklikleri attığınızda {app} bir kopyasını çöp kutusu klasöründe saklar; böylece onları geri alabilirsiniz."
+
+#: trtables.py:598
+msgid "Skip changes larger than # KB"
+msgstr "# KB boyutundan büyük değişiklikleri atla"
+
+#: trtables.py:599
+msgid "Condense long names before truncating them"
+msgstr "Uzun adları kısaltmadan önce daralt"
+
+#: trtables.py:603
+msgid "Animate the sidebar"
+msgstr "Kenar çubuğunu canlandır"
+
+#: trtables.py:604
+msgid "Smooth scrolling"
+msgstr "Yumuşak kaydırma"
+
+#: trtables.py:605
+msgid "Show Skipped Messages Again"
+msgstr "Atlanan İletileri Yeniden Göster"
+
+#: trtables.py:606
+msgid "Log level"
+msgstr "Günlük düzeyi"
+
+#: trtables.py:262
+msgid "Qt binding"
+msgstr "Qt bağlayıcısı"
+
+#: trtables.py:612
+msgid "Load third-party Pygments plugins"
+msgstr "Üçüncü taraf Pygments eklentilerini yükle"

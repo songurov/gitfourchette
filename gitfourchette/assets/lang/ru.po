@@ -2312,10 +2312,6 @@ msgstr "Отключено"
 msgid "Red and green"
 msgstr "Красный и зелёный"
 
-#: forms/prefsdialog.py:731
-msgid "Colorblind-friendly"
-msgstr "Для дальтоников"
-
 #: forms/protocolbutton.py:19
 msgid "Change URL protocol"
 msgstr "Изменить URL протокол"
@@ -7035,22 +7031,6 @@ msgstr "Неверная подпись"
 msgid "Failed to start verification process"
 msgstr "Не удалось запустить процесс проверки"
 
-#: trtables.py:196
-msgid "Truncate long ref names"
-msgstr "Сокращать длинные имена ссылок"
-
-#: trtables.py:197
-msgid "Show full ref names"
-msgstr "Показывать полные имена ссылок"
-
-#: trtables.py:201
-msgid "Hash, graph, refs, message"
-msgstr "Хэш, граф, ссылки, сообщение"
-
-#: trtables.py:202
-msgid "Graph, refs, message (aligned)"
-msgstr "Граф, ссылки, сообщение (с выравниванием)"
-
 #: trtables.py:206
 msgctxt "row spacing"
 msgid "Cramped"
@@ -7437,35 +7417,15 @@ msgctxt "Prefs"
 msgid "General"
 msgstr "Общие"
 
-#: trtables.py:355
-msgctxt "Prefs"
-msgid "Code"
-msgstr "Код"
-
-#: trtables.py:356
-msgctxt "Prefs"
-msgid "Images"
-msgstr "Изображения"
-
 #: trtables.py:357
 msgctxt "Prefs"
 msgid "Tabs"
 msgstr "Вкладки"
 
-#: trtables.py:358
-msgctxt "Prefs"
-msgid "Commit History"
-msgstr "История коммитов"
-
 #: trtables.py:359
 msgctxt "Prefs"
 msgid "Trash"
 msgstr "Корзина"
-
-#: trtables.py:360
-msgctxt "Prefs"
-msgid "Git Integration"
-msgstr "Интеграция с Git"
 
 #: trtables.py:361
 msgctxt "Prefs"
@@ -7477,34 +7437,9 @@ msgctxt "Prefs"
 msgid "Advanced"
 msgstr "Дополнительно"
 
-#: trtables.py:363
-msgctxt "Prefs"
-msgid "Custom Commands"
-msgstr "Пользовательские команды"
-
 #: trtables.py:365
 msgid "Language"
 msgstr "Язык"
-
-#: trtables.py:366
-msgid "Qt style"
-msgstr "Стиль Qt"
-
-#: trtables.py:367
-msgid "Shorten hashes to # characters"
-msgstr "Сокращать хэши до # символов"
-
-#: trtables.py:368
-msgid "Date/time format"
-msgstr "Формат даты/времени"
-
-#: trtables.py:371
-msgid "Author display style"
-msgstr "Стиль отображения автора"
-
-#: trtables.py:372
-msgid "Remember up to # recent repositories"
-msgstr "Запоминать до # недавних репозиториев"
 
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
@@ -7514,34 +7449,14 @@ msgstr "Когда строка меню скрыта, нажмите клави
 msgid "Density"
 msgstr "Плотность"
 
-#: trtables.py:377
-msgid "Dinosaur on the Home page"
-msgstr "Динозавр на Главной"
-
 #: trtables.py:378
 msgid "A little dinosaur walks across the welcome text, fetching eggs for its nest. It only moves while the Home page is on screen."
 msgstr "Маленький динозавр ходит по приветственному тексту и таскает яйца в своё гнездо. Он двигается, только пока на экране открыта Главная."
-
-#: trtables.py:380
-msgid "Dinosaur looks at the mouse pointer"
-msgstr "Динозавр следит за указателем мыши"
-
-#: trtables.py:381
-msgid "Restore all “don’t show this again” messages"
-msgstr "Сбросить все отметки «Больше не показывать»"
-
-#: trtables.py:382
-msgid "Allow third-party Pygments plugins"
-msgstr "Разрешить сторонние плагины Pygments"
 
 #: trtables.py:383
 #, python-brace-format
 msgid "Let {app} load third-party Pygments plugins installed on your system. These plugins extend syntax highlighting with new languages and color schemes. <b>May incur significant slowdowns.</b>"
 msgstr "Разрешить {app} загружать сторонние плагины Pygments, установленные в вашей системе. Эти плагины добавляют в подсветку синтаксиса новые языки и цветовые схемы. <b>Может значительно замедлить работу.</b>"
-
-#: trtables.py:386
-msgid "Sort branches && tags by"
-msgstr "Сортировка веток и тегов"
 
 #: trtables.py:388
 msgid "The default sorting mode for local branches, remote branches, and tags in the sidebar."
@@ -7554,10 +7469,6 @@ msgstr "Этот параметр можно настроить для кажд�
 #: trtables.py:392
 msgid "Font"
 msgstr "Шрифт"
-
-#: trtables.py:393
-msgid "One tab is # spaces"
-msgstr "Табуляция равна # пробелам"
 
 #: trtables.py:395
 msgid "Show whole file"
@@ -7583,22 +7494,6 @@ msgstr "Загружать изображения до # КБ"
 msgid "Syntax highlighting"
 msgstr "Подсветка синтаксиса"
 
-#: trtables.py:401
-msgid "Word wrap"
-msgstr "Перенос строк"
-
-#: trtables.py:402
-msgid "Show alien line endings (CRLF)"
-msgstr "Показывать чужеродные концы строк (CRLF)"
-
-#: trtables.py:403
-msgid "Show whitespace symbols"
-msgstr "Показывать пробельные символы"
-
-#: trtables.py:404
-msgid "Whitespace diffs"
-msgstr "Изменения пробелов"
-
 #: trtables.py:406
 msgid "How whitespace changes are shown in diffs."
 msgstr "Как показывать изменения пробелов в diff."
@@ -7606,10 +7501,6 @@ msgstr "Как показывать изменения пробелов в diff.
 #: trtables.py:407
 msgid "This setting only affects how diffs are displayed. Operations that handle patches (export, apply, revert, etc.) still honor all whitespace changes."
 msgstr "Этот параметр влияет только на отображение изменений. Операции с патчами (экспорт, применение, откат и т. д.) по-прежнему учитывают все изменения пробелов."
-
-#: trtables.py:409
-msgid "“-/+” colors"
-msgstr "Цвета «-/+»"
 
 #: trtables.py:410
 msgid "Background colors for deleted (-) and added (+) lines."
@@ -7619,33 +7510,9 @@ msgstr "Цвета фона для удалённых (-) и добавленн�
 msgid "SVG files"
 msgstr "Файлы SVG"
 
-#: trtables.py:412
-msgid "Display as text"
-msgstr "Показывать как текст"
-
-#: trtables.py:413
-msgid "Display as images"
-msgstr "Показывать как изображения"
-
-#: trtables.py:415
-msgid "Show tab close button"
-msgstr "Показывать кнопку закрытия вкладки"
-
-#: trtables.py:416
-msgid "Expand tabs to available width"
-msgstr "Растягивать вкладки на всю доступную ширину"
-
-#: trtables.py:417
-msgid "Auto-hide tabs if only one repo is open"
-msgstr "Скрывать вкладки, если открыт только один репозиторий"
-
 #: trtables.py:419
 msgid "Sort commits"
 msgstr "Сортировка коммитов"
-
-#: trtables.py:420
-msgid "Chronologically"
-msgstr "Хронологически"
 
 #: trtables.py:421
 msgid "Topologically"
@@ -7663,21 +7530,9 @@ msgstr "<b>Топологический режим</b> делает граф б�
 msgid "Row layout"
 msgstr "Компоновка строк"
 
-#: trtables.py:432
-msgid "<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the commit hash, and the ref indicators sit between the graph and the commit message."
-msgstr "<b>Хэш, граф, ссылки, сообщение</b> — классическая компоновка: каждая строка начинается с хэша коммита, а индикаторы ссылок располагаются между графом и сообщением коммита."
-
-#: trtables.py:434
-msgid "<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Ref indicators lead the message column, and the hash moves to the right, next to the author."
-msgstr "<b>Граф, ссылки, сообщение</b> — граф получает собственный столбец, поэтому сообщения коммитов выровнены, как бы ни был загружен граф в конкретной строке. Индикаторы ссылок стоят в начале столбца сообщений, а хэш перемещается вправо, рядом с автором."
-
 #: trtables.py:438
 msgid "Show author avatars"
 msgstr "Показывать аватары авторов"
-
-#: trtables.py:439
-msgid "Download author pictures"
-msgstr "Загружать фотографии авторов"
 
 #: trtables.py:441
 msgid "Look up each author’s picture on GitHub or Gravatar. This sends their email address to a third party, so it is off until you ask for it. Without it, authors get a chip with their initials, computed on your machine."
@@ -7691,14 +7546,6 @@ msgstr "Значок с инициалами автора, цвет которо
 msgid "Row spacing"
 msgstr "Межстрочный интервал"
 
-#: trtables.py:448
-msgid "Avoid gaps between branches in the graph"
-msgstr "Избегать промежутков между ветками в графе"
-
-#: trtables.py:449
-msgid "Mark author/committer signature differences"
-msgstr "Отмечать различия между автором и коммиттером"
-
 #: trtables.py:451
 msgid "The commit history displays information about a commit’s <b>author</b>—their name and the date at which they made the commit. But in some cases, a commit might have been revised by someone else than the original author—this person is called the <b>committer</b>."
 msgstr "История коммитов показывает сведения об <b>авторе</b> коммита — его имя и дату, когда он создал коммит. Но иногда коммит может быть изменён не первоначальным автором, а кем-то другим — этот человек называется <b>коммиттером</b>."
@@ -7711,29 +7558,13 @@ msgstr "Если включить этот параметр, после имен
 msgid "Note that you can always hover over the author’s name or date to obtain detailed information about the author and the committer."
 msgstr "Учтите, что вы всегда можете навести курсор на имя автора или дату, чтобы получить подробные сведения об авторе и коммиттере."
 
-#: trtables.py:460
-msgid "Load up to # commits in the history"
-msgstr "Загружать в историю до # коммитов"
-
 #: trtables.py:461
 msgid "Set to 0 to always load the full commit history."
 msgstr "Установите 0, чтобы всегда загружать всю историю коммитов."
 
-#: trtables.py:462
-msgid "Draw rows using alternating background colors"
-msgstr "Чередовать цвет фона строк"
-
-#: trtables.py:463
-msgid "Ref indicators"
-msgstr "Индикаторы ссылок"
-
 #: trtables.py:464
 msgid "You can always hover over an indicator to display the full name of the ref."
 msgstr "Вы всегда можете навести курсор на индикатор, чтобы увидеть полное имя ссылки."
-
-#: trtables.py:465
-msgid "Verify signed commits on the fly"
-msgstr "Проверять подписанные коммиты на лету"
 
 #: trtables.py:467
 #, python-brace-format
@@ -7743,27 +7574,6 @@ msgstr "Когда коммиты появляются в области про�
 #: trtables.py:469
 msgid "(No seal = Commit isn’t signed)"
 msgstr "(Нет печати = коммит не подписан)"
-
-#: trtables.py:471
-msgid "The trash keeps up to # discarded patches"
-msgstr "Корзина хранит до # отменённых патчей"
-
-#: trtables.py:472
-msgid "Patches bigger than # KB won’t be salvaged"
-msgstr "Патчи больше # КБ не сохраняются"
-
-#: trtables.py:474
-#, python-brace-format
-msgid "When you discard changes from the working directory, {app} keeps a temporary copy in a hidden “trash” folder. This gives you a last resort to rescue changes that you have discarded by mistake. You can look around this trash folder via <i>“Help &rarr; Open Trash”</i>."
-msgstr "Когда вы отменяете изменения в рабочей директории, {app} сохраняет их временную копию в скрытой папке «корзины». Это последний шанс спасти изменения, отменённые по ошибке. Заглянуть в эту папку можно через <i>«Помощь &rarr; Открыть корзину»</i>."
-
-#: trtables.py:478
-msgid "Logging verbosity"
-msgstr "Уровень журналирования"
-
-#: trtables.py:479
-msgid "Auto-refresh when app regains focus"
-msgstr "Автоматически обновлять, когда приложение снова получает фокус"
 
 #: trtables.py:481
 #, python-brace-format
@@ -7779,22 +7589,6 @@ msgstr "Если отключить эту функцию, для обновле
 msgid "We strongly recommend to keep this setting enabled."
 msgstr "Настоятельно рекомендуем оставить этот параметр включённым."
 
-#: trtables.py:487
-msgid "Auto-fetch remotes every # minutes"
-msgstr "Автоматически получать данные удалённых репозиториев каждые # мин"
-
-#: trtables.py:488
-msgid "Animation effects in sidebar"
-msgstr "Анимационные эффекты в боковой панели"
-
-#: trtables.py:489
-msgid "Smooth scrolling (where applicable)"
-msgstr "Плавная прокрутка (где возможно)"
-
-#: trtables.py:490
-msgid "Preferred Qt binding"
-msgstr "Предпочитаемая привязка Qt"
-
 #: trtables.py:492
 #, python-brace-format
 msgid "After restarting, {app} will use this Qt binding if available."
@@ -7803,10 +7597,6 @@ msgstr "После перезапуска {app} будет использова�
 #: trtables.py:493
 msgid "You can also pass the name of a Qt binding via the “QT_API” environment variable."
 msgstr "Имя привязки Qt также можно передать через переменную окружения «QT_API»."
-
-#: trtables.py:495
-msgid "Use condensed fonts"
-msgstr "Использовать сжатые шрифты"
 
 #: trtables.py:497
 msgid "When a branch name or author name is too long to fit in its allotted space, condense the font before truncating the text."
@@ -7857,11 +7647,6 @@ msgstr "Команда, выполняемая после запуска тер�
 msgid "The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that enters your working directory and optionally starts one of your Custom Commands."
 msgstr "Подстановка {0} обязательна. Она автоматически заменяется скриптом-обёрткой, который переходит в вашу рабочую директорию и при необходимости запускает одну из ваших пользовательских команд."
 
-#: trtables.py:523
-#, python-brace-format
-msgid "Have OpenSSH ask for passphrases via {app}"
-msgstr "Запрашивать парольные фразы OpenSSH через {app}"
-
 #: trtables.py:525
 #, python-brace-format
 msgid "Tick this to have OpenSSH use {app} to ask for passphrases."
@@ -7872,19 +7657,6 @@ msgstr "Включите, чтобы OpenSSH запрашивал парольн
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr "Отключите, если вы указали другую программу в переменной окружения {0} (например, {1})."
 
-#: trtables.py:547
-msgid "Use ssh-agent provided by the system"
-msgstr "Использовать ssh-agent, предоставляемый системой"
-
-#: trtables.py:548
-msgid "Use ssh-agent provided by the system (not detected)"
-msgstr "Использовать ssh-agent, предоставляемый системой (не обнаружен)"
-
-#: trtables.py:529
-#, python-brace-format
-msgid "Have {app} manage its own ssh-agent"
-msgstr "Использовать собственный ssh-agent под управлением {app}"
-
 #: trtables.py:531
 msgid "“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. Some Linux distributions set up an ssh-agent for you."
 msgstr "«ssh-agent» может хранить ваши учётные данные SSH, чтобы вам не приходилось снова и снова вводить одну и ту же парольную фразу. Некоторые дистрибутивы Linux настраивают ssh-agent за вас."
@@ -7894,10 +7666,6 @@ msgstr "«ssh-agent» может хранить ваши учётные данн
 msgid "You can also have {app} start its own instance of ssh-agent for the duration of your session and have it remember passphrases."
 msgstr "Также {app} может запускать собственный экземпляр ssh-agent на время вашего сеанса и запоминать в нём парольные фразы."
 
-#: trtables.py:537
-msgid "Parse LFS pointers"
-msgstr "Разбирать указатели LFS"
-
 #: trtables.py:539
 msgid "Tick this to display the real contents from LFS files."
 msgstr "Включите, чтобы показывать реальное содержимое файлов LFS."
@@ -7905,54 +7673,6 @@ msgstr "Включите, чтобы показывать реальное со�
 #: trtables.py:540
 msgid "Untick to display the raw text in LFS pointers."
 msgstr "Отключите, чтобы показывать необработанный текст указателей LFS."
-
-#: trtables.py:543
-msgid "Mouse Shortcuts"
-msgstr "Действия мыши"
-
-#: trtables.py:544
-msgid "Tip: If your mouse has side buttons, you can use them to navigate back/forward in the repo."
-msgstr "Совет: если у вашей мыши есть боковые кнопки, с их помощью можно перемещаться назад/вперёд по репозиторию."
-
-#: trtables.py:545
-msgid "Repository tabs:"
-msgstr "Вкладки репозиториев:"
-
-#: trtables.py:546
-msgid "Double-click tab"
-msgstr "Двойной щелчок по вкладке"
-
-#: trtables.py:547
-msgid "Middle-click tab"
-msgstr "Щелчок средней кнопкой по вкладке"
-
-#: trtables.py:548
-msgid "File lists:"
-msgstr "Списки файлов:"
-
-#: trtables.py:549
-msgid "Double-click file"
-msgstr "Двойной щелчок по файлу"
-
-#: trtables.py:550
-msgid "Middle-click file"
-msgstr "Щелчок средней кнопкой по файлу"
-
-#: trtables.py:551
-msgid "Diff view:"
-msgstr "Просмотр изменений:"
-
-#: trtables.py:552
-msgid "Middle-click selection"
-msgstr "Щелчок средней кнопкой по выделению"
-
-#: trtables.py:553
-msgid "Stage/unstage selected lines"
-msgstr "Подготовить выбранные строки / убрать из подготовленных"
-
-#: trtables.py:558
-msgid "Ask for confirmation before running any command"
-msgstr "Запрашивать подтверждение перед запуском любой команды"
 
 #: trtables.py:560
 #, python-brace-format
@@ -8060,6 +7780,439 @@ msgstr ""
 #, python-brace-format
 msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
 msgstr "Можете скопировать пример ниже и вставить его в текстовое поле. Ваши команды появятся в меню {menu}."
+
+#: forms/prefsdialog.py:1029
+msgid "lines around each change"
+msgstr "строк вокруг каждого изменения"
+
+#: forms/prefsdialog.py:1031
+msgid "Whole file"
+msgstr "Весь файл"
+
+#: forms/prefsdialog.py:769
+msgctxt "a limit of zero means no limit"
+msgid "No limit"
+msgstr "Без ограничений"
+
+#: trtables.py:197
+msgid "Shorten long names"
+msgstr "Сокращать длинные имена"
+
+#: trtables.py:198
+msgid "Full names"
+msgstr "Полные имена"
+
+#: trtables.py:202
+msgid "In the files panel"
+msgstr "На панели файлов"
+
+#: trtables.py:203
+msgid "Along the bottom"
+msgstr "Внизу окна"
+
+#: trtables.py:207
+msgid "Hash first"
+msgstr "Сначала хэш"
+
+#: trtables.py:208
+msgid "Graph first"
+msgstr "Сначала граф"
+
+#: trtables.py:145
+msgctxt "Prefs"
+msgid "Diff"
+msgstr "Сравнение"
+
+#: trtables.py:365
+msgctxt "Prefs"
+msgid "History"
+msgstr "История"
+
+#: trtables.py:114
+msgctxt "Prefs"
+msgid "Commit"
+msgstr "Коммит"
+
+#: trtables.py:3
+msgctxt "Prefs"
+msgid "Git"
+msgstr "Git"
+
+#: trtables.py:368
+msgctxt "Prefs"
+msgid "Integration"
+msgstr "Интеграция"
+
+#: trtables.py:22
+msgctxt "Prefs"
+msgid "Commands"
+msgstr "Команды"
+
+#: trtables.py:373
+msgctxt "Prefs"
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: trtables.py:374
+msgctxt "Prefs"
+msgid "Repositories"
+msgstr "Репозитории"
+
+#: trtables.py:376
+msgctxt "Prefs"
+msgid "Background Activity"
+msgstr "Фоновая активность"
+
+#: trtables.py:377
+msgctxt "Prefs"
+msgid "Home Page"
+msgstr "Главная страница"
+
+#: trtables.py:378
+msgctxt "Prefs"
+msgid "Diff View"
+msgstr "Просмотр изменений"
+
+#: trtables.py:379
+msgctxt "Prefs"
+msgid "Content"
+msgstr "Содержимое"
+
+#: trtables.py:380
+msgctxt "Prefs"
+msgid "Large Files and Images"
+msgstr "Большие файлы и изображения"
+
+#: trtables.py:381
+msgctxt "Prefs"
+msgid "Sorting"
+msgstr "Сортировка"
+
+#: trtables.py:116
+msgctxt "Prefs"
+msgid "Graph"
+msgstr "Граф"
+
+#: trtables.py:383
+msgctxt "Prefs"
+msgid "Commit Rows"
+msgstr "Строки коммитов"
+
+#: trtables.py:384
+msgctxt "Prefs"
+msgid "Signatures"
+msgstr "Подписи"
+
+#: trtables.py:385
+msgctxt "Prefs"
+msgid "Commit Form"
+msgstr "Форма коммита"
+
+#: trtables.py:386
+msgctxt "Prefs"
+msgid "File Lists"
+msgstr "Списки файлов"
+
+#: trtables.py:387
+msgctxt "Prefs"
+msgid "Git Executable"
+msgstr "Исполняемый файл Git"
+
+#: trtables.py:349
+msgctxt "Prefs"
+msgid "SSH"
+msgstr "SSH"
+
+#: trtables.py:391
+msgctxt "Prefs"
+msgid "Interface"
+msgstr "Интерфейс"
+
+#: trtables.py:392
+msgctxt "Prefs"
+msgid "Troubleshooting"
+msgstr "Устранение неполадок"
+
+#: trtables.py:373
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: trtables.py:406
+msgid "Recent repositories"
+msgstr "Недавние репозитории"
+
+#: trtables.py:407
+msgid "Show close buttons on tabs"
+msgstr "Показывать кнопки закрытия на вкладках"
+
+#: trtables.py:408
+msgid "Stretch tabs to fill the tab bar"
+msgstr "Растягивать вкладки на всю панель вкладок"
+
+#: trtables.py:409
+msgid "Hide the tab bar when only one repository is open"
+msgstr "Скрывать панель вкладок, когда открыт только один репозиторий"
+
+#: trtables.py:410
+msgid "Double-click a tab"
+msgstr "Двойной щелчок по вкладке"
+
+#: trtables.py:411
+msgid "Middle-click a tab"
+msgstr "Щелчок средней кнопкой по вкладке"
+
+#: trtables.py:412
+msgid "Fetch remotes automatically every # minutes"
+msgstr "Автоматически получать данные удалённых репозиториев каждые # мин"
+
+#: trtables.py:413
+#, python-brace-format
+msgid "Refresh when {app} becomes active"
+msgstr "Обновлять, когда {app} становится активным"
+
+#: trtables.py:414
+#, python-brace-format
+msgid "When this is off, press {key} to see changes made outside the app."
+msgstr "Если это выключено, нажмите {key}, чтобы увидеть изменения, сделанные вне приложения."
+
+#: trtables.py:422
+msgid "Show the dinosaur on the Home page"
+msgstr "Показывать динозавра на Главной"
+
+#: trtables.py:425
+msgid "Follow the pointer with its eyes"
+msgstr "Следить глазами за указателем"
+
+#: trtables.py:430
+msgid "Line colors"
+msgstr "Цвета строк"
+
+#: trtables.py:432
+msgid "Teal and orange (colorblind-friendly)"
+msgstr "Бирюзовый и оранжевый (для дальтоников)"
+
+#: trtables.py:434
+msgid "Tab width # spaces"
+msgstr "Ширина табуляции # пробелов"
+
+#: trtables.py:118
+msgid "Layout"
+msgstr "Вид"
+
+#: trtables.py:442
+msgid "Unified"
+msgstr "Единый"
+
+#: trtables.py:443
+msgid "Side by side"
+msgstr "Рядом"
+
+#: trtables.py:444
+msgid "Whitespace changes"
+msgstr "Изменения пробелов"
+
+#: trtables.py:445
+msgid "Only changes what the diff shows."
+msgstr "Влияет только на то, что показывает сравнение."
+
+#: trtables.py:450
+msgid "Wrap long lines"
+msgstr "Переносить длинные строки"
+
+#: trtables.py:451
+msgid "Show whitespace characters"
+msgstr "Показывать пробельные символы"
+
+#: trtables.py:452
+msgid "Highlight Windows line endings (CRLF)"
+msgstr "Выделять окончания строк Windows (CRLF)"
+
+#: trtables.py:453
+msgid "Middle-click stages or unstages the selected lines"
+msgstr "Щелчок средней кнопкой подготавливает выбранные строки или убирает их из подготовленных"
+
+#: trtables.py:457
+msgid "Show as image"
+msgstr "Показывать как изображение"
+
+#: trtables.py:458
+msgid "Show as text"
+msgstr "Показывать как текст"
+
+#: trtables.py:462
+msgid "By date"
+msgstr "По дате"
+
+#: trtables.py:472
+msgid "Sort branches and tags"
+msgstr "Сортировка веток и тегов"
+
+#: trtables.py:473
+msgid "Changing this resets the order you picked in each repository."
+msgstr "Изменение сбрасывает порядок, выбранный в каждом репозитории."
+
+#: trtables.py:480
+msgid "<b>Hash first</b> is the classic layout: every row opens with the commit hash, and the branch labels sit between the graph and the commit message."
+msgstr "<b>Сначала хэш</b> — классическая компоновка: каждая строка начинается с хэша коммита, а метки веток стоят между графом и сообщением коммита."
+
+#: trtables.py:482
+msgid "<b>Graph first</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Branch labels lead the message column, and the hash moves to the right, next to the author."
+msgstr "<b>Сначала граф</b> отводит графу отдельный столбец, поэтому сообщения коммитов выровнены, как бы ни был загружен граф в строке. Метки веток открывают столбец сообщения, а хэш переходит вправо, к автору."
+
+#: trtables.py:487
+msgid "Avoid gaps between branches"
+msgstr "Избегать промежутков между ветками"
+
+#: trtables.py:488
+msgid "Alternate row backgrounds"
+msgstr "Чередовать фон строк"
+
+#: trtables.py:489
+msgid "Load up to # commits"
+msgstr "Загружать до # коммитов"
+
+#: trtables.py:483
+msgid "Branch labels"
+msgstr "Метки веток"
+
+#: trtables.py:498
+msgid "Download pictures from GitHub and Gravatar"
+msgstr "Загружать фотографии с GitHub и Gravatar"
+
+#: trtables.py:499
+msgid "Sends authors’ email addresses to these services."
+msgstr "Отправляет адреса электронной почты авторов этим сервисам."
+
+#: trtables.py:504
+msgid "Date format"
+msgstr "Формат даты"
+
+#: trtables.py:506
+msgid "Hash length # characters"
+msgstr "Длина хэша # символов"
+
+#: trtables.py:507
+msgid "Mark commits whose author and committer differ (*)"
+msgstr "Отмечать коммиты, у которых автор и коммиттер различаются (*)"
+
+#: trtables.py:518
+msgid "Verify signatures as commits scroll into view"
+msgstr "Проверять подписи коммитов при прокрутке"
+
+#: trtables.py:519
+msgid "Can slow down scrolling in large repositories."
+msgstr "Может замедлить прокрутку в больших репозиториях."
+
+#: trtables.py:526
+msgid "Commit form"
+msgstr "Форма коммита"
+
+#: trtables.py:527
+msgid "Recent messages"
+msgstr "Недавние сообщения"
+
+#: trtables.py:528
+msgid "Offered in the commit message box."
+msgstr "Предлагаются в поле сообщения коммита."
+
+#: trtables.py:529
+msgid "Show files as"
+msgstr "Показывать файлы"
+
+#: trtables.py:529
+msgid "Tree"
+msgstr "Деревом"
+
+#: trtables.py:115
+msgid "List"
+msgstr "Списком"
+
+#: trtables.py:255
+msgid "Paths"
+msgstr "Пути"
+
+#: trtables.py:533
+msgid "Double-click a file"
+msgstr "Двойной щелчок по файлу"
+
+#: trtables.py:534
+msgid "Middle-click a file"
+msgstr "Щелчок средней кнопкой по файлу"
+
+#: trtables.py:538
+msgid "Show LFS file contents instead of pointers"
+msgstr "Показывать содержимое файлов LFS вместо указателей"
+
+#: trtables.py:539
+msgid "When this is off, diffs show the pointer text stored in Git."
+msgstr "Если это выключено, в сравнении показывается текст указателя, хранящийся в Git."
+
+#: trtables.py:545
+msgid "Use the system agent"
+msgstr "Использовать системный агент"
+
+#: trtables.py:546
+#, python-brace-format
+msgid "Let {app} start its own"
+msgstr "Пусть {app} запустит собственный"
+
+#: trtables.py:547
+msgid "System agent detected."
+msgstr "Системный агент обнаружен."
+
+#: trtables.py:547
+msgid "No system agent detected."
+msgstr "Системный агент не обнаружен."
+
+#: trtables.py:555
+#, python-brace-format
+msgid "Ask for SSH passphrases in {app}"
+msgstr "Запрашивать парольные фразы SSH в {app}"
+
+#: trtables.py:587
+msgid "Ask before running a command"
+msgstr "Спрашивать перед запуском команды"
+
+#: trtables.py:595
+msgid "Keep up to # discarded changes"
+msgstr "Хранить до # отменённых изменений"
+
+#: trtables.py:596
+#, python-brace-format
+msgid "When you discard changes, {app} keeps a copy in a trash folder, so you can get them back."
+msgstr "Когда вы отменяете изменения, {app} сохраняет их копию в папке корзины, чтобы их можно было вернуть."
+
+#: trtables.py:598
+msgid "Skip changes larger than # KB"
+msgstr "Пропускать изменения больше # КБ"
+
+#: trtables.py:599
+msgid "Condense long names before truncating them"
+msgstr "Сжимать длинные имена, прежде чем обрезать их"
+
+#: trtables.py:603
+msgid "Animate the sidebar"
+msgstr "Анимировать боковую панель"
+
+#: trtables.py:604
+msgid "Smooth scrolling"
+msgstr "Плавная прокрутка"
+
+#: trtables.py:605
+msgid "Show Skipped Messages Again"
+msgstr "Снова показывать пропущенные сообщения"
+
+#: trtables.py:606
+msgid "Log level"
+msgstr "Уровень журнала"
+
+#: trtables.py:262
+msgid "Qt binding"
+msgstr "Привязка Qt"
+
+#: trtables.py:612
+msgid "Load third-party Pygments plugins"
+msgstr "Загружать сторонние плагины Pygments"
 
 #~ msgid "Show details about this commit"
 #~ msgstr "Показать детали о коммите"

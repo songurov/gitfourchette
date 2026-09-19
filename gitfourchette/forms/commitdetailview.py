@@ -53,8 +53,11 @@ class CommitDetailView(QTextBrowser):
         muted = mutedTextColorHex(self)
 
         document = QTextDocument(self)
-        avatarImage = self._avatarImage(commit.author)
-        document.addResource(QTextDocument.ResourceType.ImageResource, QUrl("avatar"), avatarImage)
+        avatarCell = ""
+        if settings.prefs.showAvatars:  # Same switch as the graph's, so the Settings row tells the truth
+            avatarImage = self._avatarImage(commit.author)
+            document.addResource(QTextDocument.ResourceType.ImageResource, QUrl("avatar"), avatarImage)
+            avatarCell = "<td style='padding-right: 12px'><img src='avatar'/></td>"
 
         rows = []
 
@@ -83,7 +86,7 @@ class CommitDetailView(QTextBrowser):
 
         markup = f"""\
             <table><tr>
-            <td style='padding-right: 12px'><img src='avatar'/></td>
+            {avatarCell}
             <td>{self._person(commit.author)}<br>
             <span style='color: {muted}'>{escape(signatureDateFormat(commit.author, QLocale.FormatType.LongFormat, localTime=True))}</span></td>
             </tr></table>

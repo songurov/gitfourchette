@@ -1522,3 +1522,21 @@ def testCommitTabLoadsHeftyDiffWithoutLeavingTheTab(tempDir, mainWindow):
     assert diffArea.commitTabs.currentIndex() == diffArea.CommitTab, "no detour through Changes"
     assert diffArea.commitPatchStack.currentIndex() == 0, "the diff we asked for, right here"
     assert "y499x19" in diffArea.commitPatchView.toPlainText()
+
+
+def testCommitTabShowsNoAvatarWhileAvatarsAreOff(tempDir, mainWindow):
+    """The Commit tab obeys "Show author avatars" like the graph, so the Settings row that depends on it tells the truth."""
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    oid = Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664")
+    detailView = rw.diffArea.commitDetailView
+
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    assert 'src="avatar"' in detailView.toHtml()
+
+    GFApplication.applyPrefs(showAvatars=False)
+    parentId = rw.repo.peel_commit(oid).parent_ids[0]
+    rw.jump(NavLocator.inCommit(parentId))
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    assert 'src="avatar"' not in detailView.toHtml()
+    assert "A U Thor" in detailView.toPlainText()

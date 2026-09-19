@@ -13,7 +13,7 @@ import textwrap
 
 import pytest
 
-from gitfourchette import settings, trtables
+from gitfourchette import prefsschema, settings, trtables
 from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.forms.prefsdialog import PrefsDialog
 from gitfourchette.nav import NavLocator
@@ -477,10 +477,9 @@ def testSectionTitlesAndPreviewsAreNotDrawnDisabled(mainWindow):
         dlg = GFApplication.instance().openPrefsDialog("doubleClickTabBar")
         window = dlg.palette().color(QPalette.ColorRole.Window)
 
-        # Section titles on the Mouse Shortcuts page are titles, not unavailable options
-        titles = [label for label in dlg.findChildren(QLabel)
-                  if label.text() in ("Repository tabs:", "File lists:", "Diff view:")]
-        assert len(titles) == 3
+        # Section titles are titles, not unavailable options
+        titles = [label for label in dlg.findChildren(QLabel) if label.objectName().startswith("preftitle_")]
+        assert len(titles) >= 10
         for title in titles:
             assert title.isEnabled()
             assert contrastRatio(title.palette().color(QPalette.ColorRole.WindowText), window) >= 7
@@ -509,24 +508,27 @@ def testDependentRowsFollowTheirParent(mainWindow):
         return next(label for label in dlg.findChildren(QLabel) if label.buddy() is control(key))
 
     mascot, eyes = control("homeMascot"), control("homeMascotFollowsCursor")
-    wholeFile, context = control("wholeFileDiff"), control("contextLines")
+    wholeFile, aroundChanges, context = control("wholeFileDiff_true"), control("wholeFileDiff_false"), control("contextLines")
 
     # Primed from the stored values: disabled, not hidden, and still holding their own value
     assert not eyes.isEnabled()
     assert eyes.isChecked()
+    assert wholeFile.isChecked()
     assert not context.isEnabled()
-    assert not label("contextLines").isEnabled()
+    assert context.value() == 3
 
     mascot.setChecked(True)
     assert eyes.isEnabled()
     mascot.setChecked(False)
     assert not eyes.isEnabled()
 
-    wholeFile.setChecked(False)
+    # The context row is one choice: a number of lines, or the whole file
+    aroundChanges.click()
     assert context.isEnabled()
-    assert label("contextLines").isEnabled()
-    wholeFile.setChecked(True)
+    assert not settings.prefs.wholeFileDiff
+    wholeFile.click()
     assert not context.isEnabled()
+    assert settings.prefs.wholeFileDiff
 
     # The eyes' checkbox sits under the dinosaur's text, not under its box
     dlg.setCategory(0)
@@ -571,13 +573,14 @@ def testSshAgentChoiceReadsRightWithOrWithoutASystemAgent(mainWindow, monkeypatc
     try:
         dlg = GFApplication.instance().openPrefsDialog("ownSshAgent")
         systemAgentChoice = dlg.findChild(QRadioButton, "prefctl_ownSshAgent_false").text()
-        expected = "Use ssh-agent provided by the system" + ("" if sshAuthSock else " (not detected)")
-        assert systemAgentChoice == expected
+        assert systemAgentChoice == "Use the system agent"
+        status = dlg.findChild(QLabel, "prefnote_ownSshAgent").text()
+        assert status == ("System agent detected." if sshAuthSock else "No system agent detected.")
         dlg.reject()
     finally:
         trtables.retranslate(settings.prefs.language)
 
-    assertTranslatedInForkLanguages("Use ssh-agent provided by the system (not detected)")
+    assertTranslatedInForkLanguages("System agent detected.", "No system agent detected.")
 
 
 def testGitExecutableRowIsLabelledGit(mainWindow):
@@ -616,7 +619,7 @@ def testHintButtonsAreReachableFromTheKeyboard(mainWindow):
 
     dlg = GFApplication.instance().openPrefsDialog()
     hints: list[QHintButton] = dlg.findChildren(QHintButton)
-    assert len(hints) >= 20
+    assert len(hints) >= 12
 
     for page in range(dlg.stackedWidget.count()):
         dlg.setCategory(page)
@@ -631,13 +634,13 @@ def testHintButtonsAreReachableFromTheKeyboard(mainWindow):
 
     # Each one says which setting it explains
     names = [hint.accessibleName() for hint in hints]
-    assert "Help: Sort branches & tags by" in names
-    assert "Help: Load up to commits in the history" in names
+    assert "Help: Branch labels" in names
+    assert "Help: Load up to commits" in names
 
     # Tab reaches it after its control; Enter shows the hint next to the button, and keeps the dialog open
-    dlg.setCategory(0)
-    refSortHint = next(hint for hint in hints if hint.accessibleName() == "Help: Sort branches & tags by")
-    comboBox = dlg.findChild(QComboBox, "prefctl_refSort")
+    dlg.setCategory(prefsschema.findPane("refBoxMaxWidth"))
+    refSortHint = next(hint for hint in hints if hint.accessibleName() == "Help: Branch labels")
+    comboBox = dlg.findChild(QComboBox, "prefctl_refBoxMaxWidth")
     comboBox.setFocus()
     QTest.keyClick(comboBox, Qt.Key.Key_Tab)
     assert refSortHint.hasFocus()
@@ -661,7 +664,7 @@ def testHiddenMessagesCanBeBroughtBack(mainWindow):
     button: QPushButton = dlg.findChild(QPushButton, "prefctl_resetDontShowAgain")
     countLabel: QLabel = next(label for label in dlg.findChildren(QLabel)
                               if re.fullmatch(r"\d+ messages? (is|are) hidden\.", label.text()))
-    assert button.text() == "Restore all “don’t show this again” messages"
+    assert button.text() == "Show Skipped Messages Again"
     assert button.isEnabled()
     assert countLabel.text() == "3 messages are hidden."
 
@@ -727,6 +730,8 @@ def testLabelsLineUpInOneRightAlignedColumnOnEveryPane(mainWindow):
     labelRightEdges = set()
     fieldLeftEdges = set()
     for page in range(dlg.stackedWidget.count()):
+        if prefsschema.PANES[page].wide:
+            continue  # A pane without labels, e.g. an editor that takes the whole width
         dlg.setCategory(page)
         QTest.qWait(0)
         for label in dlg.stackedWidget.widget(page).findChildren(QLabel):
@@ -748,7 +753,8 @@ def testLabelsLineUpInOneRightAlignedColumnOnEveryPane(mainWindow):
 def testRadioChoicesAreNamedAfterTheirRowWithTheDefaultFirst(mainWindow):
     dlg = GFApplication.instance().openPrefsDialog()
     groups = {w.objectName().removeprefix("prefctl_"): w for w in dlg.findChildren(QWidget)
-              if w.objectName().startswith("prefctl_") and w.findChildren(QRadioButton)}
+              if w.objectName().startswith("prefctl_") and w.findChildren(QRadioButton)
+              and hasattr(settings.prefs, w.objectName().removeprefix("prefctl_"))}
     assert {"compactUi", "fileTreeView", "chronologicalOrder", "renderSvg", "commitFormPlacement", "ownSshAgent"} <= set(groups)
 
     for key, group in groups.items():
@@ -870,3 +876,74 @@ def testHalfTypedGitPathIsNeverUsed(mainWindow):
 
     assertTranslatedInForkLanguages("This command doesn’t run git.", "Takes effect after you restart {app}.",
                                     "Command reference")
+
+
+def testSettingsHaveTheEightPanesOfTheMap(mainWindow):
+    """Eight panes like a Mac settings toolbar holds them, each a handful of short sections."""
+    dlg = GFApplication.instance().openPrefsDialog()
+    names = [dlg.categoryList.item(i).text() for i in range(dlg.categoryList.count())]
+    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Commands", "Advanced"]
+    for pane in prefsschema.PANES:
+        assert len(pane.sections) <= 5, pane.id
+        for section in pane.sections:
+            assert len(section.rows) <= 7, (pane.id, section.title)
+    dlg.reject()
+
+
+def testSectionTitlesSitBesideUnlabelledRowsOrAboveLabelledOnes(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("tabCloseButton")
+    QTest.qWait(0)
+
+    def topLeft(widget: QWidget) -> QPoint:
+        return widget.mapTo(dlg, QPoint(0, 0))
+
+    # Like a Mac settings window: "Tabs" leads its checkboxes from the label column
+    tabsTitle = dlg.findChild(QLabel, "preftitle_tabs")
+    firstCheckBox = dlg.findChild(QCheckBox, "prefctl_tabCloseButton")
+    assert tabsTitle.font().bold()
+    assert abs(topLeft(tabsTitle).y() - topLeft(firstCheckBox).y()) <= 4
+    assert topLeft(tabsTitle).x() + tabsTitle.width() < topLeft(firstCheckBox).x()
+
+    # A section that starts with a labelled row gets its title on a row of its own, above the label
+    appearanceTitle = dlg.findChild(QLabel, "preftitle_appearance")
+    styleLabel = next(label for label in dlg.findChildren(QLabel) if label.text() == "Appearance:")
+    assert topLeft(appearanceTitle).y() + appearanceTitle.height() <= topLeft(styleLabel).y()
+    assert topLeft(appearanceTitle).x() <= topLeft(styleLabel).x()
+
+    # Titles are Title Case words, not captions with a colon
+    titles = [label.text() for label in dlg.findChildren(QLabel) if label.objectName().startswith("preftitle_")]
+    assert [title for title in titles if title.endswith(":") or (title.isupper() and len(title) > 4)] == []
+    dlg.reject()
+
+
+@pytest.mark.parametrize("lang", FORK_LANGUAGES)
+def testEveryWordInSettingsIsTranslatedInForkLanguages(mainWindow, monkeypatch, lang):
+    """Pane names, section titles, labels, choices, notes and help, as Settings shows them."""
+    from gitfourchette import localization
+
+    with open(QFile(f"assets:lang/{lang}.mo").fileName(), "rb") as moFile:
+        catalog = gettext.GNUTranslations(moFile)
+    catalog.add_fallback(_MissingTranslation())
+    monkeypatch.setattr(localization, "_translator", catalog)
+    trtables.retranslate(f"missing-{lang}")
+    try:
+        keys = set()
+        enumTypes = set()
+        for pane in prefsschema.PANES:
+            keys.add(pane.id)
+            for section in pane.sections:
+                keys.add(section.title)
+                for row in section.rows:
+                    keys |= {row.label or row.key, row.note, *(f"{row.key}_{s}" for s in ("true", "false", "help"))}
+                    value = getattr(settings.prefs, row.key)
+                    if isinstance(value, enum.Enum):
+                        enumTypes.add(type(value))
+        texts = {key: trtables.prefKeyNoDefault(key) for key in keys if key}
+        texts |= {str(member): trtables.enum(member) for enumType in enumTypes for member in enumType}
+        untranslated = sorted(key for key, text in texts.items() if _MissingTranslation.MISSING in text)
+        assert untranslated == []
+    finally:
+        trtables.retranslate(settings.prefs.language)
+
+    assertTranslatedInForkLanguages("lines around each change", "Whole file")
+    assertTranslatedInForkLanguages("No limit", context="a limit of zero means no limit")

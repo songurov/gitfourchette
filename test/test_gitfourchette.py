@@ -243,7 +243,7 @@ def testTruncatedHistory(tempDir, mainWindow, method, action):
         maxCommits = prefsDialog.findChild(QWidget, "prefctl_maxCommits")
         waitUntilTrue(maxCommits.hasFocus)
         maxCommits.setValue(0)
-        assert maxCommits.text() == "\u221E", "infinity symbol"
+        assert maxCommits.text() == "No limit"
         prefsDialog.accept()  # Closing Settings reloads the repos; no need to ask
 
     # Heads up! RepoWidget changes after a full reload

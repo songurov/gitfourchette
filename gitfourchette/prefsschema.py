@@ -35,8 +35,14 @@ class Row:
     that only makes sense while the parent is off.
     """
 
+    label: str = ""
+    "trtables key of the row's caption, if it isn't the pref's own (which other places use too)."
+
     control: str = "auto"
-    "'auto' picks a control from the pref's type; 'radio' shows a choice as radio buttons."
+    """
+    'auto' picks a control from the pref's type; 'radio' shows a choice as
+    radio buttons; 'context' is the context lines' own row.
+    """
 
     note: str = ""
     "trtables key of secondary text shown under the control."
@@ -56,16 +62,22 @@ class Section:
 @dataclasses.dataclass(frozen=True)
 class Pane:
     id: str
-    "trtables key of the pane's name; also the stem of its 'prefs-<id>' icon."
+    "trtables key of the pane's name."
+
+    icon: str
+    "Stock icon of the pane in the switcher."
 
     sections: tuple[Section, ...] = ()
+
+    wide: bool = False
+    "No label column: the rows take the pane's whole width (e.g. a text editor)."
 
     def rows(self):
         for section in self.sections:
             yield from section.rows
 
 
-def _pane(paneId: str, *sections: Section | Row) -> Pane:
+def _pane(paneId: str, icon: str, *sections: Section | Row, wide: bool = False) -> Pane:
     """A pane; bare rows at the start form an untitled first section."""
     grouped: list[Section] = []
     looseRows: list[Row] = []
@@ -79,7 +91,7 @@ def _pane(paneId: str, *sections: Section | Row) -> Pane:
         grouped.append(item)
     if looseRows:
         grouped.append(Section(rows=tuple(looseRows)))
-    return Pane(paneId, tuple(grouped))
+    return Pane(paneId, icon, tuple(grouped), wide)
 
 
 def _section(title: str, *rows: Row) -> Section:
@@ -88,110 +100,166 @@ def _section(title: str, *rows: Row) -> Section:
 
 PANES: list[Pane] = [
     _pane(
-        "general",
-        Row("language"),
-        Row("qtStyle"),
-        Row("pathDisplayStyle"),
-        Row("fileTreeView", control="radio"),
-        Row("commitFormPlacement", control="radio"),
-        Row("recentCommitMessages"),
-        Row("refSort"),
-        Row("showToolBar"),
-        Row("showStatusBar"),
-        Row("showMenuBar", notOn="macos"),  # The menu bar is always there on macOS
-        Row("compactUi", control="radio"),
-        Row("homeMascot"),
-        Row("homeMascotFollowsCursor", parent="homeMascot"),
+        "general", "prefs-general",
+        _section(
+            "appearance",
+            Row("qtStyle"),
+            Row("compactUi", control="radio", note="compactUi_help"),
+            Row("language"),
+            # Also in the View menu; kept here so that a hidden menu bar can always come back
+            Row("showToolBar"),
+            Row("showStatusBar"),
+            Row("showMenuBar", notOn="macos"),  # The menu bar is always there on macOS
+        ),
+        _section(
+            "repositories",
+            Row("maxRecentRepos"),
+        ),
+        _section(
+            "tabs",
+            Row("tabCloseButton"),
+            Row("expandingTabs"),
+            Row("autoHideTabs"),
+            Row("doubleClickTabBar"),
+            Row("middleClickTabBar"),
+        ),
+        _section(
+            "backgroundActivity",
+            Row("autoFetchMinutes", toggle="autoFetch"),
+            Row("autoRefresh", note="autoRefresh_note"),
+        ),
+        _section(
+            "homePage",
+            Row("homeMascot"),
+            Row("homeMascotFollowsCursor", parent="homeMascot"),
+        ),
     ),
     _pane(
-        "diff",
-        Row("font", alsoKeys=("fontSize",)),
-        Row("syntaxHighlighting"),
-        Row("colorblind"),
-        Row("contextLines", parent="!wholeFileDiff"),
-        Row("wholeFileDiff"),
-        Row("sideBySideDiff"),
-        Row("tabSpaces"),
-        Row("largeFileThresholdKB"),
-        Row("wordWrap"),
-        Row("showStrayCRs"),
-        Row("showWhitespace"),
-        Row("whitespaceMode"),
+        "diff", "prefs-diff",
+        _section(
+            "diffView",
+            Row("font", alsoKeys=("fontSize",)),
+            Row("syntaxHighlighting"),
+            Row("colorblind", label="lineColors", control="radio"),
+            Row("tabSpaces"),
+        ),
+        _section(
+            "content",
+            Row("contextLines", alsoKeys=("wholeFileDiff",), label="context", control="context"),
+            Row("sideBySideDiff", label="diffLayout", control="radio"),
+            Row("whitespaceMode", note="whitespaceMode_note"),
+            Row("wordWrap"),
+            Row("showWhitespace"),
+            Row("showStrayCRs"),
+            Row("middleClickStageLines"),
+        ),
+        _section(
+            "largeFiles",
+            Row("largeFileThresholdKB"),
+            Row("imageFileThresholdKB"),
+            Row("renderSvg", control="radio"),
+        ),
     ),
     _pane(
-        "imageDiff",
-        Row("imageFileThresholdKB"),
-        Row("renderSvg", control="radio"),
+        "history", "prefs-graph",
+        _section(
+            "sorting",
+            Row("chronologicalOrder", control="radio"),
+            Row("refSort", note="refSort_note"),
+        ),
+        _section(
+            "graph",
+            Row("graphRowLayout", control="radio"),
+            Row("graphRowHeight"),
+            Row("flattenLanes"),
+            Row("alternatingRowColors"),
+            Row("maxCommits"),
+        ),
+        _section(
+            "commitRows",
+            Row("refBoxMaxWidth"),
+            Row("authorDisplayStyle"),
+            Row("showAvatars"),
+            Row("downloadAvatars", parent="showAvatars", note="downloadAvatars_note"),
+            Row("shortTimeFormat"),
+            Row("shortHashChars"),
+        ),
+        _section(
+            "signatures",
+            Row("authorDiffAsterisk"),
+            Row("verifyGpgOnTheFly", note="verifyGpgOnTheFly_note"),
+        ),
     ),
     _pane(
-        "graph",
-        Row("chronologicalOrder", control="radio"),
-        Row("graphRowLayout"),
-        Row("graphRowHeight"),
-        Row("refBoxMaxWidth"),
-        Row("authorDisplayStyle"),
-        Row("showAvatars"),
-        Row("downloadAvatars"),
-        Row("shortTimeFormat"),
-        Row("maxCommits"),
-        Row("authorDiffAsterisk"),
-        Row("verifyGpgOnTheFly"),
-        Row("alternatingRowColors"),
+        "commit", "prefs-commit",
+        _section(
+            "commitForm",
+            Row("commitFormPlacement", control="radio"),
+            Row("recentCommitMessages", note="recentCommitMessages_note"),
+        ),
+        _section(
+            "fileLists",
+            Row("fileTreeView", control="radio"),
+            Row("pathDisplayStyle"),
+            Row("doubleClickFileList"),
+            Row("middleClickFileList"),
+        ),
     ),
     _pane(
-        "git",
-        Row("gitPath"),
-        Row("ownSshAgent", control="radio"),
-        Row("ownAskpass"),
-        Row("lfsAware"),
+        "git", "prefs-git",
+        _section(
+            "gitExecutable",
+            Row("gitPath"),
+            Row("lfsAware", note="lfsAware_note"),
+        ),
+        _section(
+            "ssh",
+            Row("ownSshAgent", control="radio", note="ownSshAgent_note"),
+            Row("ownAskpass"),
+        ),
     ),
     _pane(
-        "external",
-        _section("", Row("externalEditor"), Row("terminal")),
-        _section("", Row("externalDiff"), Row("externalMerge")),
+        "integration", "prefs-external",
+        _section(
+            "externalTools",
+            Row("externalEditor"),
+            Row("terminal"),
+            Row("externalDiff"),
+            Row("externalMerge"),
+        ),
     ),
     _pane(
-        "userCommands",
+        "userCommands", "prefs-usercommands",
         Row("commands"),
         Row("confirmCommands"),
+        wide=True,
     ),
     _pane(
-        "tabs",
-        Row("tabCloseButton"),
-        Row("expandingTabs"),
-        Row("autoHideTabs"),
-    ),
-    _pane(
-        "mouseShortcuts",
-        _section("tabBarClicks", Row("doubleClickTabBar"), Row("middleClickTabBar")),
-        _section("fileListClicks", Row("doubleClickFileList"), Row("middleClickFileList")),
-        _section("diffViewClicks", Row("middleClickStageLines")),
-    ),
-    _pane(
-        "trash",
-        Row("maxTrashFiles"),
-        Row("maxTrashFileKB"),
-    ),
-    _pane(
-        "advanced",
-        Row("maxRecentRepos"),
-        Row("shortHashChars"),
-        Row("autoRefresh"),
-        Row("autoFetchMinutes", toggle="autoFetch"),
-        Row("flattenLanes"),
-        Row("animations"),
-        Row("condensedFonts"),
-        Row("pygmentsPlugins", notOn="frozen"),  # Depends on system Python packages outside our sandbox
-        Row("verbosity"),
-        Row("forceQtApi", notOn="frozen"),  # Frozen builds come with their own Qt binding
-        Row("resetDontShowAgain"),
+        "advanced", "prefs-advanced",
+        _section(
+            "trash",
+            Row("maxTrashFiles", note="maxTrashFiles_note"),
+            Row("maxTrashFileKB"),
+        ),
+        _section(
+            "interface",
+            Row("condensedFonts"),
+            Row("animations"),
+            Row("smoothScroll"),
+            Row("resetDontShowAgain"),
+        ),
+        _section(
+            "troubleshooting",
+            Row("verbosity"),
+            Row("forceQtApi", notOn="frozen"),  # Frozen builds come with their own Qt binding
+            Row("pygmentsPlugins", notOn="frozen"),  # Depends on system Python packages outside our sandbox
+        ),
     ),
 ]
 "The pages of the Settings window, in order."
 
 
 HIDDEN: dict[str, str] = {
-    "smoothScroll": "rarely wanted off; kept for the few who need it",
     "toolBarButtonStyle": "set where it's seen: the toolbar's context menu",
     "toolBarIconSize": "set where it's seen: the toolbar's context menu",
     "defaultCloneLocation": "remembered by the Clone dialog",

@@ -54,6 +54,7 @@ class _GridBuilder:
     def __init__(self, grid: QGridLayout, labelColumnWidth: int, columnGap: int):
         self.grid = grid
         self.row = 0
+        self.wide = False
         grid.setContentsMargins(QMargins())
         grid.setSpacing(0)
         grid.setColumnMinimumWidth(self.LabelColumn, labelColumnWidth)
@@ -64,7 +65,15 @@ class _GridBuilder:
         self.grid.setRowMinimumHeight(self.row, height)
         self.row += 1
 
-    def addRow(self, label: QWidget | None, field: QWidget | QLayout):
+    def addRow(self, label: QWidget | None, field: QWidget | QLayout, wide: bool = False):
+        if wide:
+            assert label is None
+            if isinstance(field, QLayout):
+                self.grid.addLayout(field, self.row, 0, 1, 3)
+            else:
+                self.grid.addWidget(field, self.row, 0, 1, 3)
+            self.row += 1
+            return
         if label is not None:
             self.grid.addWidget(label, self.row, self.LabelColumn, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if isinstance(field, QLayout):
@@ -77,10 +86,11 @@ class _GridBuilder:
         self.grid.addWidget(widget, self.row, 0, 1, 3)
         self.row += 1
 
-    def addBeside(self, widget: QWidget, firstRow: int):
-        """Put a widget in the label column, level with the top of the rows added since firstRow."""
-        self.grid.addWidget(widget, firstRow, self.LabelColumn, self.row - firstRow, 1,
-                            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+    def addBeside(self, label: QLabel, firstRow: int):
+        """Put a label in the label column, level with the top of the rows added since firstRow."""
+        # The label fills the column, so that it only wraps when the column is too narrow
+        label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.grid.addWidget(label, firstRow, self.LabelColumn, self.row - firstRow, 1)
 
     def addStretch(self):
         self.grid.setRowStretch(self.row, 1)
@@ -113,7 +123,6 @@ class PrefsDialog(QDialog):
 
     ControlQObjectNamePrefix = "prefctl_"
     NoteQObjectNamePrefix = "prefnote_"
-    LocCategoryHeaderSuffix = "_HEADER"
     LocSettingHelpSuffix = "_help"
 
     PaneWidth = 640
@@ -264,7 +273,7 @@ class PrefsDialog(QDialog):
 
             self.categoryKeys.append(pane.id)
             self.stackedWidget.addWidget(page)
-            self.categoryList.addItem(QListWidgetItem(stockIcon(f"prefs-{pane.id.lower()}"), trtables.prefKey(pane.id)))
+            self.categoryList.addItem(QListWidgetItem(stockIcon(pane.icon), trtables.prefKey(pane.id)))
 
             # If the setting we want to focus on is on this page, bring the page to the foreground
             if focusOn and prefsschema.findPane(focusOn) == len(self.categoryKeys) - 1:
@@ -292,13 +301,7 @@ class PrefsDialog(QDialog):
         page.setObjectName(f"prefspane_{pane.id}")
 
         builder = _GridBuilder(QGridLayout(page), self.labelColumnWidth, self.ColumnGap)
-
-        headerText = trtables.prefKeyNoDefault(pane.id + self.LocCategoryHeaderSuffix)
-        if headerText:
-            header = self.makeNote(headerText.format(app=qAppName()), f"{pane.id}_HEADER")
-            header.setMaximumWidth(16777215)
-            builder.addSpanning(header)
-            builder.addGap(self.RowGap + self.SectionGap)
+        builder.wide = pane.wide
 
         for sectionIndex, (section, rows) in enumerate(self.visibleSections(pane)):
             if sectionIndex > 0:
@@ -340,9 +343,9 @@ class PrefsDialog(QDialog):
 
         button.toggled.connect(toggle)
 
-        builder.addRow(None, button)
+        builder.addRow(None, button, builder.wide)
         builder.addGap(self.NoteGap)
-        builder.addRow(None, browser)
+        builder.addRow(None, browser, builder.wide)
 
     def _renderSection(self, builder: _GridBuilder, section: prefsschema.Section, rows: list[prefsschema.Row]):
         titleBeside = None
@@ -385,7 +388,8 @@ class PrefsDialog(QDialog):
         rowWidgets: list[QWidget] = [control]
 
         # Name the control so that unit tests can find it
-        control.setObjectName(self.ControlQObjectNamePrefix + key)
+        if not control.objectName():
+            control.setObjectName(self.ControlQObjectNamePrefix + key)
 
         # Tack an extra QLabel to the end if there's a suffix
         if suffix:
@@ -396,10 +400,13 @@ class PrefsDialog(QDialog):
         elif key == "resetDontShowAgain":
             rowWidgets.append(self.dontShowAgainCountLabel(control))
 
-        # Any help text? Then make a help button for it & set tooltip text on the main control
+        # Any help text? Then make a help button for it & set tooltip text on the main control.
+        # A row with a note says the gist under the control already: the tooltip is enough there.
         tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix)
         hintButton = None
-        if tip:
+        if tip and row.note:
+            control.setToolTip(tip.format(app=qAppName()))
+        elif tip:
             tip = tip.format(app=qAppName())
             control.setToolTip(tip)
             hintButton = QHintButton(self, tip)
@@ -434,7 +441,7 @@ class PrefsDialog(QDialog):
         if isChild:
             self.dependentRowWidgets[key] = ([label] if label else []) + rowWidgets
 
-        builder.addRow(label, field)
+        builder.addRow(label, field, builder.wide)
 
         noteText = trtables.prefKeyNoDefault(row.note) if row.note else ""
         if key in PrefEffects.RestartApp:
@@ -452,7 +459,14 @@ class PrefsDialog(QDialog):
             if not note.objectName():
                 note.setObjectName(self.NoteQObjectNamePrefix + key)
             builder.addGap(self.NoteGap)
-            builder.addRow(None, note)
+            if isChild and not labelText and isinstance(rowWidgets[0], QCheckBox):
+                # Under the dependent checkbox's text, like the checkbox itself
+                noteField = QHBoxLayout()
+                noteField.addSpacing(self.checkBoxTextIndent(rowWidgets[0]))
+                noteField.addWidget(note)
+                builder.addRow(None, noteField, builder.wide)
+            else:
+                builder.addRow(None, note, builder.wide)
             if isChild:
                 self.dependentRowWidgets[key].append(note)
 
@@ -521,7 +535,7 @@ class PrefsDialog(QDialog):
     def rowCaption(self, row: prefsschema.Row) -> tuple[str, str]:
         """The row's caption, and the unit after its control, if any ('#' in the translated string)."""
         suffix = ""
-        caption = trtables.prefKey(row.key)
+        caption = trtables.prefKey(row.label or row.key)
         if "#" in caption:
             caption, suffix = caption.split("#")
             caption = caption.rstrip()
@@ -538,7 +552,7 @@ class PrefsDialog(QDialog):
     def isCheckBoxRow(self, row: prefsschema.Row) -> bool:
         return (type(prefs.__dict__[row.key]) is bool
                 and row.control == "auto"
-                and row.key not in ("resetDontShowAgain", "colorblind")  # A button, a pop-up with color chips
+                and row.key != "resetDontShowAgain"  # A push button
                 and not self.boolChoiceNames(row.key))
 
     @staticmethod
@@ -717,6 +731,8 @@ class PrefsDialog(QDialog):
 
         if row.control == "radio":
             return self.radioControl(key, value, caption)
+        elif row.control == "context":
+            return self.contextControl(key, value, caption)
         elif key == "language":
             return self.languageControl(key, value)
         elif key == "qtStyle":
@@ -742,19 +758,15 @@ class PrefsDialog(QDialog):
             control = self.boundedIntControl(key, value, 0, 50)
             control.setSpecialValueText(_p("a count of zero turns the setting off", "Off"))
             return control
-        elif key == "contextLines":
-            return self.boundedIntControl(key, value, *CONTEXT_LINES_RANGE)
         elif key == "tabSpaces":
             return self.boundedIntControl(key, value, 1, 16)
         elif key == "autoFetchMinutes":
             return self.boundedIntControl(key, value, 1, 9999)
         elif key == "syntaxHighlighting":
             return self.syntaxHighlightingControl(key, value)
-        elif key == "colorblind":
-            return self.colorblindControl(key, value)
         elif key == "maxCommits":
             control = self.boundedIntControl(key, value, 0, 999_999_999, 1000)
-            control.setSpecialValueText("\u221E")  # infinity
+            control.setSpecialValueText(_p("a limit of zero means no limit", "No limit"))
             return control
         elif key == "externalEditor":
             return self.strControlWithPresets(key, value, ToolPresets.Editors, leaveBlankHint=True)
@@ -776,7 +788,7 @@ class PrefsDialog(QDialog):
             return QPushButton(caption, self)  # dontShowAgainCountLabel wires it up
         elif key in ["largeFileThresholdKB", "imageFileThresholdKB", "maxTrashFileKB"]:
             control = self.boundedIntControl(key, value, 0, 999_999)
-            control.setSpecialValueText("\u221E")  # infinity
+            control.setSpecialValueText(_p("a limit of zero means no limit", "No limit"))
             return control
         elif key == "gitPath":
             presets = {}
@@ -996,6 +1008,52 @@ class PrefsDialog(QDialog):
         group.setFocusProxy(next(b for b in buttons if b.isChecked()) if any(b.isChecked() for b in buttons) else buttons[0])
         return group
 
+    def contextControl(self, prefKey: str, prefValue: int, caption: str) -> QWidget:
+        """
+        How much of the file a diff shows around each change: a number of
+        lines, or the whole file. Two prefs, one choice.
+        """
+        wholeKey = "wholeFileDiff"
+        whole = prefs.__dict__[wholeKey]
+
+        group = QWidget(self)
+        group.setObjectName(self.ControlQObjectNamePrefix + "context")
+        group.setAccessibleName(stripAccelerators(caption))
+        buttonGroup = QButtonGroup(group)
+
+        aroundButton = QRadioButton(group)
+        aroundButton.setObjectName(f"{self.ControlQObjectNamePrefix}{wholeKey}_false")
+        spinBox = self.boundedIntControl(prefKey, prefValue, *CONTEXT_LINES_RANGE)
+        spinBox.setParent(group)
+        spinBox.setObjectName(self.ControlQObjectNamePrefix + prefKey)
+        aroundLabel = QLabel(_("lines around each change"), group)
+        aroundButton.setAccessibleName(aroundLabel.text())
+        wholeButton = QRadioButton(_("Whole file"), group)
+        wholeButton.setObjectName(f"{self.ControlQObjectNamePrefix}{wholeKey}_true")
+        wholeButton.setToolTip(trtables.prefKeyNoDefault(wholeKey + self.LocSettingHelpSuffix))
+        buttonGroup.addButton(aroundButton)
+        buttonGroup.addButton(wholeButton)
+
+        layout = QHBoxLayout(group)
+        layout.setContentsMargins(QMargins())
+        layout.setSpacing(6)
+        layout.addWidget(aroundButton)
+        layout.addWidget(spinBox)
+        layout.addWidget(aroundLabel)
+        layout.addSpacing(self.RadioGap)
+        layout.addWidget(wholeButton)
+
+        def follow(wholeFile: bool):
+            # A number of lines means nothing while the whole file is shown
+            spinBox.setEnabled(not wholeFile)
+            aroundLabel.setEnabled(not wholeFile)
+
+        (wholeButton if whole else aroundButton).setChecked(True)
+        follow(whole)
+        wholeButton.toggled.connect(follow)
+        wholeButton.toggled.connect(lambda checked: self.assign(wholeKey, checked))
+        return group
+
     def enumControl(self, prefKey, prefValue, enumType, previewCallback=None) -> QComboBox | QComboBoxWithPreview:
         control: QComboBox | QComboBoxWithPreview
         if previewCallback:
@@ -1164,21 +1222,6 @@ class PrefsDialog(QDialog):
         control.setMaxVisibleItems(30)
         enforceComboBoxMaxVisibleItems(control)  # Prevent Fusion from creating a giant popup
 
-        return control
-
-    def colorblindControl(self, prefKey, prefValue):
-        control = QComboBox(self)
-        control.addItem(stockIcon("linebg-chip-redgreen"), _("Red and green"), userData=False)
-        control.addItem(stockIcon("linebg-chip-colorblind"), _("Colorblind-friendly"), userData=True)
-
-        index = control.findData(prefValue)
-        control.setCurrentIndex(index)
-
-        def onPickStyle(index):
-            pickedStyleName = control.itemData(index, Qt.ItemDataRole.UserRole)
-            self.assign(prefKey, pickedStyleName)
-
-        control.activated.connect(onPickStyle)
         return control
 
     def prependCheckBox(self, rowWidgets: list[QWidget], booleanKey: str, caption: str) -> QCheckBox:

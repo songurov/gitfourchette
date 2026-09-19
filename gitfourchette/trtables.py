@@ -194,18 +194,18 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
 
     table[GraphRefBoxWidth] = {
         GraphRefBoxWidth.IconsOnly: _("Icons only"),
-        GraphRefBoxWidth.Standard: _("Truncate long ref names"),
-        GraphRefBoxWidth.Wide: _("Show full ref names"),
+        GraphRefBoxWidth.Standard: _("Shorten long names"),
+        GraphRefBoxWidth.Wide: _("Full names"),
     }
 
     table[CommitFormPlacement] = {
-        CommitFormPlacement.FilesPanel: _("Files panel"),
-        CommitFormPlacement.BottomBar: _("Bottom bar"),
+        CommitFormPlacement.FilesPanel: _("In the files panel"),
+        CommitFormPlacement.BottomBar: _("Along the bottom"),
     }
 
     table[GraphRowLayout] = {
-        GraphRowLayout.HashFirst: _("Hash, graph, refs, message"),
-        GraphRowLayout.GraphFirst: _("Graph, refs, message (aligned)"),
+        GraphRowLayout.HashFirst: _("Hash first"),
+        GraphRowLayout.GraphFirst: _("Graph first"),
     }
 
     table[GraphRowHeight] = {
@@ -359,84 +359,107 @@ def _prefKeyTable() -> dict[str, str]:
         k="SSH_AUTH_SOCK", v=escape(sshAuthSock), c="AddKeysToAgent")
 
     return {
+        # Panes
         "general": _p("Prefs", "General"),
-        "diff": _p("Prefs", "Code"),
-        "imageDiff": _p("Prefs", "Images"),
-        "tabs": _p("Prefs", "Tabs"),
-        "graph": _p("Prefs", "Commit History"),
-        "trash": _p("Prefs", "Trash"),
-        "git": _p("Prefs", "Git Integration"),
-        "external": _p("Prefs", "External Tools"),
+        "diff": _p("Prefs", "Diff"),
+        "history": _p("Prefs", "History"),
+        "commit": _p("Prefs", "Commit"),
+        "git": _p("Prefs", "Git"),
+        "integration": _p("Prefs", "Integration"),
+        "userCommands": _p("Prefs", "Commands"),
         "advanced": _p("Prefs", "Advanced"),
-        "userCommands": _p("Prefs", "Custom Commands"),
 
-        "language": _("Language"),
-        "qtStyle": _("Qt style"),
-        "shortHashChars": _("Shorten hashes to # characters"),
-        "shortTimeFormat": _("Date/time format"),
-        "shortTimeFormat_help": _timeFormatGuide(),
-        "pathDisplayStyle": _("Path display style"),
-        "fileTreeView": _("File display"),
-        "fileTreeView_true": _("Tree"),
-        "fileTreeView_false": _("List"),
-        "commitFormPlacement": _("Commit form position"),
-        "recentCommitMessages": _("Recent commit messages"),
-        "authorDisplayStyle": _("Author display style"),
-        "maxRecentRepos": _("Remember up to # recent repositories"),
-        "showStatusBar": _("Show status bar"),
-        "showToolBar": _("Show toolbar"),
-        "showMenuBar": _("Show menu bar"),
-        "showMenuBar_help": _("When the menu bar is hidden, press the Alt key to show it again."),
+        # Sections
+        "appearance": _p("Prefs", "Appearance"),
+        "repositories": _p("Prefs", "Repositories"),
+        "tabs": _p("Prefs", "Tabs"),
+        "backgroundActivity": _p("Prefs", "Background Activity"),
+        "homePage": _p("Prefs", "Home Page"),
+        "diffView": _p("Prefs", "Diff View"),
+        "content": _p("Prefs", "Content"),
+        "largeFiles": _p("Prefs", "Large Files and Images"),
+        "sorting": _p("Prefs", "Sorting"),
+        "graph": _p("Prefs", "Graph"),
+        "commitRows": _p("Prefs", "Commit Rows"),
+        "signatures": _p("Prefs", "Signatures"),
+        "commitForm": _p("Prefs", "Commit Form"),
+        "fileLists": _p("Prefs", "File Lists"),
+        "gitExecutable": _p("Prefs", "Git Executable"),
+        "ssh": _p("Prefs", "SSH"),
+        "externalTools": _p("Prefs", "External Tools"),
+        "trash": _p("Prefs", "Trash"),
+        "interface": _p("Prefs", "Interface"),
+        "troubleshooting": _p("Prefs", "Troubleshooting"),
+
+        # General
+        "qtStyle": _("Appearance"),
         # Same words as the toolbar's menu, which offers the same choice
         "compactUi": _("Density"),
         "compactUi_false": stripAccelerators(_("&Normal")),
         "compactUi_true": stripAccelerators(_("&Compact")),
         "compactUi_help": _("Smaller text and icon-only toolbar buttons"),
-        "homeMascot": _("Dinosaur on the Home page"),
+        "language": _("Language"),
+        "showToolBar": _("Show toolbar"),
+        "showStatusBar": _("Show status bar"),
+        "showMenuBar": _("Show menu bar"),
+        "showMenuBar_help": _("When the menu bar is hidden, press the Alt key to show it again."),
+        "maxRecentRepos": _("Recent repositories"),
+        "tabCloseButton": _("Show close buttons on tabs"),
+        "expandingTabs": _("Stretch tabs to fill the tab bar"),
+        "autoHideTabs": _("Hide the tab bar when only one repository is open"),
+        "doubleClickTabBar": _("Double-click a tab"),
+        "middleClickTabBar": _("Middle-click a tab"),
+        "autoFetchMinutes": _("Fetch remotes automatically every # minutes"),
+        "autoRefresh": _("Refresh when {app} becomes active", app=APP_DISPLAY_NAME),
+        "autoRefresh_note": _("When this is off, press {key} to see changes made outside the app.", key="F5"),
+        "autoRefresh_help": paragraphs(
+            _("When you return to {app} from another application, it automatically "
+              "scans for changes in the working directory and local branches. "
+              "This keeps the interface in sync with the state of your repo on disk."),
+            _("If you turn this off, you will need to hit {key} to "
+              "perform this refresh manually.", key="F5"),
+            "<b>" + _("We strongly recommend to keep this setting enabled.") + "</b>"),
+        "homeMascot": _("Show the dinosaur on the Home page"),
         "homeMascot_help": _("A little dinosaur walks across the welcome text, fetching eggs for its nest. "
                              "It only moves while the Home page is on screen."),
-        "homeMascotFollowsCursor": _("Dinosaur looks at the mouse pointer"),
-        "resetDontShowAgain": _("Restore all “don’t show this again” messages"),
-        "pygmentsPlugins": _("Allow third-party Pygments plugins"),
-        "pygmentsPlugins_help": "<p>" + _("Let {app} load third-party Pygments plugins installed on your system. "
-                                          "These plugins extend syntax highlighting with new languages "
-                                          "and color schemes. <b>May incur significant slowdowns.</b>"),
-        "refSort": _("Sort branches && tags by"),
-        "refSort_help": paragraphs(
-            _("The default sorting mode for local branches, remote branches, and tags in the sidebar."),
-            _("You can fine-tune this setting in each repo by right-clicking Branches, Remotes, or Tags "
-              "in the sidebar. (Note that changing the default setting here will clear per-repo tweaks.)")),
+        "homeMascotFollowsCursor": _("Follow the pointer with its eyes"),
 
+        # Diff
         "font": _("Font"),
-        "sideBySideDiff": _("Side-by-side diff"),
-        "tabSpaces": _("One tab is # spaces"),
+        "syntaxHighlighting": _("Syntax highlighting"),
+        "lineColors": _("Line colors"),
+        "colorblind_false": _("Red and green"),
+        "colorblind_true": _("Teal and orange (colorblind-friendly)"),
+        "colorblind_help": _("Background colors for deleted (-) and added (+) lines."),
+        "tabSpaces": _("Tab width # spaces"),
+        "context": _("Context"),
         "contextLines": _("Show up to # context lines"),
+        "contextLines_help": _("Amount of unmodified lines to show around red or green lines in a diff."),
         "wholeFileDiff": _("Show whole file"),
         "wholeFileDiff_help": _("Show the entire file instead of just the lines around each change."),
-        "contextLines_help": _("Amount of unmodified lines to show around red or green lines in a diff."),
-        "largeFileThresholdKB": _("Load diffs up to # KB"),
-        "imageFileThresholdKB": _("Load images up to # KB"),
-        "syntaxHighlighting": _("Syntax highlighting"),
-        "wordWrap": _("Word wrap"),
-        "showStrayCRs": _("Show alien line endings (CRLF)"),
-        "showWhitespace": _("Show whitespace symbols"),
-        "whitespaceMode": _("Whitespace diffs"),
+        "diffLayout": _("Layout"),
+        "sideBySideDiff": _("Side-by-side diff"),
+        "sideBySideDiff_false": _("Unified"),
+        "sideBySideDiff_true": _("Side by side"),
+        "whitespaceMode": _("Whitespace changes"),
+        "whitespaceMode_note": _("Only changes what the diff shows."),
         "whitespaceMode_help": paragraphs(
             _("How whitespace changes are shown in diffs."),
             _("This setting only affects how diffs are displayed. "
               "Operations that handle patches (export, apply, revert, etc.) still honor all whitespace changes.")),
-        "colorblind": _("“-/+” colors"),
-        "colorblind_help": _("Background colors for deleted (-) and added (+) lines."),
+        "wordWrap": _("Wrap long lines"),
+        "showWhitespace": _("Show whitespace characters"),
+        "showStrayCRs": _("Highlight Windows line endings (CRLF)"),
+        "middleClickStageLines": _("Middle-click stages or unstages the selected lines"),
+        "largeFileThresholdKB": _("Load diffs up to # KB"),
+        "imageFileThresholdKB": _("Load images up to # KB"),
         "renderSvg": _("SVG files"),
-        "renderSvg_false": _("Display as text"),
-        "renderSvg_true": _("Display as images"),
+        "renderSvg_true": _("Show as image"),
+        "renderSvg_false": _("Show as text"),
 
-        "tabCloseButton": _("Show tab close button"),
-        "expandingTabs": _("Expand tabs to available width"),
-        "autoHideTabs": _("Auto-hide tabs if only one repo is open"),
-
+        # History
         "chronologicalOrder": _("Sort commits"),
-        "chronologicalOrder_true": _("Chronologically"),
+        "chronologicalOrder_true": _("By date"),
         "chronologicalOrder_false": _("Topologically"),
         "chronologicalOrder_help": paragraphs(
             _("<b>Chronological mode</b> lets you stay on top of the latest activity in the repository. "
@@ -446,26 +469,42 @@ def _prefKeyTable() -> dict[str, str]:
               "commits within a branch in a linear fashion. Since this is not a strictly chronological "
               "mode, you may have to do more scrolling to see the latest changes in various branches."),
         ),
+        "refSort": _("Sort branches and tags"),
+        "refSort_note": _("Changing this resets the order you picked in each repository."),
+        "refSort_help": paragraphs(
+            _("The default sorting mode for local branches, remote branches, and tags in the sidebar."),
+            _("You can fine-tune this setting in each repo by right-clicking Branches, Remotes, or Tags "
+              "in the sidebar. (Note that changing the default setting here will clear per-repo tweaks.)")),
         "graphRowLayout": _("Row layout"),
         "graphRowLayout_help": paragraphs(
-            _("<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the "
-              "commit hash, and the ref indicators sit between the graph and the commit message."),
-            _("<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages "
-              "line up no matter how busy the graph is on any given row. Ref indicators lead the "
+            _("<b>Hash first</b> is the classic layout: every row opens with the commit hash, "
+              "and the branch labels sit between the graph and the commit message."),
+            _("<b>Graph first</b> gives the graph a column of its own, so commit messages "
+              "line up no matter how busy the graph is on any given row. Branch labels lead the "
               "message column, and the hash moves to the right, next to the author."),
         ),
+        "graphRowHeight": _("Row spacing"),
+        "flattenLanes": _("Avoid gaps between branches"),
+        "alternatingRowColors": _("Alternate row backgrounds"),
+        "maxCommits": _("Load up to # commits"),
+        "maxCommits_help": _("Set to 0 to always load the full commit history."),
+        "refBoxMaxWidth": _("Branch labels"),
+        "refBoxMaxWidth_help": _("You can always hover over an indicator to display the full name of the ref."),
+        "authorDisplayStyle": _("Author"),
         "showAvatars": _("Show author avatars"),
-        "downloadAvatars": _("Download author pictures"),
+        "showAvatars_help": _(
+            "A chip with the author’s initials, colored from their email address, "
+            "so that the same person always looks the same in the history."),
+        "downloadAvatars": _("Download pictures from GitHub and Gravatar"),
+        "downloadAvatars_note": _("Sends authors’ email addresses to these services."),
         "downloadAvatars_help": _(
             "Look up each author’s picture on GitHub or Gravatar. This sends their email "
             "address to a third party, so it is off until you ask for it. Without it, "
             "authors get a chip with their initials, computed on your machine."),
-        "showAvatars_help": _(
-            "A chip with the author’s initials, colored from their email address, "
-            "so that the same person always looks the same in the history."),
-        "graphRowHeight": _("Row spacing"),
-        "flattenLanes": _("Avoid gaps between branches in the graph"),
-        "authorDiffAsterisk": _("Mark author/committer signature differences"),
+        "shortTimeFormat": _("Date format"),
+        "shortTimeFormat_help": _timeFormatGuide(),
+        "shortHashChars": _("Hash length # characters"),
+        "authorDiffAsterisk": _("Mark commits whose author and committer differ (*)"),
         "authorDiffAsterisk_help": paragraphs(
             _("The commit history displays information about a commit’s <b>author</b>—"
               "their name and the date at which they made the commit. But in some cases, a commit "
@@ -476,47 +515,57 @@ def _prefKeyTable() -> dict[str, str]:
             _("Note that you can always hover over the author’s name or date to obtain "
               "detailed information about the author and the committer."),
         ),
-        "maxCommits": _("Load up to # commits in the history"),
-        "maxCommits_help": _("Set to 0 to always load the full commit history."),
-        "alternatingRowColors": _("Draw rows using alternating background colors"),
-        "refBoxMaxWidth": _("Ref indicators"),
-        "refBoxMaxWidth_help": _("You can always hover over an indicator to display the full name of the ref."),
-        "verifyGpgOnTheFly": _("Verify signed commits on the fly"),
+        "verifyGpgOnTheFly": _("Verify signatures as commits scroll into view"),
+        "verifyGpgOnTheFly_note": _("Can slow down scrolling in large repositories."),
         "verifyGpgOnTheFly_help": _(
             "As commits scroll into view, call {0} automatically to verify their signatures. "
             "The verification status is materialized by a seal icon next to the author’s name:", tquo("git verify-commit")
         ) + _gpgStatusReferenceTable() + "<br>" + _("(No seal = Commit isn’t signed)"),
 
-        "maxTrashFiles": _("The trash keeps up to # discarded patches"),
-        "maxTrashFileKB": _("Patches bigger than # KB won’t be salvaged"),
-        "trash_HEADER": _(
-            "When you discard changes from the working directory, {app} keeps a temporary copy in a hidden "
-            "“trash” folder. This gives you a last resort to rescue changes that you have discarded by mistake. "
-            "You can look around this trash folder via <i>“Help &rarr; Open Trash”</i>."),
+        # Commit
+        "commitFormPlacement": _("Commit form"),
+        "recentCommitMessages": _("Recent messages"),
+        "recentCommitMessages_note": _("Offered in the commit message box."),
+        "fileTreeView": _("Show files as"),
+        "fileTreeView_true": _("Tree"),
+        "fileTreeView_false": _("List"),
+        "pathDisplayStyle": _("Paths"),
+        "doubleClickFileList": _("Double-click a file"),
+        "middleClickFileList": _("Middle-click a file"),
 
-        "verbosity": _("Logging verbosity"),
-        "autoRefresh": _("Auto-refresh when app regains focus"),
-        "autoRefresh_help": paragraphs(
-            _("When you return to {app} from another application, it automatically "
-              "scans for changes in the working directory and local branches. "
-              "This keeps the interface in sync with the state of your repo on disk."),
-            _("If you turn this off, you will need to hit {key} to "
-              "perform this refresh manually.", key="F5"),
-            "<b>" + _("We strongly recommend to keep this setting enabled.") + "</b>"),
-        "autoFetchMinutes": _("Auto-fetch remotes every # minutes"),
-        "animations": _("Animation effects in sidebar"),
-        "smoothScroll": _("Smooth scrolling (where applicable)"),
-        "forceQtApi": _("Preferred Qt binding"),
-        "forceQtApi_help": paragraphs(
-            _("After restarting, {app} will use this Qt binding if available."),
-            _("You can also pass the name of a Qt binding via the “QT_API” environment variable."),
+        # Git
+        "gitPath": "Git",
+        "lfsAware": _("Show LFS file contents instead of pointers"),
+        "lfsAware_note": _("When this is off, diffs show the pointer text stored in Git."),
+        "lfsAware_help": paragraphs(
+            _("Tick this to display the real contents from LFS files."),
+            _("Untick to display the raw text in LFS pointers."),
         ),
-        "condensedFonts": _("Use condensed fonts"),
-        "condensedFonts_help": "<p>" + _(
-            "When a branch name or author name is too long to fit in its allotted space, "
-            "condense the font before truncating the text."),
+        "ownSshAgent": _("SSH agent"),
+        "ownSshAgent_false": _("Use the system agent"),
+        "ownSshAgent_true": _("Let {app} start its own", app=APP_DISPLAY_NAME),
+        "ownSshAgent_note": _("System agent detected.") if sshAuthSock else _("No system agent detected."),
+        "ownSshAgent_help": paragraphs(
+            _("“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. "
+              "Some Linux distributions set up an ssh-agent for you."),
+            _("You can also have {app} start its own instance of ssh-agent "
+              "for the duration of your session and have it remember passphrases."),
+            sshAuthSockHelp,
+        ),
+        "ownAskpass": _("Ask for SSH passphrases in {app}", app=APP_DISPLAY_NAME),
+        "ownAskpass_help": paragraphs(
+            _("Tick this to have OpenSSH use {app} to ask for passphrases."),
+            _("Untick this if you’ve set up another program in the {0} environment variable (such as {1}).", tquo("SSH_ASKPASS"), tquo("ksshaskpass"))),
 
+        # Integration
         "externalEditor": _("Text editor"),
+        "terminal": _("Terminal"),
+        "terminal_help": paragraphs(
+            _("Argument placeholders:"),
+            _tokenReferenceTable({"$COMMAND": _("Command to execute after launching the terminal")}),
+            _("The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that "
+              "enters your working directory and optionally starts one of your Custom Commands.",
+              "$COMMAND")),
         "externalDiff": _("Diff tool"),
         "externalDiff_help":
             "<p style='white-space: pre'>" + _("Argument placeholders:") + "\n" + _tokenReferenceTable({
@@ -531,56 +580,39 @@ def _prefKeyTable() -> dict[str, str]:
                 "$R": _("Theirs / Remote / Right"),
                 "$M": _("Merged / Output / Result"),
             }),
-        "terminal": _("Terminal"),
-        "terminal_help": paragraphs(
-            _("Argument placeholders:"),
-            _tokenReferenceTable({"$COMMAND": _("Command to execute after launching the terminal")}),
-            _("The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that "
-              "enters your working directory and optionally starts one of your Custom Commands.",
-              "$COMMAND")),
-        "gitPath": "Git",
-        "ownAskpass": _("Have OpenSSH ask for passphrases via {app}", app=APP_DISPLAY_NAME),
-        "ownAskpass_help": paragraphs(
-            _("Tick this to have OpenSSH use {app} to ask for passphrases."),
-            _("Untick this if you’ve set up another program in the {0} environment variable (such as {1}).", tquo("SSH_ASKPASS"), tquo("ksshaskpass"))),
-        "ownSshAgent": "ssh-agent",
-        "ownSshAgent_false": (_("Use ssh-agent provided by the system") if sshAuthSock
-                              else _("Use ssh-agent provided by the system (not detected)")),
-        "ownSshAgent_true": _("Have {app} manage its own ssh-agent", app=APP_DISPLAY_NAME),
-        "ownSshAgent_help": paragraphs(
-            _("“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. "
-              "Some Linux distributions set up an ssh-agent for you."),
-            _("You can also have {app} start its own instance of ssh-agent "
-              "for the duration of your session and have it remember passphrases."),
-            sshAuthSockHelp,
-        ),
-        "lfsAware": _("Parse LFS pointers"),
-        "lfsAware_help": paragraphs(
-            _("Tick this to display the real contents from LFS files."),
-            _("Untick to display the raw text in LFS pointers."),
-        ),
 
-        "mouseShortcuts": _("Mouse Shortcuts"),
-        "mouseShortcuts_HEADER": _("Tip: If your mouse has side buttons, you can use them to navigate back/forward in the repo."),
-        "tabBarClicks": _("Repository tabs:"),
-        "doubleClickTabBar": _("Double-click tab"),
-        "middleClickTabBar": _("Middle-click tab"),
-        "fileListClicks": _("File lists:"),
-        "doubleClickFileList": _("Double-click file"),
-        "middleClickFileList": _("Middle-click file"),
-        "diffViewClicks": _("Diff view:"),
-        "middleClickStageLines": _("Middle-click selection"),
-        "middleClickStageLines_true": _("Stage/unstage selected lines"),
-        "middleClickStageLines_false": _("Do nothing"),
-
+        # Commands
         "userCommands_guide": _userCommandsGuide(),
         "commands": "",
-        "confirmCommands": _("Ask for confirmation before running any command"),
+        "confirmCommands": _("Ask before running a command"),
         "confirmCommands_help": _(
             "If you untick this, you can still force a prompt to appear for "
             "specific commands by prepending them with {0}. For example: {1}",
             tquo(f"<tt>{UserCommand.AlwaysConfirmPrefix}</tt>"),
             "<pre>?git stash</pre>"),
+
+        # Advanced
+        "maxTrashFiles": _("Keep up to # discarded changes"),
+        "maxTrashFiles_note": _("When you discard changes, {app} keeps a copy in a trash folder, "
+                                "so you can get them back.", app=APP_DISPLAY_NAME),
+        "maxTrashFileKB": _("Skip changes larger than # KB"),
+        "condensedFonts": _("Condense long names before truncating them"),
+        "condensedFonts_help": "<p>" + _(
+            "When a branch name or author name is too long to fit in its allotted space, "
+            "condense the font before truncating the text."),
+        "animations": _("Animate the sidebar"),
+        "smoothScroll": _("Smooth scrolling"),
+        "resetDontShowAgain": _("Show Skipped Messages Again"),
+        "verbosity": _("Log level"),
+        "forceQtApi": _("Qt binding"),
+        "forceQtApi_help": paragraphs(
+            _("After restarting, {app} will use this Qt binding if available."),
+            _("You can also pass the name of a Qt binding via the “QT_API” environment variable."),
+        ),
+        "pygmentsPlugins": _("Load third-party Pygments plugins"),
+        "pygmentsPlugins_help": "<p>" + _("Let {app} load third-party Pygments plugins installed on your system. "
+                                          "These plugins extend syntax highlighting with new languages "
+                                          "and color schemes. <b>May incur significant slowdowns.</b>"),
     }
 
 

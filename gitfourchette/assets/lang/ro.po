@@ -2345,10 +2345,6 @@ msgstr "Dezactivat"
 msgid "Red and green"
 msgstr "Roșu și verde"
 
-#: forms/prefsdialog.py:731
-msgid "Colorblind-friendly"
-msgstr "Adaptat pentru daltoniști"
-
 #: forms/protocolbutton.py:19
 msgid "Change URL protocol"
 msgstr "Schimbă protocolul URL"
@@ -7443,22 +7439,6 @@ msgstr "Semnătură invalidă"
 msgid "Failed to start verification process"
 msgstr "Procesul de verificare nu a putut porni"
 
-#: trtables.py:196
-msgid "Truncate long ref names"
-msgstr "Trunchiază numele lungi ale referințelor"
-
-#: trtables.py:197
-msgid "Show full ref names"
-msgstr "Afișează numele complete ale referințelor"
-
-#: trtables.py:201
-msgid "Hash, graph, refs, message"
-msgstr "Hash, graf, referințe, mesaj"
-
-#: trtables.py:202
-msgid "Graph, refs, message (aligned)"
-msgstr "Graf, referințe, mesaj (aliniat)"
-
 #: trtables.py:206
 msgctxt "row spacing"
 msgid "Cramped"
@@ -7845,35 +7825,15 @@ msgctxt "Prefs"
 msgid "General"
 msgstr "General"
 
-#: trtables.py:355
-msgctxt "Prefs"
-msgid "Code"
-msgstr "Cod"
-
-#: trtables.py:356
-msgctxt "Prefs"
-msgid "Images"
-msgstr "Imagini"
-
 #: trtables.py:357
 msgctxt "Prefs"
 msgid "Tabs"
 msgstr "File"
 
-#: trtables.py:358
-msgctxt "Prefs"
-msgid "Commit History"
-msgstr "Istoricul commit-urilor"
-
 #: trtables.py:359
 msgctxt "Prefs"
 msgid "Trash"
 msgstr "Coș de gunoi"
-
-#: trtables.py:360
-msgctxt "Prefs"
-msgid "Git Integration"
-msgstr "Integrare Git"
 
 #: trtables.py:361
 msgctxt "Prefs"
@@ -7885,34 +7845,9 @@ msgctxt "Prefs"
 msgid "Advanced"
 msgstr "Avansat"
 
-#: trtables.py:363
-msgctxt "Prefs"
-msgid "Custom Commands"
-msgstr "Comenzi personalizate"
-
 #: trtables.py:365
 msgid "Language"
 msgstr "Limbă"
-
-#: trtables.py:366
-msgid "Qt style"
-msgstr "Stil Qt"
-
-#: trtables.py:367
-msgid "Shorten hashes to # characters"
-msgstr "Scurtează hash-urile la # caractere"
-
-#: trtables.py:368
-msgid "Date/time format"
-msgstr "Format dată/oră"
-
-#: trtables.py:371
-msgid "Author display style"
-msgstr "Stil de afișare a autorului"
-
-#: trtables.py:372
-msgid "Remember up to # recent repositories"
-msgstr "Reține până la # de depozite recente"
 
 #: trtables.py:376
 msgid "When the menu bar is hidden, press the Alt key to show it again."
@@ -7922,34 +7857,14 @@ msgstr "Când bara de meniu este ascunsă, apasă tasta Alt pentru a o afișa di
 msgid "Density"
 msgstr "Densitate"
 
-#: trtables.py:377
-msgid "Dinosaur on the Home page"
-msgstr "Dinozaur pe pagina Acasă"
-
 #: trtables.py:378
 msgid "A little dinosaur walks across the welcome text, fetching eggs for its nest. It only moves while the Home page is on screen."
 msgstr "Un mic dinozaur se plimbă peste textul de bun venit, adunând ouă pentru cuibul său. Se mișcă doar cât timp pagina Acasă este pe ecran."
-
-#: trtables.py:380
-msgid "Dinosaur looks at the mouse pointer"
-msgstr "Dinozaurul se uită la cursorul mouse-ului"
-
-#: trtables.py:381
-msgid "Restore all “don’t show this again” messages"
-msgstr "Restaurează toate mesajele „nu mai afișa”"
-
-#: trtables.py:382
-msgid "Allow third-party Pygments plugins"
-msgstr "Permite plugin-uri Pygments de la terți"
 
 #: trtables.py:383
 #, python-brace-format
 msgid "Let {app} load third-party Pygments plugins installed on your system. These plugins extend syntax highlighting with new languages and color schemes. <b>May incur significant slowdowns.</b>"
 msgstr "Permite ca {app} să încarce plugin-uri Pygments de la terți instalate pe sistemul tău. Aceste plugin-uri extind evidențierea sintaxei cu limbaje și scheme de culori noi. <b>Poate încetini semnificativ aplicația.</b>"
-
-#: trtables.py:386
-msgid "Sort branches && tags by"
-msgstr "Sortează ramurile && etichetele după"
 
 #: trtables.py:388
 msgid "The default sorting mode for local branches, remote branches, and tags in the sidebar."
@@ -7962,10 +7877,6 @@ msgstr "Poți ajusta această setare în fiecare depozit făcând clic dreapta p
 #: trtables.py:392
 msgid "Font"
 msgstr "Font"
-
-#: trtables.py:393
-msgid "One tab is # spaces"
-msgstr "Un tab echivalează cu # spații"
 
 #: trtables.py:395
 msgid "Show whole file"
@@ -7991,22 +7902,6 @@ msgstr "Încarcă imagini de până la # KB"
 msgid "Syntax highlighting"
 msgstr "Evidențiere sintaxă"
 
-#: trtables.py:401
-msgid "Word wrap"
-msgstr "Încadrare text"
-
-#: trtables.py:402
-msgid "Show alien line endings (CRLF)"
-msgstr "Afișează sfârșiturile de linie străine (CRLF)"
-
-#: trtables.py:403
-msgid "Show whitespace symbols"
-msgstr "Afișează simbolurile pentru spații albe"
-
-#: trtables.py:404
-msgid "Whitespace diffs"
-msgstr "Spații albe în diff-uri"
-
 #: trtables.py:406
 msgid "How whitespace changes are shown in diffs."
 msgstr "Cum sunt afișate modificările de spații albe în diff-uri."
@@ -8014,10 +7909,6 @@ msgstr "Cum sunt afișate modificările de spații albe în diff-uri."
 #: trtables.py:407
 msgid "This setting only affects how diffs are displayed. Operations that handle patches (export, apply, revert, etc.) still honor all whitespace changes."
 msgstr "Această setare afectează doar modul de afișare a diff-urilor. Operațiile care lucrează cu patch-uri (export, aplicare, inversare etc.) țin cont în continuare de toate modificările de spații albe."
-
-#: trtables.py:409
-msgid "“-/+” colors"
-msgstr "Culori „-/+”"
 
 #: trtables.py:410
 msgid "Background colors for deleted (-) and added (+) lines."
@@ -8027,33 +7918,9 @@ msgstr "Culorile de fundal pentru liniile șterse (-) și adăugate (+)."
 msgid "SVG files"
 msgstr "Fișiere SVG"
 
-#: trtables.py:412
-msgid "Display as text"
-msgstr "Afișează ca text"
-
-#: trtables.py:413
-msgid "Display as images"
-msgstr "Afișează ca imagini"
-
-#: trtables.py:415
-msgid "Show tab close button"
-msgstr "Afișează butonul de închidere pe file"
-
-#: trtables.py:416
-msgid "Expand tabs to available width"
-msgstr "Extinde filele la lățimea disponibilă"
-
-#: trtables.py:417
-msgid "Auto-hide tabs if only one repo is open"
-msgstr "Ascunde automat filele dacă e deschis un singur depozit"
-
 #: trtables.py:419
 msgid "Sort commits"
 msgstr "Sortează commit-urile"
-
-#: trtables.py:420
-msgid "Chronologically"
-msgstr "Cronologic"
 
 #: trtables.py:421
 msgid "Topologically"
@@ -8071,21 +7938,9 @@ msgstr "<b>Modul topologic</b> face graful mai ușor de citit. Încearcă să pr
 msgid "Row layout"
 msgstr "Aranjarea rândurilor"
 
-#: trtables.py:432
-msgid "<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the commit hash, and the ref indicators sit between the graph and the commit message."
-msgstr "<b>Hash, graf, referințe, mesaj</b> este aranjarea clasică: fiecare rând începe cu hash-ul commit-ului, iar indicatorii de referință stau între graf și mesajul commit-ului."
-
-#: trtables.py:434
-msgid "<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Ref indicators lead the message column, and the hash moves to the right, next to the author."
-msgstr "<b>Graf, referințe, mesaj</b> îi dă grafului o coloană proprie, astfel încât mesajele commit-urilor se aliniază indiferent cât de aglomerat e graful pe un anumit rând. Indicatorii de referință deschid coloana de mesaje, iar hash-ul se mută la dreapta, lângă autor."
-
 #: trtables.py:438
 msgid "Show author avatars"
 msgstr "Afișează avatarele autorilor"
-
-#: trtables.py:439
-msgid "Download author pictures"
-msgstr "Descarcă pozele autorilor"
 
 #: trtables.py:441
 msgid "Look up each author’s picture on GitHub or Gravatar. This sends their email address to a third party, so it is off until you ask for it. Without it, authors get a chip with their initials, computed on your machine."
@@ -8099,14 +7954,6 @@ msgstr "O insignă cu inițialele autorului, colorată în funcție de adresa de
 msgid "Row spacing"
 msgstr "Spațiere între rânduri"
 
-#: trtables.py:448
-msgid "Avoid gaps between branches in the graph"
-msgstr "Evită golurile dintre ramuri în graf"
-
-#: trtables.py:449
-msgid "Mark author/committer signature differences"
-msgstr "Marchează diferențele de semnătură autor/committer"
-
 #: trtables.py:451
 msgid "The commit history displays information about a commit’s <b>author</b>—their name and the date at which they made the commit. But in some cases, a commit might have been revised by someone else than the original author—this person is called the <b>committer</b>."
 msgstr "Istoricul commit-urilor afișează informații despre <b>autorul</b> unui commit — numele său și data la care a făcut commit-ul. Dar în unele cazuri, un commit poate fi revizuit de altcineva decât autorul original — această persoană se numește <b>committer</b>."
@@ -8119,29 +7966,13 @@ msgstr "Dacă bifezi această opțiune, după numele și/sau data autorului va a
 msgid "Note that you can always hover over the author’s name or date to obtain detailed information about the author and the committer."
 msgstr "Reține că poți oricând să ții cursorul peste numele sau data autorului pentru a obține informații detaliate despre autor și committer."
 
-#: trtables.py:460
-msgid "Load up to # commits in the history"
-msgstr "Încarcă până la # de commit-uri în istoric"
-
 #: trtables.py:461
 msgid "Set to 0 to always load the full commit history."
 msgstr "Setează la 0 pentru a încărca mereu istoricul complet al commit-urilor."
 
-#: trtables.py:462
-msgid "Draw rows using alternating background colors"
-msgstr "Desenează rândurile cu culori de fundal alternante"
-
-#: trtables.py:463
-msgid "Ref indicators"
-msgstr "Indicatori de referință"
-
 #: trtables.py:464
 msgid "You can always hover over an indicator to display the full name of the ref."
 msgstr "Poți oricând să ții cursorul peste un indicator pentru a afișa numele complet al referinței."
-
-#: trtables.py:465
-msgid "Verify signed commits on the fly"
-msgstr "Verifică din mers commit-urile semnate"
 
 #: trtables.py:467
 #, python-brace-format
@@ -8151,27 +7982,6 @@ msgstr "Pe măsură ce commit-urile apar la derulare, apelează automat {0} pent
 #: trtables.py:469
 msgid "(No seal = Commit isn’t signed)"
 msgstr "(Fără sigiliu = commit-ul nu este semnat)"
-
-#: trtables.py:471
-msgid "The trash keeps up to # discarded patches"
-msgstr "Coșul de gunoi păstrează până la # de patch-uri aruncate"
-
-#: trtables.py:472
-msgid "Patches bigger than # KB won’t be salvaged"
-msgstr "Patch-urile mai mari de # KB nu vor fi păstrate"
-
-#: trtables.py:474
-#, python-brace-format
-msgid "When you discard changes from the working directory, {app} keeps a temporary copy in a hidden “trash” folder. This gives you a last resort to rescue changes that you have discarded by mistake. You can look around this trash folder via <i>“Help &rarr; Open Trash”</i>."
-msgstr "Când renunți la modificări din directorul de lucru, {app} păstrează o copie temporară într-un dosar ascuns numit „coș de gunoi”. Astfel ai o ultimă șansă de a recupera modificările la care ai renunțat din greșeală. Poți răsfoi acest dosar prin <i>„Ajutor &rarr; Deschide coșul de gunoi”</i>."
-
-#: trtables.py:478
-msgid "Logging verbosity"
-msgstr "Nivelul de detaliu al jurnalului"
-
-#: trtables.py:479
-msgid "Auto-refresh when app regains focus"
-msgstr "Reîmprospătează automat când aplicația revine în focus"
 
 #: trtables.py:481
 #, python-brace-format
@@ -8187,22 +7997,6 @@ msgstr "Dacă dezactivezi opțiunea, va trebui să apeși {key} pentru a face ma
 msgid "We strongly recommend to keep this setting enabled."
 msgstr "Îți recomandăm insistent să păstrezi această setare activată."
 
-#: trtables.py:487
-msgid "Auto-fetch remotes every # minutes"
-msgstr "Fetch automat de pe remote-uri la fiecare # minute"
-
-#: trtables.py:488
-msgid "Animation effects in sidebar"
-msgstr "Efecte de animație în bara laterală"
-
-#: trtables.py:489
-msgid "Smooth scrolling (where applicable)"
-msgstr "Derulare lină (unde este cazul)"
-
-#: trtables.py:490
-msgid "Preferred Qt binding"
-msgstr "Binding Qt preferat"
-
 #: trtables.py:492
 #, python-brace-format
 msgid "After restarting, {app} will use this Qt binding if available."
@@ -8211,10 +8005,6 @@ msgstr "După repornire, {app} va folosi acest binding Qt, dacă este disponibil
 #: trtables.py:493
 msgid "You can also pass the name of a Qt binding via the “QT_API” environment variable."
 msgstr "Poți transmite numele unui binding Qt și prin variabila de mediu „QT_API”."
-
-#: trtables.py:495
-msgid "Use condensed fonts"
-msgstr "Folosește fonturi condensate"
 
 #: trtables.py:497
 msgid "When a branch name or author name is too long to fit in its allotted space, condense the font before truncating the text."
@@ -8265,11 +8055,6 @@ msgstr "Comanda de executat după lansarea terminalului"
 msgid "The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that enters your working directory and optionally starts one of your Custom Commands."
 msgstr "Substituentul {0} este obligatoriu. Este înlocuit automat cu un script intermediar care intră în directorul tău de lucru și, opțional, pornește una dintre comenzile tale personalizate."
 
-#: trtables.py:523
-#, python-brace-format
-msgid "Have OpenSSH ask for passphrases via {app}"
-msgstr "Cere frazele de acces OpenSSH prin {app}"
-
 #: trtables.py:525
 #, python-brace-format
 msgid "Tick this to have OpenSSH use {app} to ask for passphrases."
@@ -8280,19 +8065,6 @@ msgstr "Bifează pentru ca OpenSSH să folosească {app} ca să ceară frazele d
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr "Debifează dacă ai configurat un alt program în variabila de mediu {0} (de exemplu {1})."
 
-#: trtables.py:547
-msgid "Use ssh-agent provided by the system"
-msgstr "Folosește ssh-agent oferit de sistem"
-
-#: trtables.py:548
-msgid "Use ssh-agent provided by the system (not detected)"
-msgstr "Folosește ssh-agent oferit de sistem (nedetectat)"
-
-#: trtables.py:529
-#, python-brace-format
-msgid "Have {app} manage its own ssh-agent"
-msgstr "Lasă {app} să-și gestioneze propriul ssh-agent"
-
 #: trtables.py:531
 msgid "“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. Some Linux distributions set up an ssh-agent for you."
 msgstr "„ssh-agent” poate salva datele tale de autentificare SSH, ca să nu fie nevoie să retastezi aceeași frază de acces iar și iar. Unele distribuții Linux configurează un ssh-agent pentru tine."
@@ -8302,10 +8074,6 @@ msgstr "„ssh-agent” poate salva datele tale de autentificare SSH, ca să nu 
 msgid "You can also have {app} start its own instance of ssh-agent for the duration of your session and have it remember passphrases."
 msgstr "Poți, de asemenea, lăsa {app} să pornească propria instanță de ssh-agent pe durata sesiunii tale, care să rețină frazele de acces."
 
-#: trtables.py:537
-msgid "Parse LFS pointers"
-msgstr "Interpretează pointerii LFS"
-
 #: trtables.py:539
 msgid "Tick this to display the real contents from LFS files."
 msgstr "Bifează pentru a afișa conținutul real al fișierelor LFS."
@@ -8313,54 +8081,6 @@ msgstr "Bifează pentru a afișa conținutul real al fișierelor LFS."
 #: trtables.py:540
 msgid "Untick to display the raw text in LFS pointers."
 msgstr "Debifează pentru a afișa textul brut din pointerii LFS."
-
-#: trtables.py:543
-msgid "Mouse Shortcuts"
-msgstr "Scurtături de mouse"
-
-#: trtables.py:544
-msgid "Tip: If your mouse has side buttons, you can use them to navigate back/forward in the repo."
-msgstr "Sfat: dacă mouse-ul are butoane laterale, le poți folosi pentru a naviga înapoi/înainte în depozit."
-
-#: trtables.py:545
-msgid "Repository tabs:"
-msgstr "Filele depozitelor:"
-
-#: trtables.py:546
-msgid "Double-click tab"
-msgstr "Dublu clic pe filă"
-
-#: trtables.py:547
-msgid "Middle-click tab"
-msgstr "Clic mijlociu pe filă"
-
-#: trtables.py:548
-msgid "File lists:"
-msgstr "Liste de fișiere:"
-
-#: trtables.py:549
-msgid "Double-click file"
-msgstr "Dublu clic pe fișier"
-
-#: trtables.py:550
-msgid "Middle-click file"
-msgstr "Clic mijlociu pe fișier"
-
-#: trtables.py:551
-msgid "Diff view:"
-msgstr "Vizualizare diff:"
-
-#: trtables.py:552
-msgid "Middle-click selection"
-msgstr "Clic mijlociu pe selecție"
-
-#: trtables.py:553
-msgid "Stage/unstage selected lines"
-msgstr "Pregătește/scoate din pregătire liniile selectate"
-
-#: trtables.py:558
-msgid "Ask for confirmation before running any command"
-msgstr "Cere confirmare înainte de a rula orice comandă"
 
 #: trtables.py:560
 #, python-brace-format
@@ -8468,3 +8188,436 @@ msgstr ""
 #, python-brace-format
 msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
 msgstr "Copiază exemplul de mai jos și lipește-l în caseta de text. Comenzile tale apar apoi în {menu} din bara de meniu."
+
+#: forms/prefsdialog.py:1029
+msgid "lines around each change"
+msgstr "linii în jurul fiecărei modificări"
+
+#: forms/prefsdialog.py:1031
+msgid "Whole file"
+msgstr "Tot fișierul"
+
+#: forms/prefsdialog.py:769
+msgctxt "a limit of zero means no limit"
+msgid "No limit"
+msgstr "Fără limită"
+
+#: trtables.py:197
+msgid "Shorten long names"
+msgstr "Scurtează numele lungi"
+
+#: trtables.py:198
+msgid "Full names"
+msgstr "Nume complete"
+
+#: trtables.py:202
+msgid "In the files panel"
+msgstr "În panoul de fișiere"
+
+#: trtables.py:203
+msgid "Along the bottom"
+msgstr "De-a lungul părții de jos"
+
+#: trtables.py:207
+msgid "Hash first"
+msgstr "Întâi hash-ul"
+
+#: trtables.py:208
+msgid "Graph first"
+msgstr "Întâi graful"
+
+#: trtables.py:145
+msgctxt "Prefs"
+msgid "Diff"
+msgstr "Diff"
+
+#: trtables.py:365
+msgctxt "Prefs"
+msgid "History"
+msgstr "Istoric"
+
+#: trtables.py:114
+msgctxt "Prefs"
+msgid "Commit"
+msgstr "Commit"
+
+#: trtables.py:3
+msgctxt "Prefs"
+msgid "Git"
+msgstr "Git"
+
+#: trtables.py:368
+msgctxt "Prefs"
+msgid "Integration"
+msgstr "Integrare"
+
+#: trtables.py:22
+msgctxt "Prefs"
+msgid "Commands"
+msgstr "Comenzi"
+
+#: trtables.py:373
+msgctxt "Prefs"
+msgid "Appearance"
+msgstr "Aspect"
+
+#: trtables.py:374
+msgctxt "Prefs"
+msgid "Repositories"
+msgstr "Depozite"
+
+#: trtables.py:376
+msgctxt "Prefs"
+msgid "Background Activity"
+msgstr "Activitate în fundal"
+
+#: trtables.py:377
+msgctxt "Prefs"
+msgid "Home Page"
+msgstr "Pagina Acasă"
+
+#: trtables.py:378
+msgctxt "Prefs"
+msgid "Diff View"
+msgstr "Vizualizare diff"
+
+#: trtables.py:379
+msgctxt "Prefs"
+msgid "Content"
+msgstr "Conținut"
+
+#: trtables.py:380
+msgctxt "Prefs"
+msgid "Large Files and Images"
+msgstr "Fișiere mari și imagini"
+
+#: trtables.py:381
+msgctxt "Prefs"
+msgid "Sorting"
+msgstr "Sortare"
+
+#: trtables.py:116
+msgctxt "Prefs"
+msgid "Graph"
+msgstr "Graf"
+
+#: trtables.py:383
+msgctxt "Prefs"
+msgid "Commit Rows"
+msgstr "Rândurile commit-urilor"
+
+#: trtables.py:384
+msgctxt "Prefs"
+msgid "Signatures"
+msgstr "Semnături"
+
+#: trtables.py:385
+msgctxt "Prefs"
+msgid "Commit Form"
+msgstr "Formularul de commit"
+
+#: trtables.py:386
+msgctxt "Prefs"
+msgid "File Lists"
+msgstr "Liste de fișiere"
+
+#: trtables.py:387
+msgctxt "Prefs"
+msgid "Git Executable"
+msgstr "Executabilul Git"
+
+#: trtables.py:349
+msgctxt "Prefs"
+msgid "SSH"
+msgstr "SSH"
+
+#: trtables.py:391
+msgctxt "Prefs"
+msgid "Interface"
+msgstr "Interfață"
+
+#: trtables.py:392
+msgctxt "Prefs"
+msgid "Troubleshooting"
+msgstr "Depanare"
+
+#: trtables.py:373
+msgid "Appearance"
+msgstr "Aspect"
+
+#: trtables.py:406
+msgid "Recent repositories"
+msgstr "Depozite recente"
+
+#: trtables.py:407
+msgid "Show close buttons on tabs"
+msgstr "Afișează butoane de închidere pe file"
+
+#: trtables.py:408
+msgid "Stretch tabs to fill the tab bar"
+msgstr "Întinde filele pe toată bara de file"
+
+#: trtables.py:409
+msgid "Hide the tab bar when only one repository is open"
+msgstr "Ascunde bara de file când e deschis un singur depozit"
+
+#: trtables.py:410
+msgid "Double-click a tab"
+msgstr "Dublu clic pe o filă"
+
+#: trtables.py:411
+msgid "Middle-click a tab"
+msgstr "Clic mijlociu pe o filă"
+
+#: trtables.py:412
+msgid "Fetch remotes automatically every # minutes"
+msgstr "Fă fetch automat de pe remote-uri la fiecare # minute"
+
+#: trtables.py:413
+#, python-brace-format
+msgid "Refresh when {app} becomes active"
+msgstr "Reîmprospătează când {app} devine activ"
+
+#: trtables.py:414
+#, python-brace-format
+msgid "When this is off, press {key} to see changes made outside the app."
+msgstr "Când opțiunea e dezactivată, apasă {key} ca să vezi modificările făcute în afara aplicației."
+
+#: trtables.py:422
+msgid "Show the dinosaur on the Home page"
+msgstr "Afișează dinozaurul pe pagina Acasă"
+
+#: trtables.py:425
+msgid "Follow the pointer with its eyes"
+msgstr "Urmărește cursorul cu privirea"
+
+#: trtables.py:430
+msgid "Line colors"
+msgstr "Culorile liniilor"
+
+#: trtables.py:432
+msgid "Teal and orange (colorblind-friendly)"
+msgstr "Turcoaz și portocaliu (pentru daltoniști)"
+
+#: trtables.py:434
+msgid "Tab width # spaces"
+msgstr "Lățimea tabului # spații"
+
+#: trtables.py:118
+msgid "Layout"
+msgstr "Aranjare"
+
+#: trtables.py:442
+msgid "Unified"
+msgstr "Unificat"
+
+#: trtables.py:443
+msgid "Side by side"
+msgstr "Unul lângă altul"
+
+#: trtables.py:444
+msgid "Whitespace changes"
+msgstr "Modificări de spații albe"
+
+#: trtables.py:445
+msgid "Only changes what the diff shows."
+msgstr "Schimbă doar ce afișează diff-ul."
+
+#: trtables.py:450
+msgid "Wrap long lines"
+msgstr "Încadrează liniile lungi"
+
+#: trtables.py:451
+msgid "Show whitespace characters"
+msgstr "Afișează caracterele de spațiu alb"
+
+#: trtables.py:452
+msgid "Highlight Windows line endings (CRLF)"
+msgstr "Evidențiază sfârșiturile de linie Windows (CRLF)"
+
+#: trtables.py:453
+msgid "Middle-click stages or unstages the selected lines"
+msgstr "Clicul mijlociu pregătește sau scoate din pregătire liniile selectate"
+
+#: trtables.py:457
+msgid "Show as image"
+msgstr "Afișează ca imagine"
+
+#: trtables.py:458
+msgid "Show as text"
+msgstr "Afișează ca text"
+
+#: trtables.py:462
+msgid "By date"
+msgstr "După dată"
+
+#: trtables.py:472
+msgid "Sort branches and tags"
+msgstr "Sortează ramurile și etichetele"
+
+#: trtables.py:473
+msgid "Changing this resets the order you picked in each repository."
+msgstr "Schimbarea anulează ordinea aleasă în fiecare depozit."
+
+#: trtables.py:480
+msgid "<b>Hash first</b> is the classic layout: every row opens with the commit hash, and the branch labels sit between the graph and the commit message."
+msgstr "<b>Întâi hash-ul</b> este aranjarea clasică: fiecare rând începe cu hash-ul commit-ului, iar etichetele ramurilor stau între graf și mesajul commit-ului."
+
+#: trtables.py:482
+msgid "<b>Graph first</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Branch labels lead the message column, and the hash moves to the right, next to the author."
+msgstr "<b>Întâi graful</b> îi dă grafului o coloană proprie, astfel încât mesajele commit-urilor se aliniază oricât de aglomerat ar fi graful pe un rând. Etichetele ramurilor deschid coloana mesajului, iar hash-ul se mută la dreapta, lângă autor."
+
+#: trtables.py:487
+msgid "Avoid gaps between branches"
+msgstr "Evită golurile dintre ramuri"
+
+#: trtables.py:488
+msgid "Alternate row backgrounds"
+msgstr "Alternează fundalul rândurilor"
+
+#: trtables.py:489
+msgid "Load up to # commits"
+msgstr "Încarcă până la # de commit-uri"
+
+#: trtables.py:483
+msgid "Branch labels"
+msgstr "Etichetele ramurilor"
+
+#: trtables.py:498
+msgid "Download pictures from GitHub and Gravatar"
+msgstr "Descarcă poze de pe GitHub și Gravatar"
+
+#: trtables.py:499
+msgid "Sends authors’ email addresses to these services."
+msgstr "Trimite adresele de e-mail ale autorilor către aceste servicii."
+
+#: trtables.py:504
+msgid "Date format"
+msgstr "Formatul datei"
+
+#: trtables.py:506
+msgid "Hash length # characters"
+msgstr "Lungimea hash-ului # caractere"
+
+#: trtables.py:507
+msgid "Mark commits whose author and committer differ (*)"
+msgstr "Marchează commit-urile al căror autor diferă de committer (*)"
+
+#: trtables.py:518
+msgid "Verify signatures as commits scroll into view"
+msgstr "Verifică semnăturile pe măsură ce commit-urile apar pe ecran"
+
+#: trtables.py:519
+msgid "Can slow down scrolling in large repositories."
+msgstr "Poate încetini derularea în depozitele mari."
+
+#: trtables.py:526
+msgid "Commit form"
+msgstr "Formularul de commit"
+
+#: trtables.py:527
+msgid "Recent messages"
+msgstr "Mesaje recente"
+
+#: trtables.py:528
+msgid "Offered in the commit message box."
+msgstr "Propuse în caseta mesajului de commit."
+
+#: trtables.py:529
+msgid "Show files as"
+msgstr "Afișează fișierele ca"
+
+#: trtables.py:529
+msgid "Tree"
+msgstr "Arbore"
+
+#: trtables.py:115
+msgid "List"
+msgstr "Listă"
+
+#: trtables.py:255
+msgid "Paths"
+msgstr "Căi"
+
+#: trtables.py:533
+msgid "Double-click a file"
+msgstr "Dublu clic pe un fișier"
+
+#: trtables.py:534
+msgid "Middle-click a file"
+msgstr "Clic mijlociu pe un fișier"
+
+#: trtables.py:538
+msgid "Show LFS file contents instead of pointers"
+msgstr "Afișează conținutul fișierelor LFS în loc de pointeri"
+
+#: trtables.py:539
+msgid "When this is off, diffs show the pointer text stored in Git."
+msgstr "Când opțiunea e dezactivată, diff-urile afișează textul pointerului stocat în Git."
+
+#: trtables.py:545
+msgid "Use the system agent"
+msgstr "Folosește agentul sistemului"
+
+#: trtables.py:546
+#, python-brace-format
+msgid "Let {app} start its own"
+msgstr "Lasă {app} să pornească unul propriu"
+
+#: trtables.py:547
+msgid "System agent detected."
+msgstr "Agentul sistemului a fost detectat."
+
+#: trtables.py:547
+msgid "No system agent detected."
+msgstr "Nu a fost detectat niciun agent al sistemului."
+
+#: trtables.py:555
+#, python-brace-format
+msgid "Ask for SSH passphrases in {app}"
+msgstr "Cere frazele de acces SSH în {app}"
+
+#: trtables.py:587
+msgid "Ask before running a command"
+msgstr "Întreabă înainte de a rula o comandă"
+
+#: trtables.py:595
+msgid "Keep up to # discarded changes"
+msgstr "Păstrează până la # de modificări aruncate"
+
+#: trtables.py:596
+#, python-brace-format
+msgid "When you discard changes, {app} keeps a copy in a trash folder, so you can get them back."
+msgstr "Când arunci modificări, {app} păstrează o copie într-un dosar coș de gunoi, ca să le poți recupera."
+
+#: trtables.py:598
+msgid "Skip changes larger than # KB"
+msgstr "Omite modificările mai mari de # KB"
+
+#: trtables.py:599
+msgid "Condense long names before truncating them"
+msgstr "Condensează numele lungi înainte de a le trunchia"
+
+#: trtables.py:603
+msgid "Animate the sidebar"
+msgstr "Animează bara laterală"
+
+#: trtables.py:604
+msgid "Smooth scrolling"
+msgstr "Derulare lină"
+
+#: trtables.py:605
+msgid "Show Skipped Messages Again"
+msgstr "Afișează din nou mesajele omise"
+
+#: trtables.py:606
+msgid "Log level"
+msgstr "Nivel de jurnalizare"
+
+#: trtables.py:262
+msgid "Qt binding"
+msgstr "Binding Qt"
+
+#: trtables.py:612
+msgid "Load third-party Pygments plugins"
+msgstr "Încarcă plugin-uri Pygments de la terți"

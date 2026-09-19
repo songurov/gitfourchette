@@ -2338,10 +2338,6 @@ msgstr ""
 msgid "Red and green"
 msgstr ""
 
-#: forms/prefsdialog.py:731
-msgid "Colorblind-friendly"
-msgstr ""
-
 #: forms/protocolbutton.py:19
 msgid "Change URL protocol"
 msgstr ""
@@ -7377,22 +7373,6 @@ msgstr ""
 msgid "Failed to start verification process"
 msgstr ""
 
-#: trtables.py:196
-msgid "Truncate long ref names"
-msgstr ""
-
-#: trtables.py:197
-msgid "Show full ref names"
-msgstr ""
-
-#: trtables.py:201
-msgid "Hash, graph, refs, message"
-msgstr ""
-
-#: trtables.py:202
-msgid "Graph, refs, message (aligned)"
-msgstr ""
-
 #: trtables.py:206
 msgctxt "row spacing"
 msgid "Cramped"
@@ -7779,34 +7759,14 @@ msgctxt "Prefs"
 msgid "General"
 msgstr ""
 
-#: trtables.py:355
-msgctxt "Prefs"
-msgid "Code"
-msgstr ""
-
-#: trtables.py:356
-msgctxt "Prefs"
-msgid "Images"
-msgstr ""
-
 #: trtables.py:357
 msgctxt "Prefs"
 msgid "Tabs"
 msgstr ""
 
-#: trtables.py:358
-msgctxt "Prefs"
-msgid "Commit History"
-msgstr ""
-
 #: trtables.py:359
 msgctxt "Prefs"
 msgid "Trash"
-msgstr ""
-
-#: trtables.py:360
-msgctxt "Prefs"
-msgid "Git Integration"
 msgstr ""
 
 #: trtables.py:361
@@ -7819,33 +7779,8 @@ msgctxt "Prefs"
 msgid "Advanced"
 msgstr ""
 
-#: trtables.py:363
-msgctxt "Prefs"
-msgid "Custom Commands"
-msgstr ""
-
 #: trtables.py:365
 msgid "Language"
-msgstr ""
-
-#: trtables.py:366
-msgid "Qt style"
-msgstr ""
-
-#: trtables.py:367
-msgid "Shorten hashes to # characters"
-msgstr ""
-
-#: trtables.py:368
-msgid "Date/time format"
-msgstr ""
-
-#: trtables.py:371
-msgid "Author display style"
-msgstr ""
-
-#: trtables.py:372
-msgid "Remember up to # recent repositories"
 msgstr ""
 
 #: trtables.py:376
@@ -7856,33 +7791,13 @@ msgstr ""
 msgid "Density"
 msgstr ""
 
-#: trtables.py:377
-msgid "Dinosaur on the Home page"
-msgstr ""
-
 #: trtables.py:378
 msgid "A little dinosaur walks across the welcome text, fetching eggs for its nest. It only moves while the Home page is on screen."
-msgstr ""
-
-#: trtables.py:380
-msgid "Dinosaur looks at the mouse pointer"
-msgstr ""
-
-#: trtables.py:381
-msgid "Restore all “don’t show this again” messages"
-msgstr ""
-
-#: trtables.py:382
-msgid "Allow third-party Pygments plugins"
 msgstr ""
 
 #: trtables.py:383
 #, python-brace-format
 msgid "Let {app} load third-party Pygments plugins installed on your system. These plugins extend syntax highlighting with new languages and color schemes. <b>May incur significant slowdowns.</b>"
-msgstr ""
-
-#: trtables.py:386
-msgid "Sort branches && tags by"
 msgstr ""
 
 #: trtables.py:388
@@ -7895,10 +7810,6 @@ msgstr ""
 
 #: trtables.py:392
 msgid "Font"
-msgstr ""
-
-#: trtables.py:393
-msgid "One tab is # spaces"
 msgstr ""
 
 #: trtables.py:395
@@ -7925,32 +7836,12 @@ msgstr ""
 msgid "Syntax highlighting"
 msgstr ""
 
-#: trtables.py:401
-msgid "Word wrap"
-msgstr ""
-
-#: trtables.py:402
-msgid "Show alien line endings (CRLF)"
-msgstr ""
-
-#: trtables.py:403
-msgid "Show whitespace symbols"
-msgstr ""
-
-#: trtables.py:404
-msgid "Whitespace diffs"
-msgstr ""
-
 #: trtables.py:406
 msgid "How whitespace changes are shown in diffs."
 msgstr ""
 
 #: trtables.py:407
 msgid "This setting only affects how diffs are displayed. Operations that handle patches (export, apply, revert, etc.) still honor all whitespace changes."
-msgstr ""
-
-#: trtables.py:409
-msgid "“-/+” colors"
 msgstr ""
 
 #: trtables.py:410
@@ -7961,32 +7852,8 @@ msgstr ""
 msgid "SVG files"
 msgstr ""
 
-#: trtables.py:412
-msgid "Display as text"
-msgstr ""
-
-#: trtables.py:413
-msgid "Display as images"
-msgstr ""
-
-#: trtables.py:415
-msgid "Show tab close button"
-msgstr ""
-
-#: trtables.py:416
-msgid "Expand tabs to available width"
-msgstr ""
-
-#: trtables.py:417
-msgid "Auto-hide tabs if only one repo is open"
-msgstr ""
-
 #: trtables.py:419
 msgid "Sort commits"
-msgstr ""
-
-#: trtables.py:420
-msgid "Chronologically"
 msgstr ""
 
 #: trtables.py:421
@@ -8005,20 +7872,8 @@ msgstr ""
 msgid "Row layout"
 msgstr ""
 
-#: trtables.py:432
-msgid "<b>Hash, graph, refs, message</b> is the classic layout: every row opens with the commit hash, and the ref indicators sit between the graph and the commit message."
-msgstr ""
-
-#: trtables.py:434
-msgid "<b>Graph, refs, message</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Ref indicators lead the message column, and the hash moves to the right, next to the author."
-msgstr ""
-
 #: trtables.py:438
 msgid "Show author avatars"
-msgstr ""
-
-#: trtables.py:439
-msgid "Download author pictures"
 msgstr ""
 
 #: trtables.py:441
@@ -8033,14 +7888,6 @@ msgstr ""
 msgid "Row spacing"
 msgstr ""
 
-#: trtables.py:448
-msgid "Avoid gaps between branches in the graph"
-msgstr ""
-
-#: trtables.py:449
-msgid "Mark author/committer signature differences"
-msgstr ""
-
 #: trtables.py:451
 msgid "The commit history displays information about a commit’s <b>author</b>—their name and the date at which they made the commit. But in some cases, a commit might have been revised by someone else than the original author—this person is called the <b>committer</b>."
 msgstr ""
@@ -8053,28 +7900,12 @@ msgstr ""
 msgid "Note that you can always hover over the author’s name or date to obtain detailed information about the author and the committer."
 msgstr ""
 
-#: trtables.py:460
-msgid "Load up to # commits in the history"
-msgstr ""
-
 #: trtables.py:461
 msgid "Set to 0 to always load the full commit history."
 msgstr ""
 
-#: trtables.py:462
-msgid "Draw rows using alternating background colors"
-msgstr ""
-
-#: trtables.py:463
-msgid "Ref indicators"
-msgstr ""
-
 #: trtables.py:464
 msgid "You can always hover over an indicator to display the full name of the ref."
-msgstr ""
-
-#: trtables.py:465
-msgid "Verify signed commits on the fly"
 msgstr ""
 
 #: trtables.py:467
@@ -8084,27 +7915,6 @@ msgstr ""
 
 #: trtables.py:469
 msgid "(No seal = Commit isn’t signed)"
-msgstr ""
-
-#: trtables.py:471
-msgid "The trash keeps up to # discarded patches"
-msgstr ""
-
-#: trtables.py:472
-msgid "Patches bigger than # KB won’t be salvaged"
-msgstr ""
-
-#: trtables.py:474
-#, python-brace-format
-msgid "When you discard changes from the working directory, {app} keeps a temporary copy in a hidden “trash” folder. This gives you a last resort to rescue changes that you have discarded by mistake. You can look around this trash folder via <i>“Help &rarr; Open Trash”</i>."
-msgstr ""
-
-#: trtables.py:478
-msgid "Logging verbosity"
-msgstr ""
-
-#: trtables.py:479
-msgid "Auto-refresh when app regains focus"
 msgstr ""
 
 #: trtables.py:481
@@ -8121,22 +7931,6 @@ msgstr ""
 msgid "We strongly recommend to keep this setting enabled."
 msgstr ""
 
-#: trtables.py:487
-msgid "Auto-fetch remotes every # minutes"
-msgstr ""
-
-#: trtables.py:488
-msgid "Animation effects in sidebar"
-msgstr ""
-
-#: trtables.py:489
-msgid "Smooth scrolling (where applicable)"
-msgstr ""
-
-#: trtables.py:490
-msgid "Preferred Qt binding"
-msgstr ""
-
 #: trtables.py:492
 #, python-brace-format
 msgid "After restarting, {app} will use this Qt binding if available."
@@ -8144,10 +7938,6 @@ msgstr ""
 
 #: trtables.py:493
 msgid "You can also pass the name of a Qt binding via the “QT_API” environment variable."
-msgstr ""
-
-#: trtables.py:495
-msgid "Use condensed fonts"
 msgstr ""
 
 #: trtables.py:497
@@ -8199,11 +7989,6 @@ msgstr ""
 msgid "The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that enters your working directory and optionally starts one of your Custom Commands."
 msgstr ""
 
-#: trtables.py:523
-#, python-brace-format
-msgid "Have OpenSSH ask for passphrases via {app}"
-msgstr ""
-
 #: trtables.py:525
 #, python-brace-format
 msgid "Tick this to have OpenSSH use {app} to ask for passphrases."
@@ -8212,19 +7997,6 @@ msgstr ""
 #: trtables.py:526
 #, python-brace-format
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
-msgstr ""
-
-#: trtables.py:547
-msgid "Use ssh-agent provided by the system"
-msgstr ""
-
-#: trtables.py:548
-msgid "Use ssh-agent provided by the system (not detected)"
-msgstr ""
-
-#: trtables.py:529
-#, python-brace-format
-msgid "Have {app} manage its own ssh-agent"
 msgstr ""
 
 #: trtables.py:531
@@ -8236,64 +8008,12 @@ msgstr ""
 msgid "You can also have {app} start its own instance of ssh-agent for the duration of your session and have it remember passphrases."
 msgstr ""
 
-#: trtables.py:537
-msgid "Parse LFS pointers"
-msgstr ""
-
 #: trtables.py:539
 msgid "Tick this to display the real contents from LFS files."
 msgstr ""
 
 #: trtables.py:540
 msgid "Untick to display the raw text in LFS pointers."
-msgstr ""
-
-#: trtables.py:543
-msgid "Mouse Shortcuts"
-msgstr ""
-
-#: trtables.py:544
-msgid "Tip: If your mouse has side buttons, you can use them to navigate back/forward in the repo."
-msgstr ""
-
-#: trtables.py:545
-msgid "Repository tabs:"
-msgstr ""
-
-#: trtables.py:546
-msgid "Double-click tab"
-msgstr ""
-
-#: trtables.py:547
-msgid "Middle-click tab"
-msgstr ""
-
-#: trtables.py:548
-msgid "File lists:"
-msgstr ""
-
-#: trtables.py:549
-msgid "Double-click file"
-msgstr ""
-
-#: trtables.py:550
-msgid "Middle-click file"
-msgstr ""
-
-#: trtables.py:551
-msgid "Diff view:"
-msgstr ""
-
-#: trtables.py:552
-msgid "Middle-click selection"
-msgstr ""
-
-#: trtables.py:553
-msgid "Stage/unstage selected lines"
-msgstr ""
-
-#: trtables.py:558
-msgid "Ask for confirmation before running any command"
 msgstr ""
 
 #: trtables.py:560
@@ -8398,4 +8118,437 @@ msgstr ""
 #: trtables.py:669
 #, python-brace-format
 msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
+msgstr ""
+
+#: forms/prefsdialog.py:1029
+msgid "lines around each change"
+msgstr ""
+
+#: forms/prefsdialog.py:1031
+msgid "Whole file"
+msgstr ""
+
+#: forms/prefsdialog.py:769
+msgctxt "a limit of zero means no limit"
+msgid "No limit"
+msgstr ""
+
+#: trtables.py:197
+msgid "Shorten long names"
+msgstr ""
+
+#: trtables.py:198
+msgid "Full names"
+msgstr ""
+
+#: trtables.py:202
+msgid "In the files panel"
+msgstr ""
+
+#: trtables.py:203
+msgid "Along the bottom"
+msgstr ""
+
+#: trtables.py:207
+msgid "Hash first"
+msgstr ""
+
+#: trtables.py:208
+msgid "Graph first"
+msgstr ""
+
+#: trtables.py:145
+msgctxt "Prefs"
+msgid "Diff"
+msgstr ""
+
+#: trtables.py:365
+msgctxt "Prefs"
+msgid "History"
+msgstr ""
+
+#: trtables.py:114
+msgctxt "Prefs"
+msgid "Commit"
+msgstr ""
+
+#: trtables.py:3
+msgctxt "Prefs"
+msgid "Git"
+msgstr ""
+
+#: trtables.py:368
+msgctxt "Prefs"
+msgid "Integration"
+msgstr ""
+
+#: trtables.py:22
+msgctxt "Prefs"
+msgid "Commands"
+msgstr ""
+
+#: trtables.py:373
+msgctxt "Prefs"
+msgid "Appearance"
+msgstr ""
+
+#: trtables.py:374
+msgctxt "Prefs"
+msgid "Repositories"
+msgstr ""
+
+#: trtables.py:376
+msgctxt "Prefs"
+msgid "Background Activity"
+msgstr ""
+
+#: trtables.py:377
+msgctxt "Prefs"
+msgid "Home Page"
+msgstr ""
+
+#: trtables.py:378
+msgctxt "Prefs"
+msgid "Diff View"
+msgstr ""
+
+#: trtables.py:379
+msgctxt "Prefs"
+msgid "Content"
+msgstr ""
+
+#: trtables.py:380
+msgctxt "Prefs"
+msgid "Large Files and Images"
+msgstr ""
+
+#: trtables.py:381
+msgctxt "Prefs"
+msgid "Sorting"
+msgstr ""
+
+#: trtables.py:116
+msgctxt "Prefs"
+msgid "Graph"
+msgstr ""
+
+#: trtables.py:383
+msgctxt "Prefs"
+msgid "Commit Rows"
+msgstr ""
+
+#: trtables.py:384
+msgctxt "Prefs"
+msgid "Signatures"
+msgstr ""
+
+#: trtables.py:385
+msgctxt "Prefs"
+msgid "Commit Form"
+msgstr ""
+
+#: trtables.py:386
+msgctxt "Prefs"
+msgid "File Lists"
+msgstr ""
+
+#: trtables.py:387
+msgctxt "Prefs"
+msgid "Git Executable"
+msgstr ""
+
+#: trtables.py:349
+msgctxt "Prefs"
+msgid "SSH"
+msgstr ""
+
+#: trtables.py:391
+msgctxt "Prefs"
+msgid "Interface"
+msgstr ""
+
+#: trtables.py:392
+msgctxt "Prefs"
+msgid "Troubleshooting"
+msgstr ""
+
+#: trtables.py:373
+msgid "Appearance"
+msgstr ""
+
+#: trtables.py:406
+msgid "Recent repositories"
+msgstr ""
+
+#: trtables.py:407
+msgid "Show close buttons on tabs"
+msgstr ""
+
+#: trtables.py:408
+msgid "Stretch tabs to fill the tab bar"
+msgstr ""
+
+#: trtables.py:409
+msgid "Hide the tab bar when only one repository is open"
+msgstr ""
+
+#: trtables.py:410
+msgid "Double-click a tab"
+msgstr ""
+
+#: trtables.py:411
+msgid "Middle-click a tab"
+msgstr ""
+
+#: trtables.py:412
+msgid "Fetch remotes automatically every # minutes"
+msgstr ""
+
+#: trtables.py:413
+#, python-brace-format
+msgid "Refresh when {app} becomes active"
+msgstr ""
+
+#: trtables.py:414
+#, python-brace-format
+msgid "When this is off, press {key} to see changes made outside the app."
+msgstr ""
+
+#: trtables.py:422
+msgid "Show the dinosaur on the Home page"
+msgstr ""
+
+#: trtables.py:425
+msgid "Follow the pointer with its eyes"
+msgstr ""
+
+#: trtables.py:430
+msgid "Line colors"
+msgstr ""
+
+#: trtables.py:432
+msgid "Teal and orange (colorblind-friendly)"
+msgstr ""
+
+#: trtables.py:434
+msgid "Tab width # spaces"
+msgstr ""
+
+#: trtables.py:118
+msgid "Layout"
+msgstr ""
+
+#: trtables.py:442
+msgid "Unified"
+msgstr ""
+
+#: trtables.py:443
+msgid "Side by side"
+msgstr ""
+
+#: trtables.py:444
+msgid "Whitespace changes"
+msgstr ""
+
+#: trtables.py:445
+msgid "Only changes what the diff shows."
+msgstr ""
+
+#: trtables.py:450
+msgid "Wrap long lines"
+msgstr ""
+
+#: trtables.py:451
+msgid "Show whitespace characters"
+msgstr ""
+
+#: trtables.py:452
+msgid "Highlight Windows line endings (CRLF)"
+msgstr ""
+
+#: trtables.py:453
+msgid "Middle-click stages or unstages the selected lines"
+msgstr ""
+
+#: trtables.py:457
+msgid "Show as image"
+msgstr ""
+
+#: trtables.py:458
+msgid "Show as text"
+msgstr ""
+
+#: trtables.py:462
+msgid "By date"
+msgstr ""
+
+#: trtables.py:472
+msgid "Sort branches and tags"
+msgstr ""
+
+#: trtables.py:473
+msgid "Changing this resets the order you picked in each repository."
+msgstr ""
+
+#: trtables.py:480
+msgid "<b>Hash first</b> is the classic layout: every row opens with the commit hash, and the branch labels sit between the graph and the commit message."
+msgstr ""
+
+#: trtables.py:482
+msgid "<b>Graph first</b> gives the graph a column of its own, so commit messages line up no matter how busy the graph is on any given row. Branch labels lead the message column, and the hash moves to the right, next to the author."
+msgstr ""
+
+#: trtables.py:487
+msgid "Avoid gaps between branches"
+msgstr ""
+
+#: trtables.py:488
+msgid "Alternate row backgrounds"
+msgstr ""
+
+#: trtables.py:489
+msgid "Load up to # commits"
+msgstr ""
+
+#: trtables.py:483
+msgid "Branch labels"
+msgstr ""
+
+#: trtables.py:498
+msgid "Download pictures from GitHub and Gravatar"
+msgstr ""
+
+#: trtables.py:499
+msgid "Sends authors’ email addresses to these services."
+msgstr ""
+
+#: trtables.py:504
+msgid "Date format"
+msgstr ""
+
+#: trtables.py:506
+msgid "Hash length # characters"
+msgstr ""
+
+#: trtables.py:507
+msgid "Mark commits whose author and committer differ (*)"
+msgstr ""
+
+#: trtables.py:518
+msgid "Verify signatures as commits scroll into view"
+msgstr ""
+
+#: trtables.py:519
+msgid "Can slow down scrolling in large repositories."
+msgstr ""
+
+#: trtables.py:526
+msgid "Commit form"
+msgstr ""
+
+#: trtables.py:527
+msgid "Recent messages"
+msgstr ""
+
+#: trtables.py:528
+msgid "Offered in the commit message box."
+msgstr ""
+
+#: trtables.py:529
+msgid "Show files as"
+msgstr ""
+
+#: trtables.py:529
+msgid "Tree"
+msgstr ""
+
+#: trtables.py:115
+msgid "List"
+msgstr ""
+
+#: trtables.py:255
+msgid "Paths"
+msgstr ""
+
+#: trtables.py:533
+msgid "Double-click a file"
+msgstr ""
+
+#: trtables.py:534
+msgid "Middle-click a file"
+msgstr ""
+
+#: trtables.py:538
+msgid "Show LFS file contents instead of pointers"
+msgstr ""
+
+#: trtables.py:539
+msgid "When this is off, diffs show the pointer text stored in Git."
+msgstr ""
+
+#: trtables.py:545
+msgid "Use the system agent"
+msgstr ""
+
+#: trtables.py:546
+#, python-brace-format
+msgid "Let {app} start its own"
+msgstr ""
+
+#: trtables.py:547
+msgid "System agent detected."
+msgstr ""
+
+#: trtables.py:547
+msgid "No system agent detected."
+msgstr ""
+
+#: trtables.py:555
+#, python-brace-format
+msgid "Ask for SSH passphrases in {app}"
+msgstr ""
+
+#: trtables.py:587
+msgid "Ask before running a command"
+msgstr ""
+
+#: trtables.py:595
+msgid "Keep up to # discarded changes"
+msgstr ""
+
+#: trtables.py:596
+#, python-brace-format
+msgid "When you discard changes, {app} keeps a copy in a trash folder, so you can get them back."
+msgstr ""
+
+#: trtables.py:598
+msgid "Skip changes larger than # KB"
+msgstr ""
+
+#: trtables.py:599
+msgid "Condense long names before truncating them"
+msgstr ""
+
+#: trtables.py:603
+msgid "Animate the sidebar"
+msgstr ""
+
+#: trtables.py:604
+msgid "Smooth scrolling"
+msgstr ""
+
+#: trtables.py:605
+msgid "Show Skipped Messages Again"
+msgstr ""
+
+#: trtables.py:606
+msgid "Log level"
+msgstr ""
+
+#: trtables.py:262
+msgid "Qt binding"
+msgstr ""
+
+#: trtables.py:612
+msgid "Load third-party Pygments plugins"
 msgstr ""
