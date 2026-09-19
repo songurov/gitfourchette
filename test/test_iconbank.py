@@ -68,6 +68,72 @@ def testTaskIconsAreAllOurOwn(mainWindow):
         assert not stockIcon(iconId).isNull(), f"{taskClass.__name__} wants a missing icon {iconId!r}"
 
 
+def _iconNamesInTheCode() -> dict[str, str]:
+    """
+    Icon names the code spells out: the first argument of stockIcon() and
+    stockIconImgTag(), and whatever is assigned to a variable or keyword named
+    like an icon (icon=, buttonIcon=, iconKey = ...). Returns {name: where}.
+    """
+
+    import typing
+    from gitfourchette.toolbox.messageboxes import MessageBoxIconName
+
+    call = re.compile(r"""\bstockIcon(?:ImgTag)?\(\s*["']([^"'{}]+)["']""")
+    assignment = re.compile(r"""\b(\w+)\s*(?::\s*[\w.\[\]| ]+)?=\s*["']([^"'{}]*)["']""")
+    iconVariable = re.compile(r"icon|iconName|iconKey|_Icon[A-Z]\w*|\w*[a-z]Icon(?:Name|Key)?")
+    # Message boxes take their icon by one of these names, not from our icon bank
+    messageBoxIcons = set(typing.get_args(MessageBoxIconName))
+
+    sourceDir = pathlib.Path(__file__).parents[1] / "gitfourchette"
+    names = {}
+    for path in sorted(sourceDir.rglob("*.py")):
+        for lineNumber, line in enumerate(path.read_text("utf-8").splitlines(), 1):
+            where = f"{path.relative_to(sourceDir)}:{lineNumber}"
+            for name in call.findall(line):
+                names.setdefault(name, where)
+            for variable, name in assignment.findall(line):
+                if iconVariable.fullmatch(variable) and name and name not in messageBoxIcons:
+                    names.setdefault(name, where)
+    return names
+
+
+def testEveryIconNamedInTheCodeExists(mainWindow):
+    """
+    stockIcon() only notices a missing icon when the code asking for it runs,
+    and some of those paths (a menu, an error page) no test ever opens. Every
+    name spelled out in the code must lead to an icon of ours or a Qt one.
+    """
+
+    from gitfourchette.toolbox import stockIcon
+    from gitfourchette.toolbox.appstyle import AppStyle
+
+    # Qt's standard icons come from the style. The app always wraps its style
+    # in AppStyle, but offscreen tests keep the bare boot style, so ask
+    # AppStyle directly, as the app would.
+    appStyle = AppStyle("fusion")
+
+    def resolve(name: str) -> QIcon:
+        if name.startswith("SP_"):
+            return appStyle.standardIcon(getattr(QStyle.StandardPixmap, name))
+        return stockIcon(name)
+
+    names = _iconNamesInTheCode()
+    # If the scan quietly stopped matching, this test would pass on nothing
+    assert len(names) > 80
+    assert names.keys() >= {"git-fetch", "view-hidden", "SP_TrashIcon", "achtung", "magnifying-glass-wait"}
+
+    missing = []
+    for name, where in names.items():
+        try:
+            icon = resolve(name)
+        except AssertionError:  # APP_TESTMODE: "no icon of our own"
+            missing.append(f"{name} ({where})")
+            continue
+        if icon.isNull():
+            missing.append(f"{name} ({where})")
+    assert not missing
+
+
 def testForeignIconNamesNeverReachTheDesktopTheme(mainWindow):
     """
     The app still calls some icons by their freedesktop names. Left to the
