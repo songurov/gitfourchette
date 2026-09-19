@@ -3633,6 +3633,22 @@ msgstr "История усечена до {0} коммитов (включая 
 msgid "History truncated to {0} commits"
 msgstr "История усечена до {0} коммитов"
 
+#: graphview/commitlogdelegate.py:594 repowidget.py:437
+#, python-brace-format
+msgid "{n} commit not pushed to {0}"
+msgid_plural "{n} commits not pushed to {0}"
+msgstr[0] "{n} коммит не отправлен в {0}"
+msgstr[1] "{n} коммита не отправлены в {0}"
+msgstr[2] "{n} коммитов не отправлено в {0}"
+
+#: graphview/commitlogdelegate.py:596
+#, python-brace-format
+msgid "{n} commit not pushed to any remote"
+msgid_plural "{n} commits not pushed to any remote"
+msgstr[0] "{n} коммит не отправлен ни в один удалённый репозиторий"
+msgstr[1] "{n} коммита не отправлены ни в один удалённый репозиторий"
+msgstr[2] "{n} коммитов не отправлено ни в один удалённый репозиторий"
+
 #: graphview/commitlogdelegate.py:751
 msgid "(Clean)"
 msgstr "(Без изменений)"
@@ -4376,14 +4392,6 @@ msgid_plural "{n} uncommitted changes"
 msgstr[0] "{n} незакоммиченное изменение"
 msgstr[1] "{n} незакоммиченных изменения"
 msgstr[2] "{n} незакоммиченных изменений"
-
-#: repowidget.py:435
-#, python-brace-format
-msgid "{n} commit not pushed to {0}"
-msgid_plural "{n} commits not pushed to {0}"
-msgstr[0] "{n} коммит не отправлен в {0}"
-msgstr[1] "{n} коммита не отправлены в {0}"
-msgstr[2] "{n} коммитов не отправлено в {0}"
 
 #: repowidget.py:508
 msgid "Please select a file before performing this action."

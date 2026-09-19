@@ -3606,6 +3606,20 @@ msgstr ""
 msgid "History truncated to {0} commits"
 msgstr ""
 
+#: graphview/commitlogdelegate.py:594 repowidget.py:437
+#, python-brace-format
+msgid "{n} commit not pushed to {0}"
+msgid_plural "{n} commits not pushed to {0}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: graphview/commitlogdelegate.py:596
+#, python-brace-format
+msgid "{n} commit not pushed to any remote"
+msgid_plural "{n} commits not pushed to any remote"
+msgstr[0] ""
+msgstr[1] ""
+
 #: graphview/commitlogdelegate.py:751
 msgid "(Clean)"
 msgstr ""
@@ -4341,13 +4355,6 @@ msgstr ""
 #, python-brace-format
 msgid "{n} uncommitted change"
 msgid_plural "{n} uncommitted changes"
-msgstr[0] ""
-msgstr[1] ""
-
-#: repowidget.py:435
-#, python-brace-format
-msgid "{n} commit not pushed to {0}"
-msgid_plural "{n} commits not pushed to {0}"
 msgstr[0] ""
 msgstr[1] ""
 

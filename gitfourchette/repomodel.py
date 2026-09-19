@@ -203,6 +203,9 @@ class RepoModel:
     contains, i.e. commits that aren't on any remote yet. Empty if the repo
     has no remote-tracking branches at all (nothing to compare against)."""
 
+    _unpushedCountByTip: dict[Oid, int]
+    "How many of `unpushedCommits` each local tip reaches, filled in on demand."
+
     hiddenRefs: set[str]
     "All cached refs that are hidden, either explicitly or via ref patterns."
 
@@ -268,6 +271,7 @@ class RepoModel:
         self.hideSeeds = set()
         self.localSeeds = set()
         self.unpushedCommits = set()
+        self._unpushedCountByTip = {}
 
         self.commitPathspecFilter = CommitPathspecFilter()
         self.commitQueryFilter = CommitQueryFilter()
@@ -572,11 +576,54 @@ class RepoModel:
         """
         unpushed = findUnpushedCommits(self.commitSequence, self.getLocalTips(), self.getRemoteTips())
 
+        # Branch tips or the sequence may have moved even if the set is the same
+        self._unpushedCountByTip = {}
+
         if unpushed == self.unpushedCommits:
             return False
 
         self.unpushedCommits = unpushed
         return True
+
+    def countUnpushed(self, branchName: str) -> tuple[int, str]:
+        """
+        How many commits on a local branch a push would send, and where to.
+
+        With an upstream, that's how far ahead of the upstream the branch is,
+        as `aheadBehind` has it, and the upstream's shorthand name. Without
+        one (or if the upstream is gone), it's how many of the branch's commits
+        aren't on any remote, with an empty name.
+        """
+        upstream = self.upstreams.get(branchName, "")
+        if upstream and RefPrefix.REMOTES + upstream in self.refs:
+            ahead, _behind = self.aheadBehind.get(branchName, (0, 0))
+            return ahead, upstream
+
+        tip = self.refs.get(RefPrefix.HEADS + branchName)
+        if tip not in self.unpushedCommits:
+            return 0, ""
+
+        try:
+            return self._unpushedCountByTip[tip], ""
+        except KeyError:
+            pass
+
+        # Walk back from the tip through unpushedCommits only. Once a commit is
+        # on a remote, so are all of its ancestors, so none of the branch's
+        # unpushed commits hides behind one.
+        unpushed = self.unpushedCommits
+        seen = set()
+        pending = [tip]
+        while pending:
+            oid = pending.pop()
+            if oid in seen or oid not in unpushed:
+                continue
+            seen.add(oid)
+            commit = self.commitSequence[self.graph.getCommitRow(oid)]
+            pending.extend(commit.parent_ids)
+
+        self._unpushedCountByTip[tip] = len(seen)
+        return len(seen), ""
 
     @benchmark
     def toggleHideRefPattern(self, refPattern: str, allButThis: bool = False):

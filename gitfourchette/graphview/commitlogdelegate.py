@@ -21,6 +21,7 @@ from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.repomodel import UC_FAKEID, UC_FAKEREF, RepoModel, GpgStatus
 from gitfourchette.settings import GraphRowLayout
+from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.toolbox import *
 
 
@@ -92,6 +93,9 @@ MAX_GRAPH_COLUMNS = 16
 is clipped instead of pushing commit messages off the screen."""
 
 NARROW_WIDTH = (500, 750)
+
+AHEAD_SPACING = 4
+"""Room between a branch's name and its count of commits to push."""
 
 
 class CommitLogDelegate(QStyledItemDelegate):
@@ -579,6 +583,18 @@ class CommitLogDelegate(QStyledItemDelegate):
         if refboxDef.prefix == RefPrefix.REMOTES and self.repoModel.singleRemote:
             text = text.split('/', 1)[-1]
 
+        # A local branch with commits to push says how many, like the sidebar
+        aheadText = ""
+        aheadToolTip = ""
+        if refboxDef.prefix == RefPrefix.HEADS:
+            ahead, pushTarget = self.repoModel.countUnpushed(refName.removeprefix(RefPrefix.HEADS))
+            if ahead > 0:
+                aheadText = f"{SYMBOL_AHEAD}{ahead}"
+                if pushTarget:
+                    aheadToolTip = _n("{n} commit not pushed to {0}", "{n} commits not pushed to {0}", ahead, pushTarget)
+                else:
+                    aheadToolTip = _n("{n} commit not pushed to any remote", "{n} commits not pushed to any remote", ahead)
+
         if isHome:
             font = self.homeRefboxFont
             iconName = "git-head"
@@ -599,12 +615,18 @@ class CommitLogDelegate(QStyledItemDelegate):
         if iconName:
             lPadding -= 1
 
+        # The count is never elided: the name gives way first
+        aheadWidth = QFontMetrics(font).horizontalAdvance(aheadText) if aheadText else 0
+
         # Determine max width
         maxWidth = int(settings.prefs.refBoxMaxWidth)
         remainingWidth = rect.width()
         if remainingWidth < 150:  # Super cramped
             maxWidth = 0  # Draw icon only
         maxWidth = min(remainingWidth, maxWidth)
+        if aheadText:
+            # The count takes room from the row, not from the name's share
+            maxWidth = max(0, min(maxWidth, remainingWidth - aheadWidth - AHEAD_SPACING))
 
         # Text-only refbox: show text regardless of the user's preference
         if not iconName and text:
@@ -618,6 +640,10 @@ class CommitLogDelegate(QStyledItemDelegate):
                 font, maxWidth, text, Qt.TextElideMode.ElideMiddle, limit=QFont.Stretch.Unstretched)
         else:
             textWidth = -rPadding  # Negate rPadding
+
+        contentWidth = textWidth
+        if aheadText:
+            contentWidth = max(0, textWidth) + (AHEAD_SPACING if textWidth > 0 else 0) + aheadWidth
 
         lClip = 0
         rClip = 0
@@ -640,7 +666,7 @@ class CommitLogDelegate(QStyledItemDelegate):
             iconPadding = 0
 
         boxRect = QRect(rect)
-        boxRect.setWidth(lPadding + iconWidth + iconPadding + textWidth + rPadding)
+        boxRect.setWidth(lPadding + iconWidth + iconPadding + contentWidth + rPadding)
 
         frameRect = QRectF(boxRect)
         frameRect.adjust(0, vMargin, 0, -vMargin)
@@ -662,9 +688,14 @@ class CommitLogDelegate(QStyledItemDelegate):
             icon = stockIcon(iconName, f"gray={color.name()}")
             icon.paint(painter, iconRect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
+        textRect = QRect(boxRect)
+        textRect.adjust(0, 0, -rPadding, 0)
+
+        if aheadText:
+            painter.drawText(textRect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, aheadText)
+            textRect.adjust(0, 0, -(aheadWidth + AHEAD_SPACING), 0)
+
         if text and textWidth > 0:
-            textRect = QRect(boxRect)
-            textRect.adjust(0, 0, -rPadding, 0)
             painter.setFont(fittedFont)
             painter.drawText(textRect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, text)
             painter.setFont(font)
@@ -698,6 +729,8 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Append tooltip
         if forceToolTip is not None:
             toolTipText = forceToolTip or refName
+            if aheadToolTip:
+                toolTipText += "\n" + aheadToolTip
             zone = CommitToolTipZone(rect.left(), boxRect.right(), "ref", toolTipText)
             self.newToolTipZone(zone)
 

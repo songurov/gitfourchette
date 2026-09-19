@@ -3591,6 +3591,20 @@ msgstr "Geçmiş {0} işlemeyle sınırlandırıldı (gizli dallar dâhil)"
 msgid "History truncated to {0} commits"
 msgstr "Geçmiş {0} işlemeyle sınırlandırıldı"
 
+#: graphview/commitlogdelegate.py:594 repowidget.py:437
+#, python-brace-format
+msgid "{n} commit not pushed to {0}"
+msgid_plural "{n} commits not pushed to {0}"
+msgstr[0] "{0} dalına gönderilmemiş {n} işleme"
+msgstr[1] "{0} dalına gönderilmemiş {n} işleme"
+
+#: graphview/commitlogdelegate.py:596
+#, python-brace-format
+msgid "{n} commit not pushed to any remote"
+msgid_plural "{n} commits not pushed to any remote"
+msgstr[0] "Hiçbir uzak depoya gönderilmemiş {n} işleme"
+msgstr[1] "Hiçbir uzak depoya gönderilmemiş {n} işleme"
+
 #: graphview/commitlogdelegate.py:751
 msgid "(Clean)"
 msgstr "(Temiz)"
@@ -4326,13 +4340,6 @@ msgid "{n} uncommitted change"
 msgid_plural "{n} uncommitted changes"
 msgstr[0] "{n} işlenmemiş değişiklik"
 msgstr[1] "{n} işlenmemiş değişiklik"
-
-#: repowidget.py:435
-#, python-brace-format
-msgid "{n} commit not pushed to {0}"
-msgid_plural "{n} commits not pushed to {0}"
-msgstr[0] "{0} dalına gönderilmemiş {n} işleme"
-msgstr[1] "{0} dalına gönderilmemiş {n} işleme"
 
 #: repowidget.py:508
 msgid "Please select a file before performing this action."

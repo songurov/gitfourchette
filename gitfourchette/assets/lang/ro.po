@@ -3632,6 +3632,22 @@ msgstr "Istoric trunchiat la {0} commit-uri (inclusiv ramurile ascunse)"
 msgid "History truncated to {0} commits"
 msgstr "Istoric trunchiat la {0} commit-uri"
 
+#: graphview/commitlogdelegate.py:594 repowidget.py:437
+#, python-brace-format
+msgid "{n} commit not pushed to {0}"
+msgid_plural "{n} commits not pushed to {0}"
+msgstr[0] "{n} commit fără push către {0}"
+msgstr[1] "{n} commit-uri fără push către {0}"
+msgstr[2] "{n} de commit-uri fără push către {0}"
+
+#: graphview/commitlogdelegate.py:596
+#, python-brace-format
+msgid "{n} commit not pushed to any remote"
+msgid_plural "{n} commits not pushed to any remote"
+msgstr[0] "{n} commit fără push către niciun remote"
+msgstr[1] "{n} commit-uri fără push către niciun remote"
+msgstr[2] "{n} de commit-uri fără push către niciun remote"
+
 #: graphview/commitlogdelegate.py:751
 msgid "(Clean)"
 msgstr "(Curat)"
@@ -4375,14 +4391,6 @@ msgid_plural "{n} uncommitted changes"
 msgstr[0] "{n} modificare fără commit"
 msgstr[1] "{n} modificări fără commit"
 msgstr[2] "{n} de modificări fără commit"
-
-#: repowidget.py:435
-#, python-brace-format
-msgid "{n} commit not pushed to {0}"
-msgid_plural "{n} commits not pushed to {0}"
-msgstr[0] "{n} commit fără push către {0}"
-msgstr[1] "{n} commit-uri fără push către {0}"
-msgstr[2] "{n} de commit-uri fără push către {0}"
 
 #: repowidget.py:508
 msgid "Please select a file before performing this action."

@@ -16,10 +16,12 @@ from gitfourchette.repomodel import UC_FAKEID, findUnpushedCommits
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import avatarColor, avatarInitials
-from gitfourchette.settings import GraphRowLayout
+from gitfourchette.settings import GraphRefBoxWidth, GraphRowLayout
+from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.themes import ThemeName, formatStyle
 from gitfourchette.tasks import QueryCommitsTouchingPath
 from .util import *
+from .test_prefs import assertTranslatedInForkLanguages
 
 
 def testCommitSearch(tempDir, mainWindow):
@@ -1391,3 +1393,130 @@ def testUnpushedCommitToolTip(tempDir, mainWindow, monkeypatch, layout):
     row, x = rowOf("origin/master")
     with pytest.raises(TimeoutError):
         qlvSummonToolTip(graphView, row, x=x)
+
+
+# -----------------------------------------------------------------------------
+# How many commits a branch has to push, on its chip in the graph
+
+
+def drawnText(graphView: GraphView, monkeypatch, oid: Oid) -> list[tuple[QRectF, str]]:
+    """Repaint the graph, and return the text drawn on a commit's row and where."""
+    rowRect = QRectF(graphView.visualRect(graphView.getFilterIndexForCommit(oid)))
+    drawn = []
+    realDrawText = QPainter.drawText
+
+    def spy(painter, *args):
+        where = args[0]
+        if isinstance(where, QRect | QRectF):
+            where = QRectF(where)
+            if rowRect.contains(where.center()):
+                drawn.append((where, next(a for a in reversed(args) if isinstance(a, str))))
+        return realDrawText(painter, *args)
+
+    with monkeypatch.context() as m:
+        m.setattr(QPainter, "drawText", spy)
+        graphView.viewport().repaint()
+
+    return drawn
+
+
+def aheadOnChip(graphView: GraphView, monkeypatch, oid: Oid) -> list[str]:
+    """Counts of commits to push drawn on a commit's row."""
+    return [text for _rect, text in drawnText(graphView, monkeypatch, oid) if text.startswith(SYMBOL_AHEAD)]
+
+
+def testBranchChipSaysHowManyCommitsToPush(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    # Two branches that were never pushed: side has 1 commit, and solo has 1
+    # of its own, side's, and the merge commit
+    shell("""
+        git switch --no-track -c side origin/first-merge
+        git commit --allow-empty -m 'side 1'
+        git switch --no-track -c solo origin/first-merge
+        git commit --allow-empty -m 'solo 1'
+        git merge --no-ff -m 'merge side into solo' side
+        git switch master
+    """, wd)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    repo = rw.repo
+    repoModel = rw.repoModel
+
+    def tip(branch):
+        return repo.branches.local[branch].target
+
+    # master is 2 commits ahead of its upstream, as the sidebar says
+    assert repoModel.aheadBehind["master"] == (2, 0)
+    assert repoModel.countUnpushed("master") == (2, "origin/master")
+    assert aheadOnChip(graphView, monkeypatch, tip("master")) == [f"{SYMBOL_AHEAD}2"]
+
+    # Without an upstream, the count is of the branch's commits that aren't
+    # on any remote - not of every unpushed commit in the repo
+    assert repoModel.countUnpushed("solo") == (3, "")
+    assert repoModel.countUnpushed("side") == (1, "")
+    assert aheadOnChip(graphView, monkeypatch, tip("solo")) == [f"{SYMBOL_AHEAD}3"]
+    assert aheadOnChip(graphView, monkeypatch, tip("side")) == [f"{SYMBOL_AHEAD}1"]
+
+    # An upstream that is gone counts as no upstream
+    shell("git config branch.side.remote origin && git config branch.side.merge refs/heads/gone", wd)
+    rw.refreshRepo()
+    assert repoModel.upstreams["side"] == "origin/gone"
+    assert repoModel.countUnpushed("side") == (1, "")
+
+    # A branch that's up to date shows nothing extra
+    shell("git update-ref refs/remotes/origin/master master", wd)
+    rw.refreshRepo()
+    assert repoModel.countUnpushed("master") == (0, "origin/master")
+    assert aheadOnChip(graphView, monkeypatch, tip("master")) == []
+    chipText = [text for _rect, text in drawnText(graphView, monkeypatch, tip("master")) if "master" in text]
+    assert chipText == ["master"], "the name alone"
+
+    # Once pushed somewhere, a branch without upstream has nothing to count
+    shell("git update-ref refs/remotes/origin/solo solo", wd)
+    rw.refreshRepo()
+    assert repoModel.countUnpushed("solo") == (0, "")
+    assert repoModel.countUnpushed("side") == (0, ""), "side was merged into solo"
+    assert aheadOnChip(graphView, monkeypatch, tip("solo")) == []
+
+
+def testBranchChipCountWithIconsOnly(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(refBoxMaxWidth=GraphRefBoxWidth.IconsOnly)
+    rw = mainWindow.openRepo(wd)
+    oid = rw.repo.branches.local["master"].target
+    drawn = [text for _rect, text in drawnText(rw.graphView, monkeypatch, oid) if "master" in text or text.startswith(SYMBOL_AHEAD)]
+    assert drawn == [f"{SYMBOL_AHEAD}2"], "the name gives way to the icon, not the count"
+
+
+def testNoCountOnBranchChipsWithoutRemoteBranches(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("git remote remove origin && git commit --allow-empty -m 'new local commit'", wd)
+    rw = mainWindow.openRepo(wd)
+    oid = rw.repo.branches.local["master"].target
+    assert rw.repoModel.countUnpushed("master") == (0, "")
+    assert aheadOnChip(rw.graphView, monkeypatch, oid) == []
+
+
+@pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with tooltips, but Qt 6 is fine")
+def testBranchChipCountToolTip(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("git switch --no-track -c never-pushed origin/first-merge && git commit --allow-empty -m 'wip' && git switch master", wd)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    def toolTipOnCount(branch):
+        oid = rw.repo.branches.local[branch].target
+        rect, _text = next((r, t) for r, t in drawnText(graphView, monkeypatch, oid) if t.startswith(SYMBOL_AHEAD))
+        row = graphView.getFilterIndexForCommit(oid).row()
+        return qlvSummonToolTip(graphView, row, x=int(rect.right()) - 2)
+
+    toolTip = toolTipOnCount("master")
+    assert "refs/heads/master" in toolTip
+    assert "2 commits not pushed to origin/master" in toolTip
+
+    toolTip = toolTipOnCount("never-pushed")
+    assert "refs/heads/never-pushed" in toolTip
+    assert "1 commit not pushed to any remote" in toolTip
+    assertTranslatedInForkLanguages("{n} commit not pushed to any remote", plural="{n} commits not pushed to any remote")
