@@ -380,7 +380,16 @@ class PrefsDialog(QDialog):
         elif key == "shortHashChars":
             return self.boundedIntControl(key, value, 4, 40)
         elif key == "maxRecentRepos":
-            return self.boundedIntControl(key, value, 0, 50)
+            # Not 0: remembering no repos would erase their nicknames and other records
+            return self.boundedIntControl(key, value, 1, 50)
+        elif key == "maxTrashFiles":
+            control = self.boundedIntControl(key, value, 0, 9999)
+            control.setSpecialValueText(_p("a count of zero turns the setting off", "Off"))
+            return control
+        elif key == "recentCommitMessages":
+            control = self.boundedIntControl(key, value, 0, 50)
+            control.setSpecialValueText(_p("a count of zero turns the setting off", "Off"))
+            return control
         elif key == "contextLines":  # staging/discarding individual lines is flaky with 0 context lines
             return self.boundedIntControl(key, value, 1, 32)
         elif key == "tabSpaces":
@@ -425,7 +434,8 @@ class PrefsDialog(QDialog):
         elif issubclass(valueType, enum.Enum):
             return self.enumControl(key, value, type(value))
         elif valueType is int:
-            return self.intControl(key, value)
+            # A count without a range of its own still gets a spin box: never negative, never free text
+            return self.boundedIntControl(key, value, 0, 999_999)
         elif valueType is bool:
             trueText = trtables.prefKeyNoDefault(key + "_true")
             falseText = trtables.prefKeyNoDefault(key + "_false")
@@ -530,18 +540,15 @@ class PrefsDialog(QDialog):
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
         return control
 
-    def intControl(self, prefKey, prefValue):
-        control = QLineEdit(str(prefValue), self)
-        control.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        control.setValidator(QIntValidator())
-        control.textEdited.connect(lambda v, k=prefKey: self.assign(k, int(v) if v else 0))
-        return control
-
     def boundedIntControl(self, prefKey, prefValue, minValue, maxValue, step=1):
         control = QSpinBox(self)
         control.setMinimum(minValue)
         control.setMaximum(maxValue)
         control.setValue(prefValue)
+        if control.value() != prefValue:
+            # A stored value outside the range shows as the nearest bound; make that what OK saves,
+            # so the box never displays a value other than the one in effect afterwards
+            self.assign(prefKey, control.value())
         control.setSingleStep(step)
         control.setGroupSeparatorShown(True)
         control.setAlignment(Qt.AlignmentFlag.AlignRight)

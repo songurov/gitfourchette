@@ -400,3 +400,48 @@ def testThemePickerKeepsTheToolbarsDarkPin(mainWindow):
     assert dlg.prefDiff == {}
     dlg.accept()
     assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark"
+
+
+def testEveryCountIsABoundedSpinBox(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog()
+    controls = {w.objectName().removeprefix(PrefsDialog.ControlQObjectNamePrefix): w
+                for w in dlg.findChildren(QWidget)
+                if w.objectName().startswith(PrefsDialog.ControlQObjectNamePrefix)}
+    intKeys = [key for key in controls if type(getattr(settings.prefs, key)) is int]
+    assert {"maxTrashFiles", "recentCommitMessages", "maxRecentRepos"} <= set(intKeys)
+
+    for key in intKeys:
+        control = controls[key]
+        before = getattr(settings.prefs, key)
+        # Typing a minus sign over the value used to raise ValueError in the text-field version
+        control.setFocus()
+        control.selectAll()
+        QTest.keyClicks(control, "-")
+        assert isinstance(control, QSpinBox), key
+        assert control.minimum() >= 0, key
+        assert control.value() == before, key
+
+    def bounds(key):
+        spinBox: QSpinBox = controls[key]
+        return spinBox.minimum(), spinBox.maximum(), spinBox.specialValueText()
+
+    assert bounds("maxTrashFiles") == (0, 9999, "Off")
+    assert bounds("recentCommitMessages") == (0, 50, "Off")
+    assert bounds("maxRecentRepos") == (1, 50, "")
+
+    dlg.accept()
+    assert settings.prefs.maxTrashFiles == 250
+    assert settings.prefs.recentCommitMessages == 10
+
+    assertTranslatedInForkLanguages("Off", context="a count of zero turns the setting off")
+
+
+def testCountOutsideItsRangeIsSavedAsShown(mainWindow):
+    # 0 recent repositories would erase every repo record on the next save;
+    # the box can't show 0 any more, and what it shows is what OK keeps
+    settings.prefs.maxRecentRepos = 0
+    dlg = GFApplication.instance().openPrefsDialog("maxRecentRepos")
+    spinBox: QSpinBox = dlg.findChild(QSpinBox, "prefctl_maxRecentRepos")
+    assert spinBox.value() == 1
+    dlg.accept()
+    assert settings.prefs.maxRecentRepos == 1

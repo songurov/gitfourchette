@@ -2311,6 +2311,11 @@ msgctxt "syntax highlighting"
 msgid "Off"
 msgstr "Отключена"
 
+#: forms/prefsdialog.py:387 forms/prefsdialog.py:391
+msgctxt "a count of zero turns the setting off"
+msgid "Off"
+msgstr "Отключено"
+
 #: forms/prefsdialog.py:730
 msgid "Red and green"
 msgstr "Красный и зелёный"
