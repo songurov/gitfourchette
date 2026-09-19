@@ -364,3 +364,46 @@ def testNeutralBranchMenuSwitchesBranch(tempDir, mainWindow, neutral):
     triggerMenuAction(menu, "no-parent")
     acceptQMessageBox(rw, "switch to")
     assert "no-parent" == rw.repoModel.homeBranch
+
+
+def testNeutralActivityButtonListsWhatTasksSaid(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    activity = toolbar.repoBox.activityButton
+    QTest.qWait(0)
+    assert activity.isVisible()
+    assert activity.menu() is mainWindow.activityMenu
+
+    mainWindow.fillActivityMenu()
+    [nothing] = mainWindow.activityMenu.actions()
+    assert "No recent activity" == nothing.text()
+    assert not nothing.isEnabled()
+
+    rw1 = mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo1"))
+    rw2 = mainWindow.openRepo(unpackRepo(tempDir, renameTo="repo2"))
+
+    # A task in a tab behind the current one: the box spins all the same
+    rw1.taskRunner.progress.emit("Busy: Fetch remote branches…", True)
+    rw1.taskRunner.progress.emit("Busy: Fetch remote branches…", True)  # back from another thread
+    assert activity.isBusy()
+    rw2.taskRunner.progress.emit("Busy: Push branch…", True)
+    rw1.taskRunner.progress.emit("", False)
+    assert activity.isBusy(), "repo2 is still pushing"
+    rw2.taskRunner.progress.emit("Pushed to origin.", False)
+    assert not activity.isBusy()
+
+    mainWindow.fillActivityMenu()
+    texts = [a.text() for a in mainWindow.activityMenu.actions()]
+    # Newest first, each once, with the repo it's about, after what loading the repos said
+    assert [t.split("  ", 1)[1] for t in texts[:3]] == [
+        "repo2: Pushed to origin.",
+        "repo2: Busy: Push branch…",
+        "repo1: Busy: Fetch remote branches…",
+    ]
+    assert any("commits total" in t for t in texts[3:])
+
+    # Closing a busy tab doesn't leave the box spinning
+    rw1.taskRunner.progress.emit("Busy: Fetch remote branches…", True)
+    assert activity.isBusy()
+    mainWindow.closeTab(mainWindow.tabs.indexOf(rw1))
+    assert not activity.isBusy()
+    QTest.qWait(1)  # let the closed tab go before the fixture changes the theme back

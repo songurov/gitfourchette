@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import collections
 import copy
 import dataclasses
 import gc
@@ -51,6 +52,9 @@ logger = logging.getLogger(__name__)
 
 USERS_GUIDE_URL = "https://gitfourchette.org/guide"
 
+
+MAX_ACTIVITY = 30
+"""How many of the tasks' recent messages the activity button remembers."""
 
 WITHOUT_REPO = {WORKS_WITHOUT_REPO: True}
 """ActionDef properties for a command that works on Home, with no repo open."""
@@ -134,6 +138,14 @@ class MainWindow(QMainWindow):
         self.mainToolBar.setRepoMenu(self.repoMenu2)
 
         self.mainToolBar.stashMenu.aboutToShow.connect(self.fillStashMenu)
+
+        # What the repos' tasks said lately, newest last, for the box's activity button
+        self.activityLog: collections.deque[tuple[QDateTime, str, str]] = collections.deque(maxlen=MAX_ACTIVITY)
+        self.busyWorkdirs: set[str] = set()
+        self.activityMenu = QMenu(self)
+        self.activityMenu.setObjectName("ToolBarActivityMenu")
+        self.activityMenu.aboutToShow.connect(self.fillActivityMenu)
+        self.mainToolBar.repoBox.activityButton.setMenu(self.activityMenu)
 
         self.openInMenu = QMenu(self)
         self.openInMenu.setObjectName("OpenInMenu")
@@ -721,6 +733,30 @@ class MainWindow(QMainWindow):
         menu.clear()
         ActionDef.addToQMenu(menu, *actions)
 
+    def onRepoTaskProgress(self, rw: RepoWidget, text: str, busy: bool) -> None:
+        """Keep what a task says for the activity button, and spin it while any repo is busy."""
+        workdir = rw.workdir
+        if busy:
+            self.busyWorkdirs.add(workdir)
+        else:
+            self.busyWorkdirs.discard(workdir)
+        self.mainToolBar.repoBox.activityButton.setBusy(bool(self.busyWorkdirs))
+
+        # A task that goes back and forth between threads says the same thing each time
+        repoName = settings.history.peekRepoNickname(workdir)
+        if text and not any(e[1:] == (repoName, text) for e in list(self.activityLog)[-1:]):
+            self.activityLog.append((QDateTime.currentDateTime(), repoName, text))
+
+    def fillActivityMenu(self) -> None:
+        actions = []
+        for when, repoName, text in reversed(self.activityLog):
+            time = QLocale().toString(when.time(), QLocale.FormatType.ShortFormat)
+            actions.append(ActionDef(escamp(elide(f"{time}  {repoName}: {text}", ems=50)), tip=text))
+        if not actions:
+            actions.append(ActionDef(_("No recent activity"), enabled=False))
+        self.activityMenu.clear()
+        ActionDef.addToQMenu(self.activityMenu, *actions)
+
     def refreshRepoButton(self) -> None:
         try:
             # Raises for an unloaded stub too, which has read nothing to report
@@ -1233,6 +1269,9 @@ class MainWindow(QMainWindow):
         rw.statusMessage.connect(self.statusBar2.showMessage)
         rw.busyMessage.connect(self.statusBar2.showBusyMessage)
         rw.clearStatus.connect(self.statusBar2.clearMessage)
+
+        rw.taskRunner.progress.connect(lambda text, busy: self.onRepoTaskProgress(rw, text, busy))
+        rw.aboutToDelete.connect(lambda: self.onRepoTaskProgress(rw, "", False))
 
         rw.historyChanged.connect(lambda: self.onRepoHistoryChanged(rw))
         rw.windowTitleChanged.connect(lambda: self.onRepoWindowTitleChanged(rw))

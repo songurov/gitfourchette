@@ -2071,6 +2071,10 @@ msgstr "Боковая панель"
 msgid "Show or hide the sidebar"
 msgstr "Показать или скрыть боковую панель"
 
+#: forms/maintoolbar.py:50
+msgid "Recent activity"
+msgstr "Недавние действия"
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr "Введите несколько букв названия команды, репозитория или рабочего пространства и нажмите Enter"
@@ -3884,6 +3888,10 @@ msgstr "Показать строку состояния"
 #: mainwindow.py:362
 msgid "Show sidebar"
 msgstr "Показать боковую панель"
+
+#: mainwindow.py:714
+msgid "No recent activity"
+msgstr "Нет недавних действий"
 
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"

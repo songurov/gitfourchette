@@ -2104,6 +2104,10 @@ msgstr "Bară laterală"
 msgid "Show or hide the sidebar"
 msgstr "Afișează sau ascunde bara laterală"
 
+#: forms/maintoolbar.py:50
+msgid "Recent activity"
+msgstr "Activitate recentă"
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr "Tastează câteva litere din orice comandă, depozit sau spațiu de lucru și apasă Enter"
@@ -3972,6 +3976,10 @@ msgstr "Afișează bara de stare"
 #: mainwindow.py:362
 msgid "Show sidebar"
 msgstr "Afișează bara laterală"
+
+#: mainwindow.py:714
+msgid "No recent activity"
+msgstr "Nicio activitate recentă"
 
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"

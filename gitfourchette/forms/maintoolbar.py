@@ -34,6 +34,43 @@ class ToolbarArrangement:
     "Icons that this layout draws differently from another one."
 
 
+class ActivityButton(QToolButton):
+    """
+    Bottom left of the box: lists what the app did lately, and spins while it's
+    busy (a fetch, a push, anything that takes a while). MainWindow fills its menu.
+    """
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("GFRepoBoxActivity")
+        self.setAutoRaise(True)
+        self.setIconSize(QSize(16, 16))
+        self.setFixedSize(18, 18)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setToolTip(_("Recent activity"))
+        self.spinnerFrame = 0
+        self.spinnerTimer = QTimer(self)
+        self.spinnerTimer.setInterval(125)
+        self.spinnerTimer.timeout.connect(self.nextSpinnerFrame)
+        self.setBusy(False)
+
+    def isBusy(self) -> bool:
+        return self.spinnerTimer.isActive()
+
+    def setBusy(self, busy: bool):
+        if busy and not self.isBusy():
+            self.spinnerTimer.start()
+            self.nextSpinnerFrame()
+        elif not busy:
+            self.spinnerTimer.stop()
+            self.setIcon(stockIcon("activity"))
+
+    def nextSpinnerFrame(self):
+        self.spinnerFrame = (self.spinnerFrame + 1) % 8
+        self.setIcon(stockIcon(f"busyspinner{1 + self.spinnerFrame}"))
+
+
 class RepoSummaryBox(QFrame):
     """
     The middle of the Centered toolbar: the repo in front of you, in bold, over
@@ -62,8 +99,10 @@ class RepoSummaryBox(QFrame):
         self.branchButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.branchButton.setToolTip(_("Switch to branch"))
 
+        # Not in the layout: it keeps to its corner, and the name and branch stay centered
+        self.activityButton = ActivityButton(self)
+
         layout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self)
-        layout.setContentsMargins(8, 3, 8, 3)
         layout.setSpacing(1)
         layout.addWidget(self.nameLabel)
         layout.addWidget(self.branchButton, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -74,12 +113,17 @@ class RepoSummaryBox(QFrame):
         """Name and branch side by side in compact mode, where the bar is one line high."""
         layout = self.layout()
         assert isinstance(layout, QBoxLayout)
+        activity = self.activityButton
         if compact:
             layout.setDirection(QBoxLayout.Direction.LeftToRight)
+            layout.setContentsMargins(activity.width() + 6, 0, 8, 0)  # the name clears the activity button
             self.setFixedSize(RepoSummaryBox.Width, RepoSummaryBox.CompactHeight)
         else:
             layout.setDirection(QBoxLayout.Direction.TopToBottom)
+            layout.setContentsMargins(8, 3, 8, 3)
             self.setFixedSize(RepoSummaryBox.Width, RepoSummaryBox.Height)
+        # Bottom left, clear of the rounded corner
+        activity.move(4, self.height() - activity.height() - (3 if compact else 4))
 
     def setSummary(self, title: str, branch: str = "", tip: str = ""):
         self.nameLabel.setText(title)

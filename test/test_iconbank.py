@@ -254,7 +254,8 @@ _iconDir = pathlib.Path(__file__).parents[1] / "gitfourchette/assets/icons"
 
 # New icons drawn for the neutral look. Nothing else draws these names.
 NEW_LINE_ICONS = [
-    "ai-sparkle", "close-small", "commit-history", "diff-side-by-side", "doc", "doc-filled", "eye-files",
+    "activity", "ai-sparkle", "close-small", "commit-history", "diff-side-by-side", "doc", "doc-filled",
+    "eye-files",
     "filter", "folder-filled", "git-folder-open", "more-circle", "open-in", "quick-launch",
     "sidebar-all-commits", "sidebar-left", "sidebar-local-changes", "view-list-tree",
 ]
