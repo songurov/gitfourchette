@@ -8528,3 +8528,84 @@ msgstr "Qt bağlayıcısı"
 #: trtables.py:612
 msgid "Load third-party Pygments plugins"
 msgstr "Üçüncü taraf Pygments eklentilerini yükle"
+
+#: diffarea.py:170
+msgid "File display"
+msgstr "Dosya görünümü"
+
+#: diffarea.py:171
+msgid "Show as list or folder tree"
+msgstr "Liste ya da klasör ağacı olarak göster"
+
+#: diffarea.py:244
+msgid "Stage all files"
+msgstr "Tüm dosyaları hazırla"
+
+#: diffarea.py:249
+msgid "Ask AI about the selected files"
+msgstr "Seçili dosyalar hakkında yapay zekâya sor"
+
+#: diffarea.py:322
+msgid "Unstage all files"
+msgstr "Tüm dosyaları hazırlıktan çıkar"
+
+#: diffarea.py:376
+msgid "AI message language"
+msgstr "Yapay zekâ mesajının dili"
+
+#: diffarea.py:388
+msgid "AI message detail"
+msgstr "Yapay zekâ mesajının ayrıntı düzeyi"
+
+#: forms/prefsdialog.py:523
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Click {button} below for more information."
+msgstr ""
+"# Özel terminal komutlarınızı buraya girin.\n"
+"# Daha sonra bunları {menu} menüsünden başlatabilirsiniz.\n"
+"# Daha fazla bilgi için aşağıdaki {button} düğmesine tıklayın."
+
+#: trtables.py:355
+msgctxt "Prefs"
+msgid "Code"
+msgstr "Kod"
+
+#: trtables.py:356
+msgctxt "Prefs"
+msgid "Images"
+msgstr "Görseller"
+
+#: trtables.py:363
+msgctxt "Prefs"
+msgid "Custom Commands"
+msgstr "Özel Komutlar"
+
+#: trtables.py:366
+msgid "Qt style"
+msgstr "Qt stili"
+
+#: trtables.py:411
+msgid "Side-by-side diff"
+msgstr "Yan yana fark"
+
+#: trtables.py:463
+msgid "Ref indicators"
+msgstr "Referans göstergeleri"
+
+#: trtables.py:649
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
+msgstr "Aşağıdaki örneği kopyalayıp metin kutusuna yapıştırabilirsiniz. Ardından Tamam'a tıklayın ve menü çubuğundaki {menu} menüsünü keşfedin."
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: on"
+msgstr "{0}: açık"
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: off"
+msgstr "{0}: kapalı"

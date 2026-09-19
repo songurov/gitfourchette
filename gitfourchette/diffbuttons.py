@@ -19,16 +19,23 @@ class DiffButtons(QWidget):
 
         self.diffMethodActions: dict[WhitespaceMode, QAction] = {}
 
+        # Each button is named after the setting it flips, so that a screen
+        # reader has more to say than "button"; its tooltip adds the state.
         self.contextButton = self._makeContextLinesButton()
         self.wholeFileButton = self._makeToggle("diff-whole-file", "wholeFileDiff")
-        self.wholeFileButton.setToolTip(_("Show the whole file, with the changes marked in place"))
+        self.wholeFileButton.setAccessibleDescription(_("Show the whole file, with the changes marked in place"))
         self.sideBySideButton = self._makeToggle("view-exclusive", "sideBySideDiff")
-        self.sideBySideButton.setToolTip(_("Side-by-side diff"))
         self.wordWrapButton = self._makeToggle("diff-wrap", "wordWrap")
         self.showWhitespaceButton = self._makeToggle("diff-show-whitespace", "showWhitespace")
         self.whitespaceModeButton = self._makeWhitespaceDiffButton()
-        self.svgButton = self._makeToggle("diff-svg", "renderSvg")
-        self.svgButton.setToolTip(_("SVG image preview"))
+        self.svgButton = self._makeToggle("diff-svg", "renderSvg", _("SVG image preview"))
+        self.toggles = [
+            self.wholeFileButton,
+            self.sideBySideButton,
+            self.wordWrapButton,
+            self.showWhitespaceButton,
+            self.svgButton,
+        ]
 
         self.buttons = [
             self.svgButton,
@@ -74,6 +81,7 @@ class DiffButtons(QWidget):
         button.setMenu(menu)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        button.setAccessibleName(trtables.prefKey("whitespaceMode"))
 
         # We'll "press" the button when the whitespace mode is anything but Strict.
         button.setCheckable(True)
@@ -124,7 +132,7 @@ class DiffButtons(QWidget):
         menu.addAction(wholeFileAction)
         menu.aboutToShow.connect(aboutToShowContextLinesMenu)
 
-        button.setToolTip(_("Context lines"))
+        button.setAccessibleName(_("Context lines"))
         button.setMenu(menu)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setText(_("Context"))
@@ -132,13 +140,18 @@ class DiffButtons(QWidget):
 
         return button
 
-    def _makeToggle(self, icon: str, prefKey: str):
+    def _makeToggle(self, icon: str, prefKey: str, name: str = ""):
         button = QToolButton(self)
         button.setCheckable(True)
         button.setIcon(stockIcon(icon))
-        button.setToolTip(trtables.prefKey(prefKey))
+        button.setAccessibleName(name or trtables.prefKey(prefKey))
         button.toggled.connect(lambda checked: GFApplication.applyPrefs(**{prefKey: checked}))
         return button
+
+    @staticmethod
+    def _toggleToolTip(button: QToolButton) -> str:
+        name = button.accessibleName()
+        return _("{0}: on", name) if button.isChecked() else _("{0}: off", name)
 
     # -------------------------------------------------------------------------
     # Sync with preferences
@@ -156,6 +169,11 @@ class DiffButtons(QWidget):
             self.contextButton.setEnabled(not settings.prefs.wholeFileDiff)
             label = "\u221e" if settings.prefs.wholeFileDiff else str(settings.prefs.contextLines)
             self.contextButton.setIcon(stockIcon("diff-context-lines", f"$TEXT$={label}"))
+            if settings.prefs.wholeFileDiff:
+                self.contextButton.setToolTip(trtables.prefKey("wholeFileDiff"))
+            else:
+                self.contextButton.setToolTip(
+                    trtables.prefKey("contextLines").replace("#", str(settings.prefs.contextLines)))
 
             mode = settings.prefs.whitespaceMode
             for m, action in self.diffMethodActions.items():
@@ -170,6 +188,9 @@ class DiffButtons(QWidget):
             self.whitespaceModeButton.setChecked(mode != WhitespaceMode.Strict)
 
             self.svgButton.setChecked(settings.prefs.renderSvg)
+
+            for button in self.toggles:
+                button.setToolTip(self._toggleToolTip(button))
 
     # -------------------------------------------------------------------------
     # Button callbacks

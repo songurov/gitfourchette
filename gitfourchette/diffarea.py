@@ -166,8 +166,9 @@ class DiffArea(QWidget):
     def _makeFileViewButton(self):
         button = QToolButton(self)
         button.setObjectName("fileViewButton")
-        button.setText("☰")
-        button.setToolTip(_("File display"))
+        button.setIcon(stockIcon("view-list-tree"))
+        button.setAccessibleName(_("File display"))
+        button.setToolTip(_("Show as list or folder tree"))
         button.setAutoRaise(True)
         button.setFixedSize(FILEHEADER_HEIGHT, FILEHEADER_HEIGHT)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -241,15 +242,18 @@ class DiffArea(QWidget):
         stageAllButton.setText(_("Stage All"))
         stageAllButton.setIcon(stockIcon("git-stage"))
         stageAllButton.setToolTip(_("Stage all files"))
+        stageAllButton.setAccessibleName(stageAllButton.toolTip())
         worktreeAiButton = QToolButton(self)
         worktreeAiButton.setObjectName("worktreeAiButton")
         worktreeAiButton.setText(_("AI"))
+        worktreeAiButton.setAccessibleName(_("Ask AI about the selected files"))
         worktreeAiButton.setAutoRaise(True)
         stageButton = QToolButton(self)
         stageButton.setObjectName("stageButton")
         stageButton.setText(_("Stage"))
         stageButton.setIcon(stockIcon("git-stage"))
         stageButton.setToolTip(_("Stage selected files"))
+        stageButton.setAccessibleName(stageButton.toolTip())
         appendShortcutToToolTip(stageButton, GlobalShortcuts.stageHotkeys[0])
 
         discardButton = QToolButton(self)
@@ -257,6 +261,7 @@ class DiffArea(QWidget):
         discardButton.setText(_("Discard"))
         discardButton.setIcon(stockIcon("git-discard"))
         discardButton.setToolTip(_("Discard changes in selected files"))
+        discardButton.setAccessibleName(discardButton.toolTip())
         appendShortcutToToolTip(discardButton, GlobalShortcuts.discardHotkeys[0])
 
         container = QWidget(self)
@@ -314,12 +319,14 @@ class DiffArea(QWidget):
         unstageAllButton.setText(_("Unstage All"))
         unstageAllButton.setIcon(stockIcon("git-unstage"))
         unstageAllButton.setToolTip(_("Unstage all files"))
+        unstageAllButton.setAccessibleName(unstageAllButton.toolTip())
 
         unstageButton = QToolButton(self)
         unstageButton.setObjectName("unstageButton")
         unstageButton.setText(_("Unstage"))
         unstageButton.setIcon(stockIcon("git-unstage"))
         unstageButton.setToolTip(_("Unstage selected files"))
+        unstageButton.setAccessibleName(unstageButton.toolTip())
         appendShortcutToToolTip(unstageButton, GlobalShortcuts.discardHotkeys[0])
 
         messageEditor = QPlainTextEdit(self)
@@ -365,6 +372,7 @@ class DiffArea(QWidget):
             "Română", "English", "Русский", "Українська", "Deutsch", "Français", "Español"])
         aiLanguageCombo.setCurrentText(settings.history.aiLanguage)
         aiLanguageCombo.setToolTip(_("Language for the AI-generated commit message"))
+        aiLanguageCombo.setAccessibleName(_("AI message language"))
         aiLanguageCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         aiLanguageCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
@@ -376,6 +384,7 @@ class DiffArea(QWidget):
         detailIndex = aiDetailCombo.findData(settings.history.aiCommitDetail)
         aiDetailCombo.setCurrentIndex(max(0, detailIndex))
         aiDetailCombo.setToolTip(_("Level of detail and structure for the AI-generated commit message"))
+        aiDetailCombo.setAccessibleName(_("AI message detail"))
         aiDetailCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         aiDetailCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
@@ -845,6 +854,14 @@ class DiffArea(QWidget):
             smallButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             smallButton.setAutoRaise(True)
             smallButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+        # Tab goes from pane to pane, past the file headers: the file lists do
+        # their buttons' work from the keyboard (Return, Delete). The diff's
+        # options have no such way in, so Tab stops on them after the diff (on
+        # macOS, with Full Keyboard Access on). A click still leaves the focus
+        # where it was.
+        for button in self.diffButtons.buttons:
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
         for button in self.stageButton, self.unstageButton, self.discardButton:
             button.setEnabled(False)

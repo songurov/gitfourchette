@@ -8547,3 +8547,81 @@ msgstr ""
 #: trtables.py:612
 msgid "Load third-party Pygments plugins"
 msgstr ""
+
+#: diffarea.py:170
+msgid "File display"
+msgstr ""
+
+#: diffarea.py:171
+msgid "Show as list or folder tree"
+msgstr ""
+
+#: diffarea.py:244
+msgid "Stage all files"
+msgstr ""
+
+#: diffarea.py:249
+msgid "Ask AI about the selected files"
+msgstr ""
+
+#: diffarea.py:322
+msgid "Unstage all files"
+msgstr ""
+
+#: diffarea.py:376
+msgid "AI message language"
+msgstr ""
+
+#: diffarea.py:388
+msgid "AI message detail"
+msgstr ""
+
+#: forms/prefsdialog.py:523
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Click {button} below for more information."
+msgstr ""
+
+#: trtables.py:355
+msgctxt "Prefs"
+msgid "Code"
+msgstr ""
+
+#: trtables.py:356
+msgctxt "Prefs"
+msgid "Images"
+msgstr ""
+
+#: trtables.py:363
+msgctxt "Prefs"
+msgid "Custom Commands"
+msgstr ""
+
+#: trtables.py:366
+msgid "Qt style"
+msgstr ""
+
+#: trtables.py:411
+msgid "Side-by-side diff"
+msgstr ""
+
+#: trtables.py:463
+msgid "Ref indicators"
+msgstr ""
+
+#: trtables.py:649
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
+msgstr ""
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: on"
+msgstr ""
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: off"
+msgstr ""

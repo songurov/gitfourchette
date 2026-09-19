@@ -12,6 +12,8 @@ from gitfourchette import settings
 from gitfourchette.diffview.diffview import DiffView
 from gitfourchette.nav import NavLocator
 from gitfourchette.settings import WhitespaceMode
+from gitfourchette.themes import ThemeName, formatStyle
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
 
@@ -1540,3 +1542,92 @@ def testCommitTabShowsNoAvatarWhileAvatarsAreOff(tempDir, mainWindow):
     rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
     assert 'src="avatar"' not in detailView.toHtml()
     assert "A U Thor" in detailView.toPlainText()
+
+
+# -----------------------------------------------------------------------------
+# The buttons around the diff: named, legible, reachable from the keyboard
+
+
+def accessibleNameOf(widget: QWidget) -> str:
+    """What a screen reader calls a widget, by Qt's rule: its accessible name, else its text."""
+    name = widget.accessibleName()
+    if not name and isinstance(widget, QAbstractButton):
+        name = stripAccelerators(widget.text())
+    return name
+
+
+def tabStops(start: QWidget) -> list[QWidget]:
+    """The widgets that Tab visits, in order, going round from `start`."""
+    stops = []
+    widget = start.nextInFocusChain()
+    while widget is not start:
+        if (widget.isVisible() and widget.isEnabled()
+                and widget.focusPolicy().value & Qt.FocusPolicy.TabFocus.value):
+            stops.append(widget)
+        widget = widget.nextInFocusChain()
+    return stops
+
+
+def paintedGlyphSize(button: QToolButton) -> int:
+    """The larger side of what a button paints over its own background, in pixels."""
+    image = button.grab().toImage()
+    ground = image.pixelColor(1, image.height() // 2)
+    xs, ys = [], []
+    for y in range(image.height()):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            if max(abs(color.red() - ground.red()), abs(color.green() - ground.green()),
+                   abs(color.blue() - ground.blue())) > 48:
+                xs.append(x)
+                ys.append(y)
+    return max(max(xs) - min(xs), max(ys) - min(ys)) + 1
+
+
+def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "an edit\n")
+    writeFile(f"{wd}/b/b1.txt", "a staged edit\n")
+    shell("git add b/b1.txt", wd)
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark"))
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    qlvClickNthRow(rw.dirtyFiles, 0)
+    assert rw.diffView.isVisible()
+
+    # Named, so a screen reader has more to say than "button"; not a lone
+    # symbol either, which VoiceOver reads out as the character's name
+    controls = [w for w in area.findChildren(QToolButton) + area.findChildren(QComboBox) if w.isVisible()]
+    assert len(controls) >= 20
+    for control in controls:
+        name = accessibleNameOf(control)
+        assert re.search(r"\w\w", name), f"{control.objectName() or control.toolTip()!r} is named {name!r}"
+
+    buttons = [b for b in area.diffButtons.buttons if b.isVisible()]
+    assert [accessibleNameOf(b) for b in buttons] == [
+        "Context lines", "Show whole file", "Side-by-side diff", "Wrap long lines", "Show whitespace characters",
+        "Whitespace changes"]
+    assert area.commitAiLanguageCombo.accessibleName() == "AI message language"
+    assert area.commitAiDetailCombo.accessibleName() == "AI message detail"
+
+    # A toggle's tooltip says whether it's on
+    assert area.diffButtons.wordWrapButton.toolTip() == "Wrap long lines: off"
+    area.diffButtons.wordWrapButton.click()
+    assert area.diffButtons.wordWrapButton.toolTip() == "Wrap long lines: on"
+    area.diffButtons.wordWrapButton.click()
+    assert area.diffButtons.contextButton.toolTip() == "Show up to 3 context lines"
+
+    # Each icon is drawn at its full 16px: the stylesheet's padding used to
+    # squeeze it into the 8px left inside a 24px button
+    for button in buttons:
+        assert paintedGlyphSize(button) >= 12, accessibleNameOf(button)
+
+    # Tab reaches the diff's options, right after the diff
+    stops = tabStops(rw.graphView)
+    for button in buttons:
+        assert button in stops, accessibleNameOf(button)
+    assert stops.index(rw.diffView) < stops.index(buttons[0])
+
+    assertTranslatedInForkLanguages(
+        "{0}: on", "{0}: off", "Side-by-side diff", "File display", "Show as list or folder tree",
+        "Stage all files", "Unstage all files", "Ask AI about the selected files",
+        "AI message language", "AI message detail")

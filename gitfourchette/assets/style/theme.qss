@@ -587,6 +587,17 @@ QHintButton, ContextHeader QToolButton {
     padding-bottom: 0px;
 }
 
+/* Icon buttons fixed at 24x24: 7px on either side would squeeze their 16px
+   icon into 8px. */
+DiffButtons QToolButton, DiffArea QToolButton#fileViewButton {
+    padding: 0px 3px;
+}
+
+/* Like the diff buttons' menus, no arrow drawn over the icon */
+DiffArea QToolButton#fileViewButton::menu-indicator {
+    image: none;
+}
+
 DiffArea QLabel.panelTitle {
     color: ${textDim};
 }

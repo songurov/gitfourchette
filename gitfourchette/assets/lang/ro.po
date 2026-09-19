@@ -8616,3 +8616,84 @@ msgstr "Binding Qt"
 #: trtables.py:612
 msgid "Load third-party Pygments plugins"
 msgstr "Încarcă plugin-uri Pygments de la terți"
+
+#: diffarea.py:170
+msgid "File display"
+msgstr "Afișarea fișierelor"
+
+#: diffarea.py:171
+msgid "Show as list or folder tree"
+msgstr "Afișează ca listă sau ca arbore de dosare"
+
+#: diffarea.py:244
+msgid "Stage all files"
+msgstr "Pregătește toate fișierele"
+
+#: diffarea.py:249
+msgid "Ask AI about the selected files"
+msgstr "Întreabă AI despre fișierele selectate"
+
+#: diffarea.py:322
+msgid "Unstage all files"
+msgstr "Scoate din pregătire toate fișierele"
+
+#: diffarea.py:376
+msgid "AI message language"
+msgstr "Limba mesajului AI"
+
+#: diffarea.py:388
+msgid "AI message detail"
+msgstr "Nivelul de detaliu al mesajului AI"
+
+#: forms/prefsdialog.py:523
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Click {button} below for more information."
+msgstr ""
+"# Introdu aici comenzi de terminal personalizate.\n"
+"# Le poți lansa apoi din meniul {menu}.\n"
+"# Apasă {button} mai jos pentru mai multe informații."
+
+#: trtables.py:355
+msgctxt "Prefs"
+msgid "Code"
+msgstr "Cod"
+
+#: trtables.py:356
+msgctxt "Prefs"
+msgid "Images"
+msgstr "Imagini"
+
+#: trtables.py:363
+msgctxt "Prefs"
+msgid "Custom Commands"
+msgstr "Comenzi personalizate"
+
+#: trtables.py:366
+msgid "Qt style"
+msgstr "Stil Qt"
+
+#: trtables.py:411
+msgid "Side-by-side diff"
+msgstr "Diff alăturat"
+
+#: trtables.py:463
+msgid "Ref indicators"
+msgstr "Indicatori de referință"
+
+#: trtables.py:649
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
+msgstr "Copiază exemplul de mai jos și lipește-l în caseta de text. Apoi apasă OK și explorează {menu} din bara de meniu."
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: on"
+msgstr "{0}: activat"
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: off"
+msgstr "{0}: dezactivat"

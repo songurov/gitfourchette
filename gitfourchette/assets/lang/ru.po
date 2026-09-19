@@ -8656,3 +8656,84 @@ msgstr "Ответвиться от ветки выпусков, чтобы ис
 #: tasks/taskbook.py:154
 msgid "Branch off the development branch to prepare a release"
 msgstr "Ответвиться от ветки разработки, чтобы подготовить выпуск"
+
+#: diffarea.py:170
+msgid "File display"
+msgstr "Отображение файлов"
+
+#: diffarea.py:171
+msgid "Show as list or folder tree"
+msgstr "Показать списком или деревом папок"
+
+#: diffarea.py:244
+msgid "Stage all files"
+msgstr "Подготовить все файлы"
+
+#: diffarea.py:249
+msgid "Ask AI about the selected files"
+msgstr "Спросить ИИ о выбранных файлах"
+
+#: diffarea.py:322
+msgid "Unstage all files"
+msgstr "Убрать все файлы из подготовленных"
+
+#: diffarea.py:376
+msgid "AI message language"
+msgstr "Язык сообщения ИИ"
+
+#: diffarea.py:388
+msgid "AI message detail"
+msgstr "Подробность сообщения ИИ"
+
+#: forms/prefsdialog.py:523
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Click {button} below for more information."
+msgstr ""
+"# Введите здесь свои команды терминала.\n"
+"# Затем их можно запускать из меню {menu}.\n"
+"# Нажмите {button} ниже, чтобы узнать больше."
+
+#: trtables.py:355
+msgctxt "Prefs"
+msgid "Code"
+msgstr "Код"
+
+#: trtables.py:356
+msgctxt "Prefs"
+msgid "Images"
+msgstr "Изображения"
+
+#: trtables.py:363
+msgctxt "Prefs"
+msgid "Custom Commands"
+msgstr "Пользовательские команды"
+
+#: trtables.py:366
+msgid "Qt style"
+msgstr "Стиль Qt"
+
+#: trtables.py:411
+msgid "Side-by-side diff"
+msgstr "Diff бок о бок"
+
+#: trtables.py:463
+msgid "Ref indicators"
+msgstr "Индикаторы ссылок"
+
+#: trtables.py:649
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
+msgstr "Можете скопировать пример ниже и вставить его в текстовое поле. Затем нажмите OK и загляните в меню {menu}."
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: on"
+msgstr "{0}: вкл."
+
+#: diffbuttons.py:153
+#, python-brace-format
+msgid "{0}: off"
+msgstr "{0}: выкл."
