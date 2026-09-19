@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 _stockIconCache: dict[int, QIcon] = {}
 _stockIconHtmlCache: dict[int, str] = {}
 
+_iconSet = ""
+"""
+Subfolder of assets:icons whose drawings replace the top-level ones of the same
+name, e.g. "neutral" for icons/neutral/git-fetch.svg. Empty: top-level icons only.
+"""
+
 # Override some icon IDs depending on desktop environment
 _overrideIconIds: dict[str, str] = {}
 
@@ -99,13 +105,7 @@ def stockIcon(iconId: str, colorTable="") -> QIcon:
     except KeyError:
         pass
 
-    # Find path to icon file (if any)
-    iconPath = ""
-    for ext in ".svg", ".png":
-        file = QFile(f"assets:icons/{iconId}{ext}")
-        if file.exists():
-            iconPath = file.fileName()
-            break
+    iconPath = stockIconPath(iconId)
 
     # Create QIcon
     if iconPath.endswith(".svg"):
@@ -132,6 +132,28 @@ def stockIcon(iconId: str, colorTable="") -> QIcon:
     # Cache icon
     _stockIconCache[key] = icon
     return icon
+
+
+def stockIconPath(iconId: str) -> str:
+    """
+    Path to our own drawing of an icon, or "" if there's none. The icon set's
+    redraw comes first, if it has one.
+    """
+    folders = [f"{_iconSet}/", ""] if _iconSet else [""]
+    for folder in folders:
+        for ext in ".svg", ".png":
+            file = QFile(f"assets:icons/{folder}{iconId}{ext}")
+            if file.exists():
+                return file.fileName()
+    return ""
+
+
+def setIconSet(name: str):
+    """Prefer the drawings in assets:icons/<name>/ (see _iconSet)."""
+    global _iconSet
+    if name != _iconSet:
+        _iconSet = name
+        clearStockIconCache()
 
 
 def stockIconImgTag(iconId: str, dpr: float = 0) -> str:

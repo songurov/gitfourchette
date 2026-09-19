@@ -684,7 +684,8 @@ class GFApplication(QApplication):
 
         # ----------------------------------------------------------------------
 
-        # Force RecolorSvgIconEngine to re-render the icons
+        # Force RecolorSvgIconEngine to re-render the icons, from the theme's own set if it has one
+        iconbank.setIconSet(customTheme.iconSet if customTheme is not None else "")
         iconbank.clearStockIconCache()
         QPixmapCache.clear()
 

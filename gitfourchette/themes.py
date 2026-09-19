@@ -210,6 +210,9 @@ class ThemeColors:
     tabPillEdge: str = ""
     tabActiveText: str = ""
 
+    iconSet: str = ""
+    "Subfolder of assets:icons whose redraws replace the icons of the same name."
+
     # Code and diffs, with the automatic syntax scheme only: a Pygments preset
     # picked in Settings keeps its own colors. "" keeps the preset's background
     # and mixes added/deleted lines from it.
@@ -493,6 +496,7 @@ NEUTRAL_DARK = ThemeColors(
     tabPill            = "#3e3e3e",
     tabPillEdge        = "#646464",
     tabActiveText      = "#ebebeb",
+    iconSet            = "neutral",
     codeBg             = "#242424",
     diffAdd            = "#2f5138",
     diffDel            = "#5b3737",
@@ -535,6 +539,7 @@ NEUTRAL_LIGHT = ThemeColors(
     tabPill            = "#ffffff",
     tabPillEdge        = "#c8c8c8",
     tabActiveText      = "#1f1f1f",
+    iconSet            = "neutral",
     codeBg             = "#f5f5f5",
     diffAdd            = "#dcf2e0",
     diffDel            = "#fbe1e1",

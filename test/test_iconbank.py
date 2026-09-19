@@ -391,3 +391,23 @@ def testLineIconsKeepTheirShapeAt1x(mainWindow):
         assert alpha(iconId) == leftRight(alpha(iconId)), iconId
     for iconId in ["neutral/chevron-right", "close-small"]:
         assert alpha(iconId) == topBottom(alpha(iconId)), iconId
+
+
+def testThemeIconSetReplacesTheIconsItRedraws(mainWindow):
+    from gitfourchette.themes import ThemeName
+    from gitfourchette.toolbox import iconbank
+    from gitfourchette.toolbox.recolorsvgiconengine import RecolorSvgIconEngine
+
+    assert "/neutral/" not in iconbank.stockIconPath("git-fetch")
+
+    GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark,neutral")
+    try:
+        redraw = iconbank.stockIconPath("git-fetch")
+        assert redraw.endswith("/neutral/git-fetch.svg")
+        assert _rendered(iconbank.stockIcon("git-fetch")) == _rendered(QIcon(RecolorSvgIconEngine(redraw)))
+        # An icon the set doesn't redraw is still found at the top level
+        assert iconbank.stockIconPath("git-branch").endswith("/icons/git-branch.svg")
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+    assert "/neutral/" not in iconbank.stockIconPath("git-fetch")
