@@ -7,7 +7,7 @@
 import pytest
 
 from gitfourchette.forms.commitinfodialog import CommitInfoDialog
-from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS
+from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS, NARROW_WIDTH, XMARGIN
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
 from gitfourchette.repomodel import UC_FAKEID
 from gitfourchette.graphview.graphview import GraphView
@@ -891,9 +891,11 @@ def testGraphFirstLayoutAlignsCommitMessages(tempDir, mainWindow):
 
 def testGraphFirstLayoutMovesHashNextToAuthor(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
-    mainWindow.resize(1000, 600)
+    mainWindow.resize(1400, 600)
     rw = mainWindow.openRepo(wd)
     graphView = rw.graphView
+    # The graph must be roomy enough to keep its hash column, however wide the sidebar is
+    assert graphView.viewport().width() - 2 * XMARGIN > NARROW_WIDTH[1]
 
     hashLefts = []
     delegate = graphView.clDelegate

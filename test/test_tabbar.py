@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+from gitfourchette import settings
 from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.repowidget import RepoWidget
 from gitfourchette.settings import TabBarClick
@@ -112,3 +113,27 @@ def testTabSpecialClick(tempDir, mainWindow, click, action):
             raise NotImplementedError(f"unknown action {action}")
 
     assert tabBar.count() == (0 if action == "close" else 2)
+
+
+def testCloseLastTabAfterResizingWindow(tempDir, mainWindow):
+    # Closing the last tab brings back the home page. If the window was resized
+    # in the meantime, the home mascot renders the welcome text again to plan
+    # its walk. Rendering delivers the pending resize events of every widget in
+    # the window - including those of the closed RepoWidget, which lingers until
+    # its deferred deletion, long after it has let go of its diff gutter.
+    assert settings.prefs.homeMascot
+
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    # Nothing to diff in a clean worktree: the diff view has never been shown or resized
+    assert rw.diffView.testAttribute(Qt.WidgetAttribute.WA_PendingResizeEvent)
+
+    mainWindow.resize(mainWindow.width() + 200, mainWindow.height() + 100)
+    QTest.qWait(0)
+
+    mainWindow.closeCurrentTab()
+    QTest.qWait(0)  # the home page comes back here
+    assert mainWindow.tabs.count() == 0
+
+    errorBoxes = [box.text() for box in mainWindow.findChildren(QMessageBox) if box.isVisible()]
+    assert not errorBoxes, "the closed repo must not raise an exception while the home page comes back"

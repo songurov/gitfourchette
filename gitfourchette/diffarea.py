@@ -108,7 +108,6 @@ class DiffArea(QWidget):
 
         splitter.addWidget(fileStack)
         splitter.addWidget(diffContainer)
-        splitter.setSizes([260, 500])
         splitter.setStretchFactor(0, 0)  # don't auto-stretch file lists when resizing window
         splitter.setStretchFactor(1, 1)
         splitter.setChildrenCollapsible(False)
@@ -139,6 +138,15 @@ class DiffArea(QWidget):
         self.refreshDiffPresentation()
         self.refreshCommitFormPlacement()
         self.refreshFileViewActions()
+
+        # If the commit form sits under the file lists, start out wide enough for
+        # each row of its controls to fit on one line (they wrap onto more lines
+        # if the user narrows the file lists down). Leave room for the commit
+        # button's caption to grow: it counts the staged files once loaded.
+        fileStackWidth = 260
+        if settings.prefs.commitFormPlacement != settings.CommitFormPlacement.BottomBar:
+            fileStackWidth = max(fileStackWidth, fileStack.sizeHint().width() + self.commitButton.sizeHint().width())
+        splitter.setSizes([fileStackWidth, 500])
 
         # Ignore height in size policy to keep DiffArea from jumping around when we're showing a banner.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Ignored)
@@ -431,24 +439,29 @@ class DiffArea(QWidget):
         messageEditor.textChanged.connect(updateSubjectCounter)
         updateSubjectCounter()
 
+        # The controls wrap onto more lines in a narrow panel,
+        # instead of forcing the whole window to be wider.
+        optionsRow = QFlowLayout()
+        optionsRow.setSpacing(4)
+        for widget in stashButton, aiButton, aiLanguageCombo, aiDetailCombo, subjectCounter:
+            optionsRow.addWidget(widget)
+        optionsRow.setAlignment(subjectCounter, Qt.AlignmentFlag.AlignRight)
+
+        actionsRow = QFlowLayout()
+        actionsRow.setSpacing(4)
+        for widget in signoffCheckBox, noVerifyCheckBox, amendCheckBox, commitButton, commitPushButton:
+            actionsRow.addWidget(widget)
+        for widget in commitButton, commitPushButton:
+            actionsRow.setAlignment(widget, Qt.AlignmentFlag.AlignRight)
+
         commitForm = QWidget(self)
         commitForm.setObjectName("commitForm")
-        commitFormLayout = QGridLayout(commitForm)
+        commitFormLayout = QVBoxLayout(commitForm)
         commitFormLayout.setContentsMargins(QMargins())
         commitFormLayout.setSpacing(4)
-        commitFormLayout.addWidget(messageEditor,       0, 0, 1, 9)
-        commitFormLayout.addWidget(stashButton,         1, 0)
-        commitFormLayout.addWidget(aiButton,            1, 1)
-        commitFormLayout.addWidget(aiLanguageCombo,     1, 2)
-        commitFormLayout.addWidget(aiDetailCombo,       1, 3)
-        commitFormLayout.addWidget(subjectCounter,      1, 4, 1, 5)
-        commitFormLayout.addWidget(signoffCheckBox,     2, 0)
-        commitFormLayout.addWidget(noVerifyCheckBox,    2, 1)
-        commitFormLayout.addWidget(amendCheckBox,       2, 2)
-        commitFormLayout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Expanding), 2, 3)
-        commitFormLayout.addWidget(commitButton,        2, 4)
-        commitFormLayout.addWidget(commitPushButton,    2, 5, 1, 2)
-        commitFormLayout.setRowStretch(0, 1)
+        commitFormLayout.addWidget(messageEditor, 1)
+        commitFormLayout.addLayout(optionsRow)
+        commitFormLayout.addLayout(actionsRow)
         commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         stageCommitFormHost = QWidget(self)

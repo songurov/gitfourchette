@@ -41,6 +41,7 @@ from .qcomboboxwithpreview import QComboBoxWithPreview
 from .qelidedlabel import QElidedLabel
 from .qfaintseparator import QFaintSeparator
 from .qfilepickercheckbox import QFilePickerCheckBox
+from .qflowlayout import QFlowLayout
 from .qhintbutton import QHintButton
 from .qprocessconnection import QProcessConnection
 from .qsignalconnectcontext import QSignalConnectContext

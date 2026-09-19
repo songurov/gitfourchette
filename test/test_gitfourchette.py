@@ -1075,6 +1075,72 @@ def testWindowSizeUnaffectedByLongRepoNames(tempDir, mainWindow):
     assert mainWindow.size() == desiredSize
 
 
+def _commitFormControls(rw: RepoWidget) -> list[QWidget]:
+    form = rw.diffArea.commitForm
+    return [widget for widget in form.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly)
+            if widget.isVisibleTo(form) and widget is not rw.diffArea.commitMessageEditor]
+
+
+def _settleLayouts():
+    # A layout that needs more room asks its parent layout, which asks its own
+    # parent on the next pass of the event loop, and so on up the widget tree
+    for _i in range(5):
+        QTest.qWait(0)
+
+
+def _onSameLine(a: QWidget, b: QWidget) -> bool:
+    return a.geometry().top() <= b.geometry().bottom() and b.geometry().top() <= a.geometry().bottom()
+
+
+def testCommitFormWrapsInNarrowWindow(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "changed\n")
+    rw = mainWindow.openRepo(wd)
+    rw.diffArea.dirtyFiles.selectAll()
+    rw.diffArea.dirtyFiles.stage()
+    form = rw.diffArea.commitForm
+    controls = _commitFormControls(rw)
+    assert rw.diffArea.commitPushButton in controls
+
+    # The commit form doesn't force the window to be wide enough for all of its
+    # controls side by side: it only needs room for its widest control.
+    assert form.minimumSizeHint().width() <= max(control.sizeHint().width() for control in controls)
+
+    # In a narrow window, the controls wrap onto more lines, without any of
+    # them overlapping or sticking out of the form.
+    mainWindow.resize(1, 1200)  # as narrow as it gets, but tall enough for all the lines
+    _settleLayouts()
+    assert form.height() >= form.minimumSizeHint().height()
+    assert form.width() < rw.diffArea.signoffCommitCheckBox.width() + rw.diffArea.commitPushButton.width() + rw.diffArea.commitButton.width()
+    assert not _onSameLine(rw.diffArea.signoffCommitCheckBox, rw.diffArea.commitPushButton)
+    for i, control in enumerate(controls):
+        assert form.rect().contains(control.geometry()), f"{control.objectName()} sticks out of the commit form"
+        for other in controls[i + 1:]:
+            assert not control.geometry().intersects(other.geometry()), f"{control.objectName()} overlaps {other.objectName()}"
+
+
+def testCommitFormFitsOnTwoLinesByDefault(tempDir, mainWindow):
+    # Out of the box, the file lists are wide enough for each row of the commit
+    # form's controls to fit on a single line - even once the commit button
+    # counts the staged files.
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "changed\n")
+    writeFile(f"{wd}/b/b1.txt", "changed\n")
+    rw = mainWindow.openRepo(wd)
+    rw.diffArea.dirtyFiles.selectAll()
+    rw.diffArea.dirtyFiles.stage()
+    assert rw.diffArea.commitButton.text() == "Commit 2 files"
+
+    mainWindow.resize(1400, 950)
+    _settleLayouts()
+    diffArea = rw.diffArea
+    firstRow = [diffArea.commitAiButton, diffArea.commitAiLanguageCombo, diffArea.commitAiDetailCombo, diffArea.commitSubjectCounter]
+    secondRow = [diffArea.noVerifyCommitCheckBox, diffArea.amendCommitCheckBox, diffArea.commitButton, diffArea.commitPushButton]
+    assert all(_onSameLine(diffArea.commitAiButton, widget) for widget in firstRow)
+    assert all(_onSameLine(diffArea.signoffCommitCheckBox, widget) for widget in secondRow)
+    assert not _onSameLine(diffArea.commitAiButton, diffArea.signoffCommitCheckBox)
+
+
 def testSshAgentSandboxingMatchesGit(tempDir, mainWindow):
     app = GFApplication.instance()
     app.applyPrefs(ownSshAgent=True)
