@@ -232,3 +232,48 @@ def testNeutralSideBySideFillerRows(tempDir, mainWindow):
         assert NEUTRAL_DARK.diffFiller in backgrounds
     finally:
         GFApplication.applyPrefs(qtStyle="", sideBySideDiff=False)
+
+
+def _toolbarLooks(mainWindow, iconId="git-settings"):
+    from gitfourchette.toolbox import ActionDef
+    toolbar = mainWindow.mainToolBar
+    action = next(a for a in toolbar.actions() if a.property(ActionDef.IconProperty) == iconId)
+    button: QToolButton = toolbar.widgetForAction(action)
+    button.ensurePolished()
+    image = action.icon().pixmap(16, 16).toImage()
+    inked = [image.pixelColor(x, y) for x in range(16) for y in range(16) if image.pixelColor(x, y).alpha() == 255]
+    return {
+        "iconSize": toolbar.iconSize().width(),
+        "labelPoints": button.font().pointSizeF(),
+        "labelColor": button.palette().color(QPalette.ColorRole.ButtonText).name(),
+        "iconColor": inked[0].name() if inked else "",
+        "repoPoints": toolbar.repoButton.font().pointSizeF(),
+    }
+
+
+def testNeutralToolbarHasSmallBrightIconsOverShortDimLabels(mainWindow):
+    from gitfourchette.toolbox.recolorsvgiconengine import RecolorSvgIconEngine
+    appPoints = QApplication.font().pointSizeF()
+
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral", compactUi=False)
+    try:
+        assert _toolbarLooks(mainWindow) == {
+            "iconSize": 16,
+            "labelPoints": appPoints - 2,
+            "labelColor": NEUTRAL_DARK.textDim,
+            "iconColor": NEUTRAL_DARK.toolbarIconColor,
+            "repoPoints": appPoints,  # the repo and branch aren't a label
+        }
+        # The button that shows the theme gets the same bright icon
+        assert _toolbarLooks(mainWindow, "theme-dark")["iconColor"] == NEUTRAL_DARK.toolbarIconColor
+
+        GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark")
+        assert _toolbarLooks(mainWindow) == {
+            "iconSize": 22,
+            "labelPoints": appPoints,
+            "labelColor": MODERN_DARK.text,
+            "iconColor": RecolorSvgIconEngine.IconColors.mainColor.name(),
+            "repoPoints": appPoints,
+        }
+    finally:
+        GFApplication.applyPrefs(qtStyle="")

@@ -25,6 +25,9 @@ class ActionDef:
     SEPARATOR: ClassVar[ActionDef]
     SPACER: ClassVar[ActionDef]
 
+    IconProperty: ClassVar[str] = "stockIcon"
+    """Dynamic property of the QAction that remembers its stockIcon ID, so the icon can be redrawn."""
+
     class Kind(enum.IntEnum):
         Action = enum.auto()
         Section = enum.auto()
@@ -69,6 +72,7 @@ class ActionDef:
 
         if self.icon:
             action.setIcon(stockIcon(self.icon))
+            action.setProperty(ActionDef.IconProperty, self.icon)
 
         if self.checkState != 0:
             action.setCheckable(True)

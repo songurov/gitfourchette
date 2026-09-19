@@ -187,6 +187,10 @@ class ThemeColors:
     toolbarPadding: str = "4px 6px"
     toolbarBorderWidth: int = 1
     "Line under the main toolbar, in pixels."
+    toolbarIconSize: int = 22
+    "Main toolbar icons when the labels show (compact mode has its own size)."
+    toolbarLabelDrop: float = 0
+    "How many points smaller than the rest of the text the main toolbar's labels are."
     pillRadius: int = 7
     "Roundness of the tabs' pills (Neutral only)."
     sidebarRowHeight: str = "1.25em"
@@ -212,6 +216,8 @@ class ThemeColors:
 
     iconSet: str = ""
     "Subfolder of assets:icons whose redraws replace the icons of the same name."
+    toolbarIconColor: str = ""
+    "Main toolbar icons, if not the usual icon color. The labels under them use textDim."
 
     # Code and diffs, with the automatic syntax scheme only: a Pygments preset
     # picked in Settings keeps its own colors. "" keeps the preset's background
@@ -484,6 +490,8 @@ NEUTRAL_DARK = ThemeColors(
     tabPadding         = "4px 12px",
     toolbarPadding     = "2px 8px",
     toolbarBorderWidth = 0,
+    toolbarIconSize    = 16,
+    toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
     fileRowHeight      = "1.4em",
     scrollHandleMargin = "2px",
@@ -497,6 +505,7 @@ NEUTRAL_DARK = ThemeColors(
     tabPillEdge        = "#646464",
     tabActiveText      = "#ebebeb",
     iconSet            = "neutral",
+    toolbarIconColor   = "#e9e9e9",
     codeBg             = "#242424",
     diffAdd            = "#2f5138",
     diffDel            = "#5b3737",
@@ -528,6 +537,8 @@ NEUTRAL_LIGHT = ThemeColors(
     tabPadding         = "4px 12px",
     toolbarPadding     = "2px 8px",
     toolbarBorderWidth = 0,
+    toolbarIconSize    = 16,
+    toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
     fileRowHeight      = "1.4em",
     scrollHandleMargin = "2px",
@@ -540,6 +551,7 @@ NEUTRAL_LIGHT = ThemeColors(
     tabPillEdge        = "#c8c8c8",
     tabActiveText      = "#1f1f1f",
     iconSet            = "neutral",
+    toolbarIconColor   = "#3a3a3a",
     codeBg             = "#f5f5f5",
     diffAdd            = "#dcf2e0",
     diffDel            = "#fbe1e1",

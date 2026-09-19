@@ -715,3 +715,17 @@ ${neutralOnly}QCheckBox::indicator {
 ${neutralOnly}ContextHeader {
     background-color: ${panelHeader};
 }
+
+/* Main toolbar: short dim labels under the icons. The repo and branch in the
+   middle aren't a label, so they keep the normal text color. */
+${neutralOnly}#GFToolbar QToolButton {
+    color: ${textDim};
+}
+
+${neutralOnly}#GFToolbar QToolButton:disabled {
+    color: ${textFaint};
+}
+
+${neutralOnly}#GFToolbar QToolButton#GFToolbarRepoButton {
+    color: ${text};
+}

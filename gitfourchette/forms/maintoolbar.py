@@ -11,6 +11,7 @@ from gitfourchette import tasks
 from gitfourchette.localization import *
 from gitfourchette.qt import *
 from gitfourchette.tasks import TaskBook
+from gitfourchette.themes import activeTheme
 from gitfourchette.toolbox import *
 
 
@@ -36,6 +37,7 @@ class MainToolBar(QToolBar):
 
         self.userCommandActions: list[QAction] = []
         self.darkTheme = False
+        self.iconColorTable = ""
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onCustomContextMenuRequested)
@@ -147,6 +149,7 @@ class MainToolBar(QToolBar):
         assert isinstance(repoButton, QToolButton)
         repoButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        repoButton.setObjectName("GFToolbarRepoButton")
         self.repoButton = repoButton
 
         themeButton = self.widgetForAction(self.themeAction)
@@ -221,23 +224,49 @@ class MainToolBar(QToolBar):
 
     def applyCompact(self, compact: bool):
         """
-        Two shapes for the same bar.
+        Two shapes for the same bar, in the theme's proportions.
 
         Normal stacks a larger icon over its label, which is what a toolbar you
         look at all day wants. Compact drops the labels and shrinks the icons,
         to match the smaller type everywhere else.
+
+        The theme sizes the icons of the normal shape, and may shrink the labels
+        and give the icons a color of their own: Neutral draws small bright
+        icons over short dim labels.
         """
+        theme = activeTheme()
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly if compact
                                 else Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        size = 14 if compact else 22
+        size = 14 if compact else (theme.toolbarIconSize if theme else 22)
         self.setIconSize(QSize(size, size))
         # The middle block keeps its text in both shapes: it's the label, not a button
         self.repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
+        # Each button gets its font directly: under a style sheet, a font set on
+        # the toolbar doesn't reach its buttons. QFont() follows the app's again.
+        labelFont = QFont()
+        pointDrop = theme.toolbarLabelDrop if theme else 0
+        if pointDrop:
+            labelFont = QApplication.font()
+            labelFont.setPointSizeF(max(6.0, labelFont.pointSizeF() - pointDrop))
+
+        iconColor = theme.toolbarIconColor if theme else ""
+        self.iconColorTable = f"gray={iconColor}" if iconColor else ""
+
+        for action in self.actions():
+            button = self.widgetForAction(action)
+            if isinstance(button, QToolButton) and button is not self.repoButton:
+                button.setFont(labelFont)
+            iconId = action.property(ActionDef.IconProperty)
+            if iconId:
+                action.setIcon(stockIcon(iconId, self.iconColorTable))
+
     def setDarkTheme(self, dark: bool):
         """Show which way the theme is set, right on the button."""
         self.darkTheme = dark
-        self.themeAction.setIcon(stockIcon("theme-dark" if dark else "theme-light"))
+        iconId = "theme-dark" if dark else "theme-light"
+        self.themeAction.setProperty(ActionDef.IconProperty, iconId)
+        self.themeAction.setIcon(stockIcon(iconId, self.iconColorTable))
         self.themeAction.setToolTip(_("Dark theme") if dark else _("Light theme"))
 
     def setWorkspaceName(self, name: str):
