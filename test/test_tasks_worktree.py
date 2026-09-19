@@ -457,6 +457,22 @@ def testWorktreesSectionSitsAboveBranches(tempDir, mainWindow):
     assert kinds.index(SidebarItem.WorktreesHeader) < kinds.index(SidebarItem.LocalBranchesHeader)
 
 
+def testWorktreesSectionOpensTheSourceList(tempDir, mainWindow):
+    """In Neutral's source list, Worktrees is the first section, right under the gap."""
+    wd = unpackRepo(tempDir)
+    addWorktree(wd, "sidejob", "-b", "sidejob")
+    GFApplication.applyPrefs(qtStyle="gitfourchette-builtin,dark,neutral")
+    try:
+        rw = mainWindow.openRepo(wd)
+        kinds = [n.kind for n in rw.sidebar.sidebarModel.rootNode.children]
+        assert kinds[:5] == [
+            SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges, SidebarItem.Spacer,
+            SidebarItem.WorktreesHeader, SidebarItem.LocalBranchesHeader]
+        assert kinds.count(SidebarItem.Spacer) == 1
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+
 def testWorktreeNodeTooltipAndIcon(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     worktreePath = addWorktree(wd, "sidejob", "-b", "sidejob")

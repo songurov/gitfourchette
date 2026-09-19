@@ -216,6 +216,13 @@ class ThemeColors:
     tabLabelDrop: float = 0
     "How many points smaller than the rest of the text the repo tabs' names are."
     sidebarRowHeight: str = "1.25em"
+    sidebarSourceList: bool = False
+    """
+    Draw the sidebar like a macOS source list: sections follow one another
+    without a gap, headers are bold at full contrast with a chevron in the
+    margin, rows are indented under their header, the selection is a rounded
+    pill inset from the edges, and the checked-out branch has a check mark.
+    """
     fileRowHeight: str = "1.15em"
     fileIconSize: int = 0
     "Status tiles and folders in the file lists; 0 makes them as tall as a line of text."
@@ -307,6 +314,8 @@ class ThemeColors:
     fusionOnly: str = ""
     # Same idea for rules that only the Neutral variant has.
     neutralOnly: str = ""
+    # And for rules that only apply to a source-list sidebar (see sidebarSourceList).
+    sourceListOnly: str = ""
 
     def __post_init__(self):
         """
@@ -371,6 +380,7 @@ class ThemeColors:
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
+        self.sourceListOnly     = "" if self.sidebarSourceList else "___IGNORE"
         self.menuRadius         = min(maxMenuRadius, self.outerRadius)
         self.comboBoxMenuRadius = min(maxMenuRadius, self.outerRadius)
 
@@ -549,6 +559,7 @@ NEUTRAL_DARK = ThemeColors(
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
+    sidebarSourceList  = True,
     fileRowHeight      = "1.4em",
     fileIconSize       = 14,
     fileTreeIndent     = 16,
@@ -612,6 +623,7 @@ NEUTRAL_LIGHT = ThemeColors(
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
+    sidebarSourceList  = True,
     fileRowHeight      = "1.4em",
     fileIconSize       = 14,
     fileTreeIndent     = 16,

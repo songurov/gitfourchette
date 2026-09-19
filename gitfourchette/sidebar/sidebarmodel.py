@@ -60,22 +60,36 @@ class SidebarItem(enum.IntEnum):
 
 
 class SidebarLayout:
-    RootItems: ClassVar = [
+    NavItems: ClassVar = [
         SidebarItem.WorkdirHeader,
         SidebarItem.UncommittedChanges,
-        SidebarItem.Spacer,
+    ]
+
+    Sections: ClassVar = [
         SidebarItem.WorktreesHeader,
-        SidebarItem.Spacer,
         SidebarItem.LocalBranchesHeader,
-        SidebarItem.Spacer,
         SidebarItem.RemotesHeader,
-        SidebarItem.Spacer,
         SidebarItem.TagsHeader,
-        SidebarItem.Spacer,
         SidebarItem.StashesHeader,
-        SidebarItem.Spacer,
         SidebarItem.SubmodulesHeader,
     ]
+
+    @classmethod
+    def rootItems(cls, sections: list[SidebarItem], sourceList: bool = False) -> list[SidebarItem]:
+        """
+        The top-level rows: the repo and its working directory, then `sections`.
+
+        A spacer sets every section apart. A source list only sets the
+        sections apart from the rows above them, as a group.
+        """
+        items = list(cls.NavItems)
+        if sourceList:
+            items.append(SidebarItem.Spacer)
+            items.extend(sections)
+        else:
+            for section in sections:
+                items.extend([SidebarItem.Spacer, section])
+        return items
 
     ForceExpand: ClassVar = [
         SidebarItem.WorkdirHeader
@@ -95,6 +109,8 @@ class SidebarLayout:
     ])
 
     UnindentItems: ClassVar = {
+        # Leaves line up with their header's text, a level to the left of
+        # where the tree would put them. A source list leaves them indented.
         SidebarItem.LocalBranch: -1,
         SidebarItem.UnbornHead: -1,
         SidebarItem.DetachedHead: -1,
@@ -105,6 +121,12 @@ class SidebarLayout:
         SidebarItem.Remote: -1,
         SidebarItem.RemoteBranch: -1,
         SidebarItem.RefFolder: -1,
+    }
+
+    SourceListIndentItems: ClassVar = {
+        # In a source list, the working directory row sits under the repo's
+        # name like the rows of a section do under their header.
+        SidebarItem.UncommittedChanges: 1,
     }
 
     HideableItems: ClassVar = sorted([
@@ -218,6 +240,9 @@ class SidebarModel(QAbstractItemModel):
     _cachedToolTipIndex: QModelIndex
     _cachedToolTipText: str
 
+    sourceList: bool
+    "Lay out and label the rows for a source-list sidebar (see ThemeColors.sidebarSourceList)."
+
     collapseCacheLayers: list[set[str]]
     """
     Keeps a cache of collapsed nodes.
@@ -256,6 +281,8 @@ class SidebarModel(QAbstractItemModel):
         # Initialize collapse cache with an empty permanent layer
         # (i.e. all items start expanded)
         self.collapseCacheLayers = [set()]
+
+        self.sourceList = False
 
         self.clear()
 
@@ -355,12 +382,11 @@ class SidebarModel(QAbstractItemModel):
         # Set up root nodes
         # -----------------------------
         rootNode = SidebarNode(SidebarItem.Root)
-        rootItems = list(SidebarLayout.RootItems)
+        sections = list(SidebarLayout.Sections)
         if not any(w.name for w in repoModel.worktrees):
             # A repo that doesn't use worktrees shouldn't be told about them.
-            # Drop the header along with the spacer that precedes it.
-            i = rootItems.index(SidebarItem.WorktreesHeader)
-            del rootItems[i - 1: i + 1]
+            sections.remove(SidebarItem.WorktreesHeader)
+        rootItems = SidebarLayout.rootItems(sections, self.sourceList)
         for eitem in rootItems:
             rootNode.appendChild(SidebarNode(eitem))
         uncommittedNode = rootNode.findChild(SidebarItem.UncommittedChanges)
@@ -681,7 +707,9 @@ class SidebarModel(QAbstractItemModel):
                 self.cacheToolTip(index, text)
                 return text
             elif iconKeyRole:
-                return "git-branch" if branchName != self._checkedOut else "git-head"
+                if branchName != self._checkedOut:
+                    return "git-branch"
+                return "check" if self.sourceList else "git-head"
             elif fontRole:
                 if branchName == self._checkedOut:
                     font = QFont(self._parentWidget.font())
@@ -915,7 +943,7 @@ class SidebarModel(QAbstractItemModel):
                 return ""
             elif fontRole:
                 font = self._parentWidget.font()
-                font.setWeight(QFont.Weight.DemiBold)
+                font.setWeight(QFont.Weight.Bold if self.sourceList else QFont.Weight.DemiBold)
                 return font
 
         return None

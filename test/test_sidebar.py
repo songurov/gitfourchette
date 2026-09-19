@@ -9,9 +9,21 @@ import re
 
 from gitfourchette.nav import NavLocator
 from gitfourchette.repomodel import UC_FAKEID
+from gitfourchette.sidebar.sidebardelegate import PADDING, EYE_WIDTH
 from gitfourchette.sidebar.sidebarmodel import SidebarItem, SidebarModel
+from gitfourchette.themes import NEUTRAL_DARK
 from gitfourchette.toolbox import naturalSort
 from .util import *
+
+NEUTRAL_DARK_STYLE = "gitfourchette-builtin,dark,neutral"
+MODERN_DARK_STYLE = "gitfourchette-builtin,dark"
+
+# Neutral's selection pill, measured on Fork: 9 px in from the sidebar's left
+# edge, 11 px from its right edge, with 6 px corners. In the sidebar's
+# viewport, which starts 1 px in from its edge:
+PILL_LEFT = 8
+PILL_RIGHT = 10
+PILL_RADIUS = 6
 
 
 def _summonSearchBar(rw):
@@ -809,3 +821,186 @@ def testRemoteShowsHostingServiceIcon(tempDir, mainWindow):
     shell("git remote set-url origin https://git.example.com/someone/something.git", wd)
     rw.refreshRepo()
     assert remoteIconKey() == "git-remote"
+
+
+@pytest.fixture
+def restoreTheme():
+    """Put the default theme back after a test that picked one."""
+    yield
+    GFApplication.applyPrefs(qtStyle="")
+
+
+def _rootKinds(sb) -> list[SidebarItem]:
+    return [n.kind for n in sb.sidebarModel.rootNode.children]
+
+
+def _contentLeft(sb, node) -> int:
+    """Where a row's icon (or a header's text) starts, from the sidebar's left edge."""
+    rect = sb.visualRect(sb.nodeToFilterIndex(node))
+    return sb.viewport().mapTo(sb, rect.topLeft()).x() + PADDING
+
+
+@pytest.mark.parametrize("live", [False, True])
+def testNeutralSidebarIsASourceList(tempDir, mainWindow, restoreTheme, live):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=MODERN_DARK_STYLE if live else NEUTRAL_DARK_STYLE)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+
+    classicKinds = [
+        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges,
+        SidebarItem.Spacer, SidebarItem.LocalBranchesHeader,
+        SidebarItem.Spacer, SidebarItem.RemotesHeader,
+        SidebarItem.Spacer, SidebarItem.TagsHeader,
+        SidebarItem.Spacer, SidebarItem.StashesHeader,
+        SidebarItem.Spacer, SidebarItem.SubmodulesHeader,
+    ]
+    sourceListKinds = [
+        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges,
+        SidebarItem.Spacer,
+        SidebarItem.LocalBranchesHeader, SidebarItem.RemotesHeader, SidebarItem.TagsHeader,
+        SidebarItem.StashesHeader, SidebarItem.SubmodulesHeader,
+    ]
+
+    def iconKey(ref):
+        return sb.indexForRef(ref).data(SidebarModel.Role.IconKey)
+
+    def headerWeight():
+        node = sb.findNodeByKind(SidebarItem.LocalBranchesHeader)
+        return sb.nodeToFilterIndex(node).data(Qt.ItemDataRole.FontRole).weight()
+
+    if live:
+        # Modern: a gap before every section, the HEAD icon, a deep indentation
+        assert _rootKinds(sb) == classicKinds
+        assert iconKey("refs/heads/master") == "git-head"
+        assert sb.indentation() == 16
+        assert headerWeight() == QFont.Weight.DemiBold
+
+        # Switching themes rebuilds the rows and keeps the selection
+        sb.selectAnyRef("refs/heads/no-parent")
+        GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+        assert sb.selectedNode().data == "refs/heads/no-parent"
+
+    # Neutral: the sections follow one another, set apart from the rows above
+    # them as a group; the checked-out branch has a check mark
+    assert _rootKinds(sb) == sourceListKinds
+    assert iconKey("refs/heads/master") == "check"
+    assert iconKey("refs/heads/no-parent") == "git-branch"
+    assert sb.indentation() == 7
+    assert headerWeight() == QFont.Weight.Bold
+
+    if live:
+        GFApplication.applyPrefs(qtStyle=MODERN_DARK_STYLE)
+        assert _rootKinds(sb) == classicKinds
+        assert iconKey("refs/heads/master") == "git-head"
+        assert sb.indentation() == 16
+        assert sb.selectedNode().data == "refs/heads/no-parent"
+
+
+def testNeutralSidebarIndentsRowsUnderTheirHeader(tempDir, mainWindow, restoreTheme):
+    wd = unpackRepo(tempDir)
+    shell("git branch folder/leaf", wd)
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+
+    # Headers' text 30 px from the edge, leaving room for their chevrons; the
+    # repo's name, which has none, 26. Rows start 7 px further in per level,
+    # the working directory's included.
+    assert _contentLeft(sb, sb.findNodeByKind(SidebarItem.WorkdirHeader)) == 26
+    assert _contentLeft(sb, sb.findNodeByKind(SidebarItem.LocalBranchesHeader)) == 30
+    assert _contentLeft(sb, sb.findNodeByKind(SidebarItem.RemotesHeader)) == 30
+    assert _contentLeft(sb, sb.findNodeByKind(SidebarItem.UncommittedChanges)) == 37
+    assert _contentLeft(sb, sb.findNodeByRef("refs/heads/master")) == 37
+    assert _contentLeft(sb, sb.findNode(lambda n: n.kind == SidebarItem.RefFolder and n.data == "refs/heads/folder")) == 37
+    assert _contentLeft(sb, sb.findNodeByRef("refs/heads/folder/leaf")) == 44
+    assert _contentLeft(sb, sb.findNodeByRef("refs/remotes/origin/master")) == 44
+
+
+def testNeutralSidebarSelectionIsAnInsetPill(tempDir, mainWindow, restoreTheme):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+
+    sb.selectAnyRef("refs/heads/no-parent")
+    row = sb.visualRect(sb.indexForRef("refs/heads/no-parent"))
+    y = row.center().y()
+    right = sb.viewport().width() - 1
+
+    def pixels():
+        image = sb.viewport().grab().toImage()
+        assert image.devicePixelRatio() == 1
+        return lambda x, y: image.pixelColor(x, y).name()
+
+    # Away from the sidebar: the pill is neutral gray, and stops short of both edges
+    rw.graphView.setFocus()
+    px = pixels()
+    assert px(2, y) == NEUTRAL_DARK.bg
+    assert px(PILL_LEFT + PILL_RADIUS, y) == NEUTRAL_DARK.selInactive
+    assert px(right - PILL_RIGHT - PILL_RADIUS, y) == NEUTRAL_DARK.selInactive
+    assert px(right - 2, y) == NEUTRAL_DARK.bg
+    # Its corners are rounded
+    assert px(PILL_LEFT, row.top() + 1) != NEUTRAL_DARK.selInactive
+
+    # With the sidebar focused, it's the accent color
+    sb.setFocus()
+    accent = QApplication.palette().color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight).name()
+    px = pixels()
+    assert px(2, y) == NEUTRAL_DARK.bg
+    assert px(PILL_LEFT + PILL_RADIUS, y) == accent
+
+
+def testNeutralSidebarClickZonesFollowTheDrawing(tempDir, mainWindow, restoreTheme):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+    viewport = sb.viewport()
+
+    # Clicking the chevron drawn in a header's margin collapses the section,
+    # and clicking it again expands it
+    header = sb.findNodeByKind(SidebarItem.LocalBranchesHeader)
+    headerIndex = sb.nodeToFilterIndex(header)
+    row = sb.visualRect(headerIndex)
+    image = viewport.grab().toImage()
+    inked = [QPoint(x, y)
+             for y in range(row.top(), row.bottom() + 1)
+             for x in range(0, row.left() + PADDING)
+             if image.pixelColor(x, y).name() != NEUTRAL_DARK.bg]
+    assert inked, "no chevron in the header's margin"
+    chevron = QRect(min(p.x() for p in inked), min(p.y() for p in inked), 1, 1)
+    chevron.setRight(max(p.x() for p in inked))
+    chevron.setBottom(max(p.y() for p in inked))
+    assert chevron.right() < row.left() + PADDING - 4  # clear of the text
+
+    assert sb.isExpanded(headerIndex)
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=chevron.center())
+    assert not sb.isExpanded(headerIndex)
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=chevron.center())
+    assert sb.isExpanded(headerIndex)
+
+    # Hovering a branch shows its eye inside the pill; clicking the eye hides the branch
+    node = sb.findNodeByRef("refs/heads/no-parent")
+    index = sb.nodeToFilterIndex(node)
+    row = sb.visualRect(index)
+    QTest.mouseMove(viewport, row.center())
+    hover = QHoverEvent(QEvent.Type.HoverMove, QPointF(row.center()), QPointF(row.center()), QPointF(row.center()))
+    QApplication.sendEvent(viewport, hover)
+    image = viewport.grab().toImage()
+    eyeBox = QRect(row.right() - PADDING - EYE_WIDTH, row.top(), EYE_WIDTH, row.height())
+    hoverPill = image.pixelColor(eyeBox.left() - 4, row.center().y()).name()
+    assert hoverPill != NEUTRAL_DARK.bg
+    assert any(image.pixelColor(x, y).name() not in (hoverPill, NEUTRAL_DARK.bg)
+               for x in range(eyeBox.left(), eyeBox.right() + 1)
+               for y in range(eyeBox.top(), eyeBox.bottom() + 1)), "no eye drawn"
+    assert row.right() < viewport.width() - PILL_RIGHT  # inside the pill
+
+    assert not sb.sidebarModel.isExplicitlyHidden(node)
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=eyeBox.center())
+    assert sb.sidebarModel.isExplicitlyHidden(sb.findNodeByRef("refs/heads/no-parent"))
+
+    # Clicking the name selects the branch
+    textPoint = QPoint(row.left() + PADDING + 30, row.center().y())
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=textPoint)
+    assert sb.selectedNode().data == "refs/heads/no-parent"

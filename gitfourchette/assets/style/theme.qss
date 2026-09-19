@@ -815,3 +815,20 @@ ${neutralOnly}DiffArea #fileListHeader QToolButton::menu-indicator {
     image: none;
     width: 0px;
 }
+
+/* --------------------------------------------------------------------------
+ * Source-list sidebar only (see ThemeColors.sidebarSourceList)
+ * ------------------------------------------------------------------------ */
+
+/* SidebarDelegate paints the selection and the hover as a pill inset from the
+   edges. Nothing else may fill the row, the margin left of it included. */
+${sourceListOnly}Sidebar {
+    show-decoration-selected: 0;
+}
+
+${sourceListOnly}Sidebar::item,
+${sourceListOnly}Sidebar::item:hover,
+${sourceListOnly}Sidebar::item:selected,
+${sourceListOnly}Sidebar::item:selected:active {
+    background: transparent;
+}

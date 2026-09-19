@@ -24,6 +24,22 @@ EXPAND_TRIANGLE_WIDTH = 6
 PADDING = 4
 EYE_WIDTH = 16
 
+# Source-list metrics (see ThemeColors.sidebarSourceList), in the proportions
+# of a macOS source list: headers' text 30 px from the sidebar's edge (the
+# repo's name 26), each level's rows 7 px further in, and the selection a 22 px
+# pill that stays about 10 px clear of either edge.
+SOURCE_LIST_INDENT = 7
+SOURCE_LIST_MARGIN = 18
+"Room left of the headers for their chevrons, besides the tree's own indentation."
+SOURCE_LIST_TITLE_SHIFT = 4
+"The repo's name has no chevron to clear: it starts this much left of the headers' text."
+SOURCE_LIST_ICON_GAP = 4
+SOURCE_LIST_CHEVRON_GAP = 21
+"From the left of a chevron's 16 px box to the text or icon it expands."
+PILL_INSET_LEFT = 8
+PILL_INSET_RIGHT = 10
+PILL_RADIUS = 6
+
 
 class SidebarClickZone(enum.IntEnum):
     Invalid = 0
@@ -45,12 +61,26 @@ class SidebarDelegate(QStyledItemDelegate):
         self.sidebar = parent
 
     @staticmethod
-    def unindentRect(item: SidebarItem, rect: QRect, indentation: int):
+    def unindentRect(item: SidebarItem, rect: QRect, indentation: int, sourceList: bool = False):
+        if sourceList:
+            # Rows keep the tree's indentation, past a margin for the headers'
+            # chevrons, and end where the selection pill ends.
+            left = SOURCE_LIST_MARGIN + SidebarLayout.SourceListIndentItems.get(item, 0) * indentation
+            if item == SidebarItem.WorkdirHeader:
+                left -= SOURCE_LIST_TITLE_SHIFT
+            rect.adjust(left, 0, -PILL_INSET_RIGHT, 0)
+            return rect
         if item not in SidebarLayout.UnindentItems:
             return
         unindentLevels = SidebarLayout.UnindentItems[item]
         unindentPixels = unindentLevels * indentation
         return rect.adjust(unindentPixels, 0, 0, 0)
+
+    @staticmethod
+    def pillRect(row: QRect, viewport: QRect) -> QRectF:
+        """Where a source list draws the selection pill of a row, in viewport coordinates."""
+        return QRectF(viewport.left() + PILL_INSET_LEFT, row.top() + 1,
+                      viewport.width() - PILL_INSET_LEFT - PILL_INSET_RIGHT, row.height() - 2)
 
     @staticmethod
     def getClickZone(node: SidebarNode, rect: QRect, x: int):
@@ -72,6 +102,7 @@ class SidebarDelegate(QStyledItemDelegate):
         assert view is option.widget
 
         style: QStyle = view.style()
+        sourceList = view.sourceList
         isActive = bool(option.state & QStyle.StateFlag.State_Active)
         isSelected = bool(option.state & QStyle.StateFlag.State_Selected)
         mouseOver = bool(option.state & QStyle.StateFlag.State_Enabled) and bool(option.state & QStyle.StateFlag.State_MouseOver)
@@ -90,7 +121,16 @@ class SidebarDelegate(QStyledItemDelegate):
 
         painter.save()
 
-        if node.kind == SidebarItem.Spacer:
+        if node.kind == SidebarItem.Spacer and sourceList:
+            # A hairline across the whole sidebar
+            mouseOver = False
+            option.state &= ~QStyle.StateFlag.State_MouseOver
+            lineColor = option.palette.color(colorGroup, QPalette.ColorRole.WindowText)
+            lineColor.setAlpha(38)
+            middle = option.rect.top() + option.rect.height() // 2
+            painter.fillRect(QRect(0, middle, view.viewport().width(), 1), lineColor)
+
+        elif node.kind == SidebarItem.Spacer:
             mouseOver = False
             option.state &= ~QStyle.StateFlag.State_MouseOver
 
@@ -114,46 +154,77 @@ class SidebarDelegate(QStyledItemDelegate):
             painter.restore()
 
         # Unindent rect
-        SidebarDelegate.unindentRect(node.kind, option.rect, view.indentation())
-
-        # Draw expand/collapse triangle.
-        if node.mayHaveChildren() and not node.wantForceExpand():
-            opt2 = QStyleOptionViewItem(option)
-            opt2.rect.adjust(-(EXPAND_TRIANGLE_WIDTH + PADDING), 0, 0, 0)  # args must be integers for pyqt5!
-            opt2.rect.setWidth(EXPAND_TRIANGLE_WIDTH)
-
-            # See QTreeView::drawBranches() in qtreeview.cpp for other interesting states
-            opt2.state &= ~QStyle.StateFlag.State_MouseOver
-            arrowPrimitive = PE_EXPANDED if view.isExpanded(index) else PE_COLLAPSED
-            style.drawPrimitive(arrowPrimitive, opt2, painter, view)
-
-        # Draw control background
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, option.widget)
-
-        # Adjust contents
-        option.rect.adjust(PADDING, 0, -PADDING, 0)
+        SidebarDelegate.unindentRect(node.kind, option.rect, view.indentation(), sourceList)
 
         # Set highlighted text color if this item is selected
         iconMode = QIcon.Mode.Normal
         if isSelected:
             penColor = option.palette.color(colorGroup, QPalette.ColorRole.HighlightedText)
             iconMode = QIcon.Mode.Selected if isActive else QIcon.Mode.SelectedInactive  # type: ignore[attr-defined]
-        elif not node.parent.parent and node.kind != SidebarItem.UncommittedChanges:
+        elif not node.parent.parent and node.kind != SidebarItem.UncommittedChanges and not sourceList:
             penColor = option.palette.color(colorGroup, QPalette.ColorRole.WindowText)
             penColor.setAlphaF(.66)
         else:
             penColor = option.palette.color(colorGroup, QPalette.ColorRole.WindowText)
+
+        if sourceList:
+            # Selection and hover: a rounded pill inset from the edges of the
+            # sidebar, whatever the row's depth. The theme's style sheet leaves
+            # the row itself unfilled.
+            if node.kind != SidebarItem.Spacer and (isSelected or mouseOver):
+                if isSelected:
+                    fill = option.palette.color(colorGroup, QPalette.ColorRole.Highlight)
+                else:
+                    fill = option.palette.color(colorGroup, QPalette.ColorRole.WindowText)
+                    fill.setAlpha(16)
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(fill)
+                painter.drawRoundedRect(SidebarDelegate.pillRect(option.rect, view.viewport().rect()),
+                                        PILL_RADIUS, PILL_RADIUS)
+                painter.restore()
+
+            # Chevron in the margin, pointing down when expanded
+            if node.mayHaveChildren() and not node.wantForceExpand():
+                chevron = "chevron-down" if view.isExpanded(index) else "chevron-right"
+                r = QRect(0, 0, 16, 16)
+                r.moveCenter(option.rect.center())
+                r.moveLeft(option.rect.left() + PADDING - SOURCE_LIST_CHEVRON_GAP)
+                stockIcon(chevron).paint(painter, r, mode=iconMode)
+
+        else:
+            # Draw expand/collapse triangle.
+            if node.mayHaveChildren() and not node.wantForceExpand():
+                opt2 = QStyleOptionViewItem(option)
+                opt2.rect.adjust(-(EXPAND_TRIANGLE_WIDTH + PADDING), 0, 0, 0)  # args must be integers for pyqt5!
+                opt2.rect.setWidth(EXPAND_TRIANGLE_WIDTH)
+
+                # See QTreeView::drawBranches() in qtreeview.cpp for other interesting states
+                opt2.state &= ~QStyle.StateFlag.State_MouseOver
+                arrowPrimitive = PE_EXPANDED if view.isExpanded(index) else PE_COLLAPSED
+                style.drawPrimitive(arrowPrimitive, opt2, painter, view)
+
+            # Draw control background
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, option.widget)
+
+        # Adjust contents
+        option.rect.adjust(PADDING, 0, -PADDING, 0)
+
         painter.setPen(penColor)
 
         # Draw decoration icon
         iconWidth = option.decorationSize.width()
         iconKey = index.data(SidebarModel.Role.IconKey)
         if iconKey:
+            if sourceList and iconKey == "git-folder" and view.isExpanded(index):
+                iconKey = "git-folder-open"
             r = QRect(option.rect)
             r.setWidth(iconWidth)
             icon = stockIcon(iconKey)
             icon.paint(painter, r, option.decorationAlignment, mode=iconMode)
-            option.rect.adjust(r.width() + PADDING*150//100, 0, 0, 0)
+            iconGap = SOURCE_LIST_ICON_GAP if sourceList else PADDING*150//100
+            option.rect.adjust(r.width() + iconGap, 0, 0, 0)
 
         # Prepare text
         textRect = QRect(option.rect)

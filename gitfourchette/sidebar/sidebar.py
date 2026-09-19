@@ -21,12 +21,13 @@ from gitfourchette.porcelain import Oid, RefPrefix, Repo, WorktreeInfo
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEREF
 from gitfourchette.repoprefs import RefSort
-from gitfourchette.sidebar.sidebardelegate import SidebarDelegate, SidebarClickZone
+from gitfourchette.sidebar.sidebardelegate import SidebarDelegate, SidebarClickZone, SOURCE_LIST_INDENT
 from gitfourchette.sidebar.sidebarfilter import SidebarFilter
 from gitfourchette.sidebar.sidebarmodel import SidebarModel, SidebarNode, SidebarItem
 from gitfourchette.sidebar.sidebarsearch import SidebarSearch
 from gitfourchette.tasks import *
 from gitfourchette.tasks import gitflowtasks
+from gitfourchette.themes import activeTheme
 from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost, identifyHost
 
@@ -46,6 +47,8 @@ class Sidebar(QTreeView):
     filterModel: SidebarFilter
     selectionBackup: SidebarNode | None
     mousePressCache: tuple[int, SidebarClickZone]
+    sourceList: bool
+    "Drawn as a source list, as the theme asks (see ThemeColors.sidebarSourceList)."
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -56,6 +59,7 @@ class Sidebar(QTreeView):
         self.setAcceptDrops(True)
         self.branchDragStart = None
         self.setMinimumWidth(128)
+        self.sourceList = False
         self.setIndentation(16)
         self.setHeaderHidden(True)
         self.setUniformRowHeights(True)  # large sidebars update twice as fast with this, but we can't have thinner spacers
@@ -126,7 +130,7 @@ class Sidebar(QTreeView):
 
         if index.isValid():
             node = self.filterIndexToNode(index)
-            SidebarDelegate.unindentRect(node.kind, vr, self.indentation())
+            SidebarDelegate.unindentRect(node.kind, vr, self.indentation(), self.sourceList)
 
         return vr
 
@@ -714,6 +718,27 @@ class Sidebar(QTreeView):
     def refreshPrefs(self):
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         self.setAnimated(settings.prefs.animations)
+
+        theme = activeTheme()
+        self.setSourceList(theme is not None and theme.sidebarSourceList)
+
+    def setSourceList(self, sourceList: bool):
+        """
+        Lay the sidebar out as a source list, or as a plain tree. Switching
+        themes switches it live: the rows are rebuilt, and the selection kept.
+        """
+        if sourceList == self.sourceList:
+            return
+
+        self.sourceList = sourceList
+        self.sidebarModel.sourceList = sourceList
+        self.setIndentation(SOURCE_LIST_INDENT if sourceList else 16)
+
+        repoModel = self.sidebarModel.repoModel
+        if repoModel is not None:
+            self.backUpSelection()
+            self.refresh(repoModel)
+            self.restoreSelectionBackup()
 
     def repaintUncommittedChanges(self):
         index = self.indexForRef(UC_FAKEREF)
