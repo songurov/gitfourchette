@@ -44,6 +44,34 @@ class ThemeAccent(enum.StrEnum):
     Purple = "#b875dc"
 
 
+def parseStyle(styleName: str) -> tuple[str, str, str]:
+    """
+    Split a Prefs.qtStyle string into (engine, mode, accent).
+
+    The engine is "" (system default), ThemeName.BuiltIn or a Qt style name.
+    Only the built-in theme has a mode ("light", "dark", or "" to follow the
+    system) and an accent ("#rrggbb", or "" for the system's accent), e.g.
+    "gitfourchette-builtin,dark,#e93d58". When a token repeats, the last one wins.
+
+    Every reader and writer of qtStyle goes through this pair, so a value
+    written in one place reads back the same everywhere else.
+    """
+    tokens = [t for t in styleName.split(",") if t]
+    if not tokens:
+        return "", "", ""
+    engine, rest = tokens[0], tokens[1:]
+    modes = [t for t in rest if t in ("light", "dark")]
+    accents = [t for t in rest if t.startswith("#")]
+    return engine, (modes[-1] if modes else ""), (accents[-1] if accents else "")
+
+
+def formatStyle(engine: str, mode: str = "", accent: str = "") -> str:
+    """The Prefs.qtStyle string for parseStyle's parts; the inverse of parseStyle."""
+    if engine != ThemeName.BuiltIn:
+        return engine
+    return ",".join(t for t in (engine, mode, accent) if t)
+
+
 def isDarkStyle(styleName: str) -> bool:
     """
     Whether this style string asks for a dark palette.
@@ -51,11 +79,9 @@ def isDarkStyle(styleName: str) -> bool:
     A built-in theme carries its mode as a token ("gitfourchette-builtin,dark").
     Without one, or with any other Qt style, the system decides.
     """
-    tokens = styleName.split(",")
-    if "dark" in tokens[1:]:
-        return True
-    if "light" in tokens[1:]:
-        return False
+    _engine, mode, _accent = parseStyle(styleName)
+    if mode:
+        return mode == "dark"
     try:
         return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
     except AttributeError:  # pragma: no cover - Qt < 6.5
@@ -89,13 +115,12 @@ def withThemeMode(styleName: str, dark: bool) -> str:
     "make it dark" when the current style has no say in the matter.
     """
     mode = "dark" if dark else "light"
-    tokens = [t for t in styleName.split(",") if t]
+    engine, _mode, accent = parseStyle(styleName)
 
-    if not tokens or tokens[0] != ThemeName.BuiltIn:
-        return f"{ThemeName.BuiltIn},{mode}"
+    if engine != ThemeName.BuiltIn:
+        return formatStyle(ThemeName.BuiltIn, mode)
 
-    kept = [t for t in tokens[1:] if t not in ("light", "dark")]
-    return ",".join([ThemeName.BuiltIn, mode, *kept])
+    return formatStyle(engine, mode, accent)
 
 
 @dataclasses.dataclass
@@ -195,23 +220,14 @@ class ThemeColors:
         Omit lightOrDark and/or #accentHex to infer colors from system palette.
         """
 
-        tokens = styleName.split(",")
+        engine, _mode, accentToken = parseStyle(styleName)
 
-        if tokens.pop(0) != ThemeName.BuiltIn:
+        if engine != ThemeName.BuiltIn:
             return None
 
-        try:
-            appScheme = QGuiApplication.styleHints().colorScheme()
-            dark = appScheme == Qt.ColorScheme.Dark
-        except AttributeError:  # Qt < 6.5
-            dark = False
-
-        while tokens:
-            token = tokens.pop(0)
-            if token in ("light", "dark"):
-                dark = token == "dark"
-            elif token.startswith("#"):
-                accent = QColor(token)
+        dark = isDarkStyle(styleName)
+        if accentToken:
+            accent = QColor(accentToken)
 
         theme = MODERN_DARK if dark else MODERN_LIGHT
         if accent is not None:

@@ -337,3 +337,66 @@ def testDensityRowUsesTheToolbarWords(mainWindow):
         GFApplication.applyPrefs(compactUi=False)
 
     assertTranslatedInForkLanguages("Density", "Smaller text and icon-only toolbar buttons")
+
+
+def _themeStrings():
+    """Every qtStyle string the app writes for the built-in theme: the toolbar's
+    light/dark switch (withThemeMode) and the Settings variant picker."""
+    from gitfourchette.themes import ThemeName, ThemeAccent, withThemeMode
+    written = {str(ThemeName.BuiltIn)}  # "System colors"
+    for engine in ["", "Fusion", ThemeName.BuiltIn]:
+        for mode in ["", "light", "dark"]:
+            for accent in ["", *ThemeAccent]:
+                styleName = ",".join(t for t in [engine, mode, accent] if t)
+                for dark in [False, True]:
+                    written.add(withThemeMode(styleName, dark))
+    return sorted(written)
+
+
+def testThemeStringsRoundTripThroughOneParser():
+    from gitfourchette.themes import ThemeName, formatStyle, parseStyle, withThemeMode
+
+    strings = _themeStrings()
+    assert f"{ThemeName.BuiltIn},dark" in strings  # the toolbar's own value
+    for styleName in strings:
+        assert formatStyle(*parseStyle(styleName)) == styleName
+
+    # Token order and repeats don't matter; the last one wins, as when resolving a theme
+    assert parseStyle(f"{ThemeName.BuiltIn},#e93d58,light,dark") == (ThemeName.BuiltIn, "dark", "#e93d58")
+    assert withThemeMode(f"{ThemeName.BuiltIn},#e93d58,light", True) == f"{ThemeName.BuiltIn},dark,#e93d58"
+    assert parseStyle("Fusion") == ("Fusion", "", "")
+    assert parseStyle("") == ("", "", "")
+
+
+def testThemePickerShowsEveryThemeTheAppWrites(mainWindow):
+    for styleName in _themeStrings():
+        settings.prefs.qtStyle = styleName
+
+        dlg = GFApplication.instance().openPrefsDialog("qtStyle")
+        group: QWidget = dlg.findChild(QWidget, "prefctl_qtStyle")
+        stylePicker, variantPicker = group.findChildren(QComboBox)
+        assert variantPicker.isVisible()
+        assert variantPicker.currentData() == styleName
+
+        # Picking the style that's already there changes nothing
+        stylePicker.activated.emit(stylePicker.currentIndex())
+        variantPicker.activated.emit(variantPicker.currentIndex())
+        assert dlg.prefDiff == {}, styleName
+        dlg.reject()
+
+
+def testThemePickerKeepsTheToolbarsDarkPin(mainWindow):
+    from gitfourchette.themes import ThemeName
+
+    mainWindow.onSetDarkTheme(True)  # the toolbar's Theme > Dark
+    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark"
+
+    dlg = GFApplication.instance().openPrefsDialog("qtStyle")
+    group: QWidget = dlg.findChild(QWidget, "prefctl_qtStyle")
+    stylePicker, variantPicker = group.findChildren(QComboBox)
+    assert variantPicker.currentText() == "Dark"
+
+    stylePicker.activated.emit(stylePicker.currentIndex())
+    assert dlg.prefDiff == {}
+    dlg.accept()
+    assert settings.prefs.qtStyle == f"{ThemeName.BuiltIn},dark"

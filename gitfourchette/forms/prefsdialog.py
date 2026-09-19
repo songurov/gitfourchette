@@ -17,7 +17,7 @@ from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.settings import SHORT_DATE_PRESETS, prefs
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
-from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent
+from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent, formatStyle, parseStyle
 from gitfourchette.toolbox import *
 
 logger = logging.getLogger(__name__)
@@ -594,7 +594,7 @@ class PrefsDialog(QDialog):
         return control
 
     def qtStyleControl(self, prefKey, prefValue):
-        currentStyleName = prefValue.split(",", 1)[0]
+        currentStyleName, _mode, _accent = parseStyle(prefValue)
         control = QComboBox(self)
         variantPicker = self._customThemeVariantPickerControl(prefValue)
 
@@ -624,6 +624,8 @@ class PrefsDialog(QDialog):
                 newValue = accentName
             else:
                 variantPicker.setVisible(False)
+            if parseStyle(newValue) == parseStyle(prefValue):
+                newValue = prefValue  # Same theme, however it was spelled: nothing changes
             self.assign(prefKey, newValue)
 
         control.activated.connect(onPickStyle)
@@ -642,22 +644,32 @@ class PrefsDialog(QDialog):
         picker.setIconSize(QSize(16, 16))
         enforceComboBoxMaxVisibleItems(picker, 32)
 
-        picker.addItem(stockIcon("light-dark-toggle"), _("System colors"), str(ThemeName.BuiltIn))
+        # Compare parsed values, so that any spelling of the current theme finds its item
+        currentVariant = parseStyle(prefValue)
+
+        def addVariant(icon: QIcon, caption: str, mode: str = "", accent: str = ""):
+            value = formatStyle(ThemeName.BuiltIn, mode, accent)
+            picker.addItem(icon, caption, value)
+            if parseStyle(value) == currentVariant:
+                picker.setCurrentIndex(picker.count() - 1)
+
+        addVariant(stockIcon("light-dark-toggle"), _("System colors"))
 
         for dark in [False, True]:
             picker.insertSeparator(picker.count())
 
-            themePrefix = ThemeName.BuiltIn + "," + ("dark" if dark else "light")
-            theme = ThemeColors.resolveTheme(themePrefix)
+            mode = "dark" if dark else "light"
+            theme = ThemeColors.resolveTheme(formatStyle(ThemeName.BuiltIn, mode))
+
+            # Light or dark with the system's accent: what the toolbar's Theme menu picks
+            modeCaption = stripAccelerators(_("&Dark") if dark else _("&Light"))
+            addVariant(stockIcon(f"theme-{mode}"), modeCaption, mode)
 
             for accent in ThemeAccent:
                 icon = stockIcon("theme-chip", f"white={theme.bg} black={theme.text} blue={accent}")
-                caption = _("Dark {color}") if "dark" in themePrefix else _( "Light {color}")
+                caption = _("Dark {color}") if dark else _( "Light {color}")
                 caption = caption.format(color=trtables.enum(accent))
-                value = themePrefix + "," + accent
-                picker.addItem(icon, caption, value)
-                if value == prefValue:
-                    picker.setCurrentIndex(picker.count() - 1)
+                addVariant(icon, caption, mode, accent)
 
         return picker
 
