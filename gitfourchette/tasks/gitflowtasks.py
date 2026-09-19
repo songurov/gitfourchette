@@ -354,7 +354,10 @@ def finishActionName(kind: GitFlowKind, name: str, quote=lquoe) -> str:
 
 class GitFlowFinish(GitFlowTask):
     """
-    Merge a Git Flow branch where it belongs, then delete it.
+    Merge a Git Flow branch where it belongs, then delete it. A release or
+    hotfix is merged into the production branch, tagged there with its
+    version (annotated tag), and the tag is merged back into the development
+    branch.
 
     Every step is skipped when it's found done already, so after stopping on
     a conflict, running this again once the merge is committed does only what
@@ -389,7 +392,16 @@ class GitFlowFinish(GitFlowTask):
         # Checks, before anything changes
 
         self.requireLocalBranch(branch)
-        base = repo.gitflow_branch_base(branch) or cfg.develop
+        if kind == GitFlowKind.FEATURE:
+            base = repo.gitflow_branch_base(branch) or cfg.develop
+        else:
+            expectedBase = cfg.master if kind == GitFlowKind.HOTFIX else cfg.develop
+            base = repo.gitflow_branch_base(branch) or expectedBase
+            if base != expectedBase:
+                # e.g. a hotfix off a support branch: git-flow merges it elsewhere
+                raise AbortTask(paragraphs(
+                    _("{0} was started from {1}, not from {2}.", bquo(branch), bquo(base), bquo(expectedBase)),
+                    _("Use the git-flow command line tools to finish it.")))
         targets = cfg.finish_targets(kind, base)
         for target in targets:
             self.requireLocalBranch(target)
@@ -404,15 +416,63 @@ class GitFlowFinish(GitFlowTask):
         firstTarget = targets[0]
         lastTarget = targets[-1]
 
+        tag = ""
+        tagExists = False
+        if kind != GitFlowKind.FEATURE:
+            masterTip = self.tip(cfg.master)
+            inMaster = repo.is_ancestor(branchTip, masterTip)
+            tag = cfg.tag_name(name)
+            tagExists = RefPrefix.TAGS + tag in repo.references
+
+            if kind == GitFlowKind.HOTFIX:
+                if repo.merge_base(branchTip, masterTip) is None:
+                    raise AbortTask(_("{0} has no common ancestor with {1}.", bquo(branch), bquo(cfg.master)))
+                if inMaster and not tagExists and repo.gitflow_merge_commit(branchTip, masterTip) == branchTip:
+                    # Finishing would only put a version tag on an old commit
+                    raise AbortTask(paragraphs(
+                        _("{0} has no commits of its own.", bquo(branch)),
+                        _("Commit the fix on it first.")))
+
+            # An existing tag must be the one finishing makes: on the merge of this very tip.
+            # (Or, if the branch reached the production branch without a merge, on the tip itself.)
+            if tagExists and not (
+                    repo.gitflow_tag_merges(tag, branchTip)
+                    or (inMaster and repo.commit_id_from_tag_name(tag) == repo.gitflow_merge_commit(branchTip, masterTip))):
+                raise AbortTask(paragraphs(
+                    _("Tag {0} already exists and doesn’t point to a merge of {1}.", bquo(tag), bquo(branch)),
+                    _("Delete or rename that tag, then try again.")))
+
         # --------------------------------------------------------------------
         # Ask
 
         deleteCheckBox = QCheckBox(_("Delete local branch {0} afterwards", lquoe(branch)))
         deleteCheckBox.setChecked(True)
-        yield from self.flowConfirm(
-            text=_("Merge {0} into {1}?", bquo(branch), bquo(firstTarget)),
-            verb=_("Finish"),
-            checkbox=deleteCheckBox)
+        tagMessage = ""
+
+        if kind == GitFlowKind.FEATURE:
+            yield from self.flowConfirm(
+                text=_("Merge {0} into {1}?", bquo(branch), bquo(firstTarget)),
+                verb=_("Finish"),
+                checkbox=deleteCheckBox)
+        else:
+            subtitle = _("{0} will be merged into {1}, tagged {2}, and merged back into {3}.",
+                         tquo(branch), tquo(cfg.master), tquo(tag), tquo(cfg.develop))
+            if tagExists:
+                subtitle += " " + _("Tag {0} already exists and will be kept.", tquo(tag))
+            dlg = TextInputDialog(self.parentWidget(), self.name(), _("Message for tag {0}:", tquo(tag)),
+                                  subtitle=subtitle, multilineSubtitle=True)
+            dlg.setExtraWidget(deleteCheckBox)
+            if tagExists:
+                dlg.setText(repo.get_tag_message(tag))
+                dlg.lineEdit.setEnabled(False)
+            else:
+                dlg.setText(tag)  # git-flow's default message
+                dlg.setValidator(lambda text: "" if text.strip() else _("Enter a message."))
+            dlg.okButton.setText(_("Finish"))
+            yield from self.flowDialog(dlg)
+            tagMessage = dlg.lineEdit.text()
+            dlg.deleteLater()
+
         deleteBranch = deleteCheckBox.isChecked()
 
         if deleteBranch:
@@ -426,6 +486,23 @@ class GitFlowFinish(GitFlowTask):
         if not repo.is_ancestor(branchTip, self.tip(firstTarget)):
             yield from self.flowMerge(branch, firstTarget, finishName)
             self.doneSteps.append(_("merged into {0}", bquo(firstTarget)))
+
+        tagCreated = False
+        if kind != GitFlowKind.FEATURE:
+            # Tag the merge, unless the tag is there already (vetted above).
+            # Not the production branch's tip: after picking up from a conflict,
+            # it may have moved on from the merge.
+            if not tagExists:
+                mergeCommit = repo.gitflow_merge_commit(branchTip, self.tip(cfg.master))
+                self.epilog.effects |= TaskEffects.Refs
+                yield from self.flowGit("tag", "--annotate", f"--message={tagMessage}", "--", tag, str(mergeCommit))
+                self.doneSteps.append(_("tagged {0}", bquo(tag)))
+                tagCreated = True
+
+            # Merge the tag (not the branch) back, so that 'git describe' on develop knows the version
+            if not repo.is_ancestor(repo.commit_id_from_tag_name(tag), self.tip(cfg.develop)):
+                yield from self.flowMerge(tag, cfg.develop, finishName)
+                self.doneSteps.append(_("merged back into {0}", bquo(cfg.develop)))
 
         # --------------------------------------------------------------------
         # Delete the local branch (never the remote one)
@@ -465,6 +542,8 @@ class GitFlowFinish(GitFlowTask):
         self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head | TaskEffects.Workdir
         self.epilog.jumpTo = NavLocator.inRef(RefPrefix.HEADS + lastTarget)
         status = [_("{0} finished.", tquo(branch))]
+        if tagCreated:
+            status.append(_("Tag {0} created.", tquo(tag)))
         if remoteStillThere:
             status.append(_("{0} is still on {1}.", tquo(branch), tquo(origin)))
         self.epilog.status = " ".join(status)
@@ -472,6 +551,14 @@ class GitFlowFinish(GitFlowTask):
 
 class GitFlowFinishFeature(GitFlowFinish):
     kind = GitFlowKind.FEATURE
+
+
+class GitFlowFinishRelease(GitFlowFinish):
+    kind = GitFlowKind.RELEASE
+
+
+class GitFlowFinishHotfix(GitFlowFinish):
+    kind = GitFlowKind.HOTFIX
 
 
 START_TASKS: dict[GitFlowKind, type[GitFlowStart]] = {
@@ -482,4 +569,6 @@ START_TASKS: dict[GitFlowKind, type[GitFlowStart]] = {
 
 FINISH_TASKS: dict[GitFlowKind, type[GitFlowFinish]] = {
     GitFlowKind.FEATURE: GitFlowFinishFeature,
+    GitFlowKind.RELEASE: GitFlowFinishRelease,
+    GitFlowKind.HOTFIX: GitFlowFinishHotfix,
 }

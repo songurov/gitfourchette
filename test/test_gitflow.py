@@ -1082,3 +1082,393 @@ def testStartAndFinishRefusedDuringRebase(tempDir, mainWindow):
     tasks.GitFlowFinishFeature.invoke(rw, "feature/x")
     acceptQMessageBox(rw, "a rebase is in progress.+conclude or abort it")
     assert rw.repo.state() == RepositoryState.REBASE_INTERACTIVE  # what libgit2 calls git's default rebase
+
+
+# -----------------------------------------------------------------------------
+# Finish release / hotfix
+
+def makeRelease(wd: str, version: str = "1.0", kind: str = "release", base: str = "develop"):
+    """A release (or hotfix) branch with a version bump of its own, checked out."""
+    shell(f"""
+        git checkout -q -b {kind}/{version} {base}
+        echo {version} > VERSION
+        git add VERSION
+        git commit -q -m 'Bump version to {version}'
+        git config gitflow.branch.{kind}/{version}.base {base}
+    """, wd)
+
+
+def finishDialog(rw, kind: str = "release") -> TextInputDialog:
+    return findQDialog(rw, f"finish {kind}", TextInputDialog)
+
+
+def deleteCheckBoxOf(dlg: TextInputDialog) -> QCheckBox:
+    return dlg.findChild(QCheckBox)
+
+
+def tagNames(repo: Repo) -> list[str]:
+    return sorted(repo.listall_tags())
+
+
+def testFinishRelease(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    releaseTip = repo.branches.local["release/1.0"].target
+    tagsBefore = tagNames(repo)
+
+    assert "Finish Release “1.0”…" in flowMenuTitles(mainWindow)
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    findChildWithText(dlg, r"release/1\.0. will be merged into .master., tagged .1\.0., and merged back into .develop.", QLabel)
+    findChildWithText(dlg, r"message for tag .1\.0.:", QLabel)
+    assert dlg.lineEdit.text() == "1.0"  # git-flow's default message
+    assert deleteCheckBoxOf(dlg).text() == "Delete local branch “release/1.0” afterwards"
+    assert deleteCheckBoxOf(dlg).isChecked()
+    dlg.lineEdit.setText("")
+    assert not dlg.okButton.isEnabled()
+    dlg.lineEdit.setText("Release 1.0: faster checkout")
+    clickOk(dlg, dlg.buttonBox)
+
+    # Merged into master, with a merge commit
+    masterMerge = repo.peel_commit(repo.branches.local["master"].target)
+    assert masterMerge.parent_ids[1] == releaseTip
+
+    # Tagged there, with an annotated tag
+    tagObject = repo[repo.references["refs/tags/1.0"].target]
+    assert isinstance(tagObject, Tag)
+    assert tagObject.message == "Release 1.0: faster checkout\n"
+    assert tagObject.peel(Commit).id == masterMerge.id
+    assert tagNames(repo) == sorted(tagsBefore + ["1.0"])
+
+    # The tag merged back into develop
+    developMerge = repo.peel_commit(repo.branches.local["develop"].target)
+    assert developMerge.parent_ids[1] == masterMerge.id
+    assert developMerge.message.startswith("Merge tag '1.0' into develop")
+
+    assert "release/1.0" not in repo.branches.local
+    assert repo.head_branch_shorthand == "develop"
+    assert re.search(r"release/1\.0.+finished.+tag .1\.0. created", mainWindow.statusBar().currentMessage(), re.IGNORECASE)
+
+
+def testFinishReleaseVersionTagPrefix(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git config gitflow.prefix.versiontag v", wd)
+    makeRelease(wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    assert dlg.lineEdit.text() == "v1.0"
+    clickOk(dlg, dlg.buttonBox)
+
+    assert "v1.0" in rw.repo.listall_tags()
+    assert "1.0" not in rw.repo.listall_tags()
+    assert rw.repo.gitflow_tag_merges("v1.0", rw.repo.peel_commit(rw.repo.branches.local["master"].target).parent_ids[1])
+
+
+def testFinishHotfix(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git checkout -q develop && git commit -q --allow-empty -m 'next release work'", wd)
+    makeRelease(wd, "0.9.1", kind="hotfix", base="master")
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    hotfixTip = repo.branches.local["hotfix/0.9.1"].target
+
+    finishFromSidebar(rw, "hotfix/0.9.1", "finish hotfix .0.9.1.")
+    dlg = finishDialog(rw, "hotfix")
+    clickOk(dlg, dlg.buttonBox)
+
+    masterMerge = repo.peel_commit(repo.branches.local["master"].target)
+    assert masterMerge.parent_ids[1] == hotfixTip
+    assert repo.commit_id_from_tag_name("0.9.1") == masterMerge.id
+    assert repo.get_tag_message("0.9.1") == "0.9.1"
+    developMerge = repo.peel_commit(repo.branches.local["develop"].target)
+    assert developMerge.parent_ids[1] == masterMerge.id
+    assert "hotfix/0.9.1" not in repo.branches.local
+    assert repo.head_branch_shorthand == "develop"
+
+
+def testFinishReleaseConflictOnMasterThenResume(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    shell("""
+        git checkout -q master
+        echo 'hotfixed on master' > VERSION
+        git add VERSION
+        git commit -q -m 'hotfix straight on master'
+        git checkout -q release/1.0
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    masterMergesBefore = countMerges(repo, "master")
+    developMergesBefore = countMerges(repo, "develop")
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+    qmb = findQMessageBox(rw, r"merging .release/1\.0. into .master. caused conflicts.+finish release .1\.0.… again")
+    assert "already done" not in qmb.text().lower()  # nothing was done before that
+    qmb.accept()
+    assert repo.state() == RepositoryState.MERGE
+    assert "1.0" not in repo.listall_tags()
+
+    shell("git checkout --theirs VERSION && git add VERSION && git commit -q --no-edit", wd)
+    rw.refreshRepo()
+    assert repo.head_branch_shorthand == "master"
+
+    # Picks up with the tag and the back-merge only
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    assert dlg.lineEdit.isEnabled()  # no tag yet
+    clickOk(dlg, dlg.buttonBox)
+
+    assert countMerges(repo, "master") == masterMergesBefore + 1
+    assert countMerges(repo, "develop") == developMergesBefore + 1
+    assert repo.commit_id_from_tag_name("1.0") == repo.branches.local["master"].target
+    assert "release/1.0" not in repo.branches.local
+
+
+def makeReleaseThatConflictsOnBackmerge(wd: str):
+    makeRelease(wd)
+    shell("""
+        git checkout -q develop
+        echo 'develop moved on' > VERSION
+        git add VERSION
+        git commit -q -m 'develop changes VERSION too'
+        git checkout -q release/1.0
+    """, wd)
+
+
+def testFinishReleaseConflictOnBackmergeThenResume(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeReleaseThatConflictsOnBackmerge(wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    masterMergesBefore = countMerges(repo, "master")
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    dlg.lineEdit.setText("Release 1.0")
+    clickOk(dlg, dlg.buttonBox)
+
+    acceptQMessageBox(rw, r"merging .1\.0. into .develop. caused conflicts.+"
+                          r"already done: merged into .master., tagged .1\.0.\.")
+    assert repo.state() == RepositoryState.MERGE
+    assert repo.head_branch_shorthand == "develop"
+    assert rw.repoModel.prefs.draftCommitMessage.startswith("Merge tag '1.0' into develop")
+    tagTarget = repo.commit_id_from_tag_name("1.0")
+
+    shell("git checkout --theirs VERSION && git add VERSION && git commit -q --no-edit", wd)
+    rw.refreshRepo()
+
+    # The back-merge is committed: HEAD merges the tag, so Finish is offered again
+    assert "Finish Release “1.0”…" in flowMenuTitles(mainWindow)
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    assert not dlg.lineEdit.isEnabled()
+    assert dlg.lineEdit.text() == "Release 1.0"
+    findChildWithText(dlg, r"tag .1\.0. already exists and will be kept", QLabel)
+    clickOk(dlg, dlg.buttonBox)
+
+    assert countMerges(repo, "master") == masterMergesBefore + 1
+    assert repo.commit_id_from_tag_name("1.0") == tagTarget
+    assert "release/1.0" not in repo.branches.local
+    assert repo.head_branch_shorthand == "develop"
+
+
+def testFinishReleaseCheckoutFailureMidwayReportsDoneSteps(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    shell("""
+        git checkout -q develop
+        echo tracked > blocker.txt
+        git add blocker.txt
+        git commit -q -m 'blocker on develop'
+        git checkout -q release/1.0
+    """, wd)
+    writeFile(f"{wd}blocker.txt", "untracked here\n")
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    masterMergesBefore = countMerges(repo, "master")
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+    acceptQMessageBox(rw, r"already done: merged into .master., tagged .1\.0.\..+untracked working tree files would be overwritten")
+    assert countMerges(repo, "master") == masterMergesBefore + 1
+    assert "release/1.0" in repo.branches.local
+
+    os.unlink(f"{wd}blocker.txt")
+    rw.refreshRepo()
+    finishFromSidebar(rw, "release/1.0", "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+
+    assert countMerges(repo, "master") == masterMergesBefore + 1  # merged into master once in all
+    assert repo.is_ancestor(repo.commit_id_from_tag_name("1.0"), repo.branches.local["develop"].target)
+    assert "release/1.0" not in repo.branches.local
+
+
+def testFinishReleaseTagClash(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    shell("git tag 1.0 master~1", wd)
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    acceptQMessageBox(rw, r"tag .1\.0. already exists and doesn.t point to a merge of .release/1\.0.+delete or rename that tag")
+    assert refsSnapshot(rw.repo) == refsBefore
+    assert rw.repo.head_branch_shorthand == "release/1.0"
+
+
+def testFinishReleaseTagsTheMergeNotMastersTip(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    shell("""
+        git checkout -q master
+        echo 'hotfixed on master' > VERSION
+        git add VERSION
+        git commit -q -m 'hotfix straight on master'
+        git checkout -q release/1.0
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+    acceptQMessageBox(rw, "caused conflicts")
+    shell("""
+        git checkout --theirs VERSION && git add VERSION && git commit -q --no-edit
+        git commit -q --allow-empty -m 'something else on master, after the merge'
+    """, wd)
+    rw.refreshRepo()
+    mergeCommit = repo.peel_commit(repo.branches.local["master"].target).parent_ids[0]
+
+    finishFromSidebar(rw, "release/1.0", "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+
+    assert repo.commit_id_from_tag_name("1.0") == mergeCommit
+    assert repo.gitflow_tag_merges("1.0", repo.peel_commit(mergeCommit).parent_ids[1])
+    assert "release/1.0" not in repo.branches.local
+
+
+def testFinishReleaseAlreadyInMasterIsNotLockedOutByItsOwnTag(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    shell("git checkout -q master && git merge -q --ff-only release/1.0 && git checkout -q release/1.0", wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+    releaseTip = repo.branches.local["release/1.0"].target
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    deleteCheckBoxOf(dlg).setChecked(False)
+    clickOk(dlg, dlg.buttonBox)
+    assert repo.commit_id_from_tag_name("1.0") == releaseTip  # no merge commit to tag: the tip itself
+    assert repo.branches.local["master"].target == releaseTip
+    assert "release/1.0" in repo.branches.local
+
+    finishFromSidebar(rw, "release/1.0", "finish release .1.0.")
+    dlg = finishDialog(rw)
+    assert not dlg.lineEdit.isEnabled()
+    deleteCheckBoxOf(dlg).setChecked(False)
+    clickOk(dlg, dlg.buttonBox)
+    assert re.search(r"nothing left to do: .release/1\.0. is already finished",
+                     mainWindow.statusBar().currentMessage(), re.IGNORECASE)
+
+
+def testFinishReleaseNewCommitAfterTagIsRefused(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeReleaseThatConflictsOnBackmerge(wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+    acceptQMessageBox(rw, "caused conflicts")
+    rw.mergeBanner.buttons[-1].click()
+    acceptQMessageBox(rw, "abort.+merge")
+    assert rw.repo.state() == RepositoryState.NONE
+
+    # The tag was made for the release as it was then: don't tag or merge a newer state under that version
+    shell("git checkout -q release/1.0 && git commit -q --allow-empty -m 'one more fix'", wd)
+    rw.refreshRepo()
+    refsBefore = refsSnapshot(rw.repo)
+    finishFromSidebar(rw, "release/1.0", "finish release .1.0.")
+    acceptQMessageBox(rw, r"tag .1\.0. already exists and doesn.t point to a merge of .release/1\.0.")
+    assert refsSnapshot(rw.repo) == refsBefore
+
+
+def testFinishHotfixWithoutCommitsRefused(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch hotfix/0.9.1 master && git config gitflow.branch.hotfix/0.9.1.base master", wd)
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "hotfix/0.9.1", "finish hotfix .0.9.1.")
+    acceptQMessageBox(rw, r"hotfix/0\.9\.1. has no commits of its own.+commit the fix on it first")
+    assert refsSnapshot(rw.repo) == refsBefore
+    assert "0.9.1" not in rw.repo.listall_tags()
+
+
+def testFinishHotfixWithoutCommonAncestorRefused(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("""
+        git checkout -q --orphan hotfix/0.9.1
+        git commit -q --allow-empty -m 'unrelated history'
+        git checkout -q master
+    """, wd)
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    finishFromSidebar(rw, "hotfix/0.9.1", "finish hotfix .0.9.1.")
+    acceptQMessageBox(rw, r"hotfix/0\.9\.1. has no common ancestor with .master.")
+    assert refsSnapshot(rw.repo) == refsBefore
+
+
+def testFinishReleaseKeepBranchThenFinishAgain(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    makeRelease(wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    dlg = finishDialog(rw)
+    deleteCheckBoxOf(dlg).setChecked(False)
+    clickOk(dlg, dlg.buttonBox)
+    assert "release/1.0" in repo.branches.local
+    assert repo.gitflow_branch_base("release/1.0") == "develop"
+    refsAfterFirstRun = refsSnapshot(repo)
+
+    finishFromSidebar(rw, "release/1.0", "finish release .1.0.")
+    clickOk(finishDialog(rw), finishDialog(rw).buttonBox)
+
+    # Only the branch went: no new merge, no new tag
+    del refsAfterFirstRun["refs/heads/release/1.0"]
+    assert refsSnapshot(repo) == refsAfterFirstRun
+    assert repo.gitflow_branch_base("release/1.0") == ""
+
+
+def testFinishReleaseStartedFromOtherBase(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch support/1.x master", wd)
+    makeRelease(wd, base="support/1.x")
+    rw = mainWindow.openRepo(wd)
+    refsBefore = refsSnapshot(rw.repo)
+
+    triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
+    acceptQMessageBox(rw, r"release/1\.0. was started from .support/1\.x., not from .develop.+git-flow command line tools")
+    assert refsSnapshot(rw.repo) == refsBefore

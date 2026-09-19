@@ -932,8 +932,14 @@ class RepoWidget(QWidget):
             classified = cfg.classify(branch)
             if not classified or classified[0] in found or classified[0] not in gitflowtasks.FINISH_TASKS:
                 continue
+            kind, name = classified
             if repo.branches.local[branch].target == mergedIn[0]:
-                found[classified[0]] = (branch, classified[1])
+                found[kind] = (branch, name)
+            elif kind != GitFlowKind.FEATURE:
+                # A release or hotfix is merged back into develop through its version tag
+                with suppress(KeyError):
+                    if repo.commit_id_from_tag_name(cfg.tag_name(name)) == mergedIn[0]:
+                        found[kind] = (branch, name)
 
         return found
 

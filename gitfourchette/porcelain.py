@@ -58,6 +58,7 @@ from pygit2 import (
     Stash,
     StashApplyCallbacks,
     Submodule,
+    Tag,
     Tree,
     Walker,
 
@@ -1323,6 +1324,12 @@ class Repo(_VanillaRepository):
     def commit_id_from_tag_name(self, tagname: str) -> Oid:
         assert not tagname.startswith("refs/")
         return self.commit_id_from_refname(RefPrefix.TAGS + tagname)
+
+    def get_tag_message(self, tagname: str) -> str:
+        """Message of an annotated tag. Empty for a lightweight tag."""
+        assert not tagname.startswith("refs/")
+        tag_object = self[self.references[RefPrefix.TAGS + tagname].target]
+        return tag_object.message.strip() if isinstance(tag_object, Tag) else ""
 
     def map_refs_to_ids(self, include_stashes=False) -> dict[str, Oid]:
         """

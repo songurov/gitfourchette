@@ -118,6 +118,8 @@ from gitfourchette.tasks.worktreetasks import (
 
 from gitfourchette.tasks.gitflowtasks import (
     GitFlowFinishFeature,
+    GitFlowFinishHotfix,
+    GitFlowFinishRelease,
     GitFlowInit,
     GitFlowStartFeature,
     GitFlowStartHotfix,
