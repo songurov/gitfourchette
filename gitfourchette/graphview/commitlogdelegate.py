@@ -112,6 +112,29 @@ is clipped instead of pushing commit messages off the screen."""
 
 NARROW_WIDTH = (500, 750)
 
+MESSAGE_MEASURE_CHARS = 96
+"""With metadataNearMessage, the furthest past the graph (in hash characters)
+that author, hash and date may start."""
+
+TOP_ROWS_IN_FULL = 50
+"""With metadataNearMessage, author, hash and date start past the whole of
+this many rows at the top of the history (what the window opens on)..."""
+
+TOP_ROWS_SHARE = .98
+"""...and past this share of the rows below, down to TOP_OF_HISTORY. The
+rare longer subject is elided rather than pushing them all away."""
+
+MESSAGE_GUTTER_CHARS = 3
+"""With metadataNearMessage, the widest row stops this far (in hash characters)
+short of the author, so that it doesn't read as running into it."""
+
+MESSAGE_FLOOR_CHARS = 40
+"""Ref chips give way before a commit message shrinks to fewer characters than this."""
+
+TOP_OF_HISTORY = 500
+"""How many commits from the top of the history size the author column and
+the room for the messages."""
+
 AHEAD_SPACING = 4
 """Room between a branch's name and its count of commits to push."""
 
@@ -185,10 +208,13 @@ class CommitLogDelegate(QStyledItemDelegate):
         self.infoSearch = infoSearch
 
         self.mustRefreshMetrics = True
+        self.mustMeasureTopOfHistory = True
         self.hashCharWidth = 0
+        self.messageWidth = 0
         self.dateMaxWidth = 0
         self.authorMaxWidth = 0
         self.hashColumnWidth = 0
+        self.unpushedMarkWidth = 0
         self.graphColumns = MIN_GRAPH_COLUMNS
         self.activeCommitFont = QFont()
         self.uncommittedFont = QFont()
@@ -215,7 +241,13 @@ class CommitLogDelegate(QStyledItemDelegate):
 
     def invalidateMetrics(self):
         self.mustRefreshMetrics = True
+        self.mustMeasureTopOfHistory = True
+        self.messageWidth = 0
         self.graphColumns = MIN_GRAPH_COLUMNS
+
+    def invalidateTopOfHistory(self):
+        """Commits or refs have changed at the top of the history: measure its rows again."""
+        self.mustMeasureTopOfHistory = True
 
     def refreshMetrics(self, option: QStyleOptionViewItem):
         if not self.mustRefreshMetrics:
@@ -236,18 +268,87 @@ class CommitLogDelegate(QStyledItemDelegate):
         self.homeRefboxFont = QFont(self.refboxFont)
         self.homeRefboxFont.setWeight(QFont.Weight.Bold)
 
-        wideDate = QDateTime.fromString("2999-12-25T23:59:59.999", Qt.DateFormat.ISODate)
-        dateText = option.locale.toString(wideDate, settings.prefs.shortTimeFormat)
-        if settings.prefs.authorDiffAsterisk:
-            dateText += "*"
-        self.dateMaxWidth = QFontMetrics(option.font).horizontalAdvance(dateText + " ")
-        self.dateMaxWidth = int(self.dateMaxWidth)  # make sure it's an int for pyqt5 compat
+        metrics = QFontMetrics(option.font)
 
-        self.authorMaxWidth = self.hashCharWidth * MAX_AUTHOR_CHARS.get(settings.prefs.authorDisplayStyle, 16)
+        # As wide as the widest date the format makes
+        dateTexts = [formatShortDate(date, settings.prefs.shortTimeFormat, option.locale) for date in self.sampleDates()]
+        dateMaxWidth = max(metrics.horizontalAdvance(text) for text in dateTexts)
+        if settings.prefs.authorDiffAsterisk:
+            dateMaxWidth += metrics.horizontalAdvance("*")
+        self.dateMaxWidth = int(dateMaxWidth + metrics.horizontalAdvance(" "))  # make sure it's an int for pyqt5 compat
+
+        # The hash, after a slot for the arrow that marks a commit that isn't on any remote yet
+        self.unpushedMarkWidth = metrics.horizontalAdvance(SYMBOL_AHEAD) + 2
+        self.hashColumnWidth = self.unpushedMarkWidth + self.hashCharWidth * settings.prefs.shortHashChars + XSPACING
+
+    def measureTopOfHistory(self, option: QStyleOptionViewItem):
+        """
+        Size the author column and the room for the messages to the rows at
+        the top of the history. Measured again whenever commits or refs change
+        there, not only when settings change.
+        """
+        if not self.mustMeasureTopOfHistory:
+            return
+
+        self.mustMeasureTopOfHistory = False
+        commits = [commit for commit in self.repoModel.commitSequence[:TOP_OF_HISTORY]
+                   if commit.id != UC_FAKEID and hasattr(commit, "author")]
+
+        # As wide as the widest author, up to a cap (FittedText condenses the rare longer name)
+        metrics = QFontMetrics(option.font)
+        style = settings.prefs.authorDisplayStyle
+        authorCap = self.hashCharWidth * MAX_AUTHOR_CHARS.get(style, 16)
+        authorWidths = [metrics.horizontalAdvance(abbreviatePerson(commit.author, style) + "*")
+                        for commit in commits]
+        self.authorMaxWidth = min(authorCap, max(authorWidths, default=authorCap)) + XSPACING
         if settings.prefs.showAvatars:
             self.authorMaxWidth += AVATAR_SIZE + AVATAR_SPACING
 
-        self.hashColumnWidth = self.hashCharWidth * settings.prefs.shortHashChars + XSPACING
+        # Room for the messages, ref chips included: the whole of the rows the
+        # window opens on, and nearly all of the rows below. It only ever grows
+        # (until the settings change), so author, hash and date don't move back
+        # and forth as commits come in.
+        regular, bold = QFontMetrics(option.font), QFontMetrics(self.activeCommitFont)
+        rowWidths = [self.naturalRowWidth(commit, bold if self.isBold(commit.id) else regular, option.rect.height())
+                     for commit in commits]
+        ranked = sorted(rowWidths)
+        typical = ranked[min(len(ranked) - 1, int(len(ranked) * TOP_ROWS_SHARE))] if ranked else 0
+        widest = max(max(rowWidths[:TOP_ROWS_IN_FULL], default=0), typical) + self.hashCharWidth * MESSAGE_GUTTER_CHARS
+        widest = max(self.hashCharWidth * MESSAGE_FLOOR_CHARS, min(self.hashCharWidth * MESSAGE_MEASURE_CHARS, widest))
+        self.messageWidth = max(self.messageWidth, widest)
+
+    def naturalRowWidth(self, commit: Commit, metrics: QFontMetrics, rowHeight: int) -> int:
+        """How wide a commit's ref chips and message are, when nothing cuts them short."""
+        summary, _contd = messageSummary(commit.message, "")
+        width = metrics.horizontalAdvance(summary)
+        refs = self.repoModel.refsAt.get(commit.id, None)
+        if refs:
+            probe = QRect(0, 0, 1 << 20, rowHeight)
+            for refName, kwargs in self._refChips(refs):
+                self._paintRefbox(None, probe, refName, dryRun=True, **kwargs)
+            width += probe.left()
+        return width
+
+    @staticmethod
+    def sampleDates() -> list[QDateTime]:
+        """Dates whose formatted text is as wide as any the date column may show."""
+        now = QDateTime.currentDateTime()
+        year = now.date().year()
+        late = QTime(23, 59, 59)
+        if settings.prefs.shortTimeFormat == COMPACT_DATE_FORMAT:
+            # Today, every month of this year (their names differ in width), and another year
+            return ([QDateTime(now.date(), late)]
+                    + [QDateTime(QDate(year, month, 28), late) for month in range(1, 13)]
+                    + [QDateTime(QDate(2999, 12, 28), late)])
+        return [QDateTime(QDate(2999, 12, 25), late)]
+
+    def messageMeasure(self) -> int:
+        """Width from the left of a row to where the author column starts, with metadataNearMessage."""
+        if self.hashOnTheRight():
+            lead = graphColumnWidth(self.graphColumns) + XSPACING
+        else:
+            lead = self.hashColumnWidth + graphColumnWidth(self.graphColumns)
+        return lead + (self.messageWidth or self.hashCharWidth * MESSAGE_MEASURE_CHARS)
 
     # --------------------------------------------------------------------------
     # Qt callbacks
@@ -314,6 +415,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Get metrics of '0' before setting a custom font,
         # so that alignments are consistent in all commits regardless of bold or italic.
         self.refreshMetrics(option)
+        self.measureTopOfHistory(option)
 
         # Get the commit
         # special: SpecialRow = index.data(CommitLogModel.Role.SpecialRow)
@@ -340,10 +442,15 @@ class CommitLogDelegate(QStyledItemDelegate):
         elif fullWidth <= NARROW_WIDTH[1]:
             authorWidth = int(lerp(authorWidth/2, authorWidth, rect.width(), NARROW_WIDTH[0], NARROW_WIDTH[1]))
             hashWidth = 0  # the hash is the first thing to go in a cramped window
-        leftBoundDate = rect.right() - dateWidth
+        # Author, hash and date: at the right edge, or, in a wide window, a
+        # set distance past the graph, so a row reads in one sweep
+        rightBound = rect.right()
+        metaWidth = authorWidth + hashWidth + dateWidth
+        if settings.prefs.metadataNearMessage and metaWidth:
+            rightBound = min(rightBound, rect.left() + self.messageMeasure() + metaWidth)
+        leftBoundDate = rightBound - dateWidth
         leftBoundHash = leftBoundDate - hashWidth
         leftBoundName = leftBoundHash - authorWidth
-        rightBound = rect.right()
         tabBound = leftBoundName
 
         # Reserve rightmost column
@@ -355,7 +462,9 @@ class CommitLogDelegate(QStyledItemDelegate):
         if not self.hashOnTheRight():
             painter.save()
             painter.setPen(metaColor)
-            self._paintHash(painter, rect, oid)
+            unpushedMark = self._paintHash(painter, rect, oid, starColor)
+            if unpushedMark is not None:
+                self.newToolTipZone(CommitToolTipZone(unpushedMark.left(), unpushedMark.right(), "unpushed"))
             painter.restore()
 
         # Private
@@ -396,10 +505,11 @@ class CommitLogDelegate(QStyledItemDelegate):
             self._paintAuthor(painter, rect, commit, faded)
 
         # Hash
+        unpushedMark = None
         if hashWidth != 0 and commit:
             rect.setLeft(leftBoundHash)
             rect.setRight(leftBoundDate - XMARGIN)
-            self._paintHash(painter, rect, oid)
+            unpushedMark = self._paintHash(painter, rect, oid, starColor)
 
         # Date
         if dateWidth != 0 and commit:
@@ -412,6 +522,8 @@ class CommitLogDelegate(QStyledItemDelegate):
             self.newToolTipZone(CommitToolTipZone(leftBoundName, rightBound, "author"))
         if dateWidth != 0:
             self.newToolTipZone(CommitToolTipZone(leftBoundDate, rightBound, "date"))
+        if unpushedMark is not None:
+            self.newToolTipZone(CommitToolTipZone(unpushedMark.left(), unpushedMark.right(), "unpushed"))
 
         # Tooltip metrics
         # Block model signals to update it - otherwise QComboBox will constantly redraw itself
@@ -426,9 +538,24 @@ class CommitLogDelegate(QStyledItemDelegate):
     # --------------------------------------------------------------------------
     # Paint blocks
 
-    def _paintHash(self, painter: QPainter, rect: QRect, oid: Oid | None):
+    def _paintHash(self, painter: QPainter, rect: QRect, oid: Oid | None, markColor: QColor) -> QRect | None:
+        """
+        Paint the short hash. A commit that isn't on any remote yet gets an
+        arrow before it, like the one on its branch's chip; return where.
+        """
         hcw = self.hashCharWidth
         hashText = shortHash(oid) if oid else ("·" * settings.prefs.shortHashChars)
+
+        markRect = QRect(rect)
+        markRect.setWidth(self.unpushedMarkWidth)
+        if self.isUnpushed(oid):
+            painter.save()
+            painter.setPen(markColor)
+            painter.drawText(markRect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, SYMBOL_AHEAD)
+            painter.restore()
+        else:
+            markRect = None
+        rect.setLeft(rect.left() + self.unpushedMarkWidth)
 
         charRect = QRect(rect)
         charRect.setWidth(hcw)
@@ -448,6 +575,7 @@ class CommitLogDelegate(QStyledItemDelegate):
             SearchBar.highlightNeedle(painter, rect, hashText, 0, len(term), x1, x2)
 
         rect.setLeft(charRect.right())
+        return markRect
 
     def _paintSpecialMessage(self, painter: QPainter, rect: QRect, special: SpecialRow):
         if special == SpecialRow.UncommittedChanges:
@@ -591,10 +719,20 @@ class CommitLogDelegate(QStyledItemDelegate):
     # --------------------------------------------------------------------------
     # Refbox painting
 
-    def _paintRefboxes(self, painter: QPainter, rect: QRect, refs: list[str]):
+    def _paintRefboxes(self, painter: QPainter, rect: QRect, refs: list[str], messageWidth: int):
+        xMax = painter.clipBoundingRect().right()
+        chips = self._refChips(refs)
+        nameWidths = self._fitRefboxes(painter, rect, chips, messageWidth)
+
+        for (refName, kwargs), nameWidth in zip(chips, nameWidths, strict=True):
+            self._paintRefbox(painter, rect, refName, nameWidth=nameWidth, **kwargs)
+            if rect.left() >= xMax:
+                return
+
+    def _refChips(self, refs: list[str]) -> list[tuple[str, dict]]:
+        """The chips to draw for a commit's refs, in order: (ref name, arguments for _paintRefbox)."""
         repoModel = self.repoModel
         homeBranch = RefPrefix.HEADS + repoModel.homeBranch
-        xMax = painter.clipBoundingRect().right()
 
         # Group refs in clusters (branches with same upstream)
         clusters: dict[str, list[str]] = {}
@@ -634,7 +772,10 @@ class CommitLogDelegate(QStyledItemDelegate):
             nonLooseRefs.add(upstreamRef)
             nonLooseRefs.add(refName)
 
-        # Draw clusters first
+        # Chips to draw, in order: (ref name, arguments for _paintRefbox)
+        chips: list[tuple[str, dict]] = []
+
+        # Clusters first
         for upstreamRef, localRefList in clusters.items():
             # See if we can omit the name of the remote branch
             if repoModel.singleRemote and len(localRefList) == 1:
@@ -646,17 +787,14 @@ class CommitLogDelegate(QStyledItemDelegate):
             else:
                 omitRemoteName = False
 
-            # Draw local branches
+            # Local branches
             for i, localRef in enumerate(localRefList):
-                self._paintRefbox(painter, rect, localRef, clipLeft=i != 0, clipRight=True, isHome=localRef == homeBranch)
+                chips.append((localRef, {"clipLeft": i != 0, "clipRight": True, "isHome": localRef == homeBranch}))
 
-            # Draw upstream at end of cluster
-            self._paintRefbox(painter, rect, upstreamRef, clipLeft=True, forceOmitName=omitRemoteName)
+            # Upstream at end of cluster
+            chips.append((upstreamRef, {"clipLeft": True, "forceOmitName": omitRemoteName}))
 
-            if rect.left() >= xMax:
-                return
-
-        # Draw loose refs
+        # Loose refs
         for refName in refs:
             # Skip refboxes for hidden refs (except tags and special refs)
             if (refName in repoModel.hiddenRefs
@@ -668,10 +806,45 @@ class CommitLogDelegate(QStyledItemDelegate):
             if refName in nonLooseRefs:
                 continue
 
-            self._paintRefbox(painter, rect, refName, isHome=refName == homeBranch)
+            chips.append((refName, {"isHome": refName == homeBranch}))
 
-            if rect.left() >= xMax:
-                return
+        return chips
+
+    def _fitRefboxes(self, painter: QPainter, rect: QRect, chips: list[tuple[str, dict]], messageWidth: int) -> list[int | None]:
+        """
+        Chips give way before the commit message (`messageWidth` wide) is cut
+        under MESSAGE_FLOOR_CHARS: remote branches go down to their icon first,
+        then tags, then the names of local branches are elided. A branch's count
+        of commits to push stays whole.
+
+        Return how wide each chip's name may be (None: as wide as the settings allow).
+        """
+        nameWidths: list[int | None] = [None] * len(chips)
+        budget = rect.width() - min(messageWidth, self.hashCharWidth * MESSAGE_FLOOR_CHARS)
+
+        def excess() -> int:
+            probe = QRect(rect)
+            for (refName, kwargs), nameWidth in zip(chips, nameWidths, strict=True):
+                self._paintRefbox(painter, probe, refName, nameWidth=nameWidth, dryRun=True, **kwargs)
+            return probe.left() - rect.left() - budget
+
+        over = excess()
+
+        for prefix in (RefPrefix.REMOTES, RefPrefix.TAGS):
+            for i, (refName, _kwargs) in enumerate(chips):
+                if over > 0 and refName.startswith(prefix):
+                    nameWidths[i] = 0
+                    over = excess()
+
+        for i in reversed(range(len(chips))):
+            refName, kwargs = chips[i]
+            if over > 0 and refName.startswith(RefPrefix.HEADS):
+                nameWidth = self._paintRefbox(painter, QRect(rect), refName, dryRun=True, **kwargs)
+                nameWidth -= over
+                nameWidths[i] = nameWidth if nameWidth >= 3 * self.hashCharWidth else 0
+                over = excess()
+
+        return nameWidths
 
     def _paintRefbox(
             self,
@@ -683,9 +856,16 @@ class CommitLogDelegate(QStyledItemDelegate):
             clipRight: bool = False,
             forceOmitName: bool = False,
             forceToolTip: str | None = "",
-    ):
+            nameWidth: int | None = None,
+            dryRun: bool = False,
+    ) -> int:
+        """
+        Paint a ref's chip at the left of `rect`, and move `rect`'s left edge past it.
+        `nameWidth` caps the width of the ref's name (0: icon only). With `dryRun`,
+        only move `rect`. Return the width that the name takes up.
+        """
         if refName == 'HEAD' and not self.repoModel.headIsDetached:
-            return
+            return 0
 
         refboxDef = next(d for d in REFBOXES if refName.startswith(d.prefix))
 
@@ -735,9 +915,6 @@ class CommitLogDelegate(QStyledItemDelegate):
         else:
             font = self.refboxFont
 
-        painter.setFont(font)
-        painter.setPen(color)
-
         rrRadius = 4  # Rounded Rectangle radius
         lPadding = 4  # Left padding
         rPadding = 4  # Right padding
@@ -762,6 +939,10 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Text-only refbox: show text regardless of the user's preference
         if not iconName and text:
             maxWidth = max(maxWidth, remainingWidth)
+
+        # Giving way to the commit message
+        if nameWidth is not None and iconName:
+            maxWidth = min(maxWidth, nameWidth)
 
         # Draw text.
         # No condensing here: squeezed letterforms next to normal text read as a
@@ -803,6 +984,14 @@ class CommitLogDelegate(QStyledItemDelegate):
         frameRect.adjust(0, vMargin, 0, -vMargin)
         frameRect.adjust(-lClip, 0, 0, 0)
         clipBox = frameRect.adjusted(lClip, 0, -rClip+1, 0)
+        advance = round(clipBox.right()) + (6 if not rClip else 0)
+
+        if dryRun:
+            rect.setLeft(advance)
+            return max(0, textWidth)
+
+        painter.setFont(font)
+        painter.setPen(color)
 
         if lClip or rClip:
             painter.save()
@@ -867,7 +1056,8 @@ class CommitLogDelegate(QStyledItemDelegate):
             self.newToolTipZone(zone)
 
         # Advance caller rectangle
-        rect.setLeft(round(clipBox.right()) + (6 if not rClip else 0))
+        rect.setLeft(advance)
+        return max(0, textWidth)
 
     # --------------------------------------------------------------------------
     # Error painting
@@ -993,7 +1183,10 @@ class CommitLogDelegate(QStyledItemDelegate):
         # ------ Actual refs
         refsHere = self.repoModel.refsAt.get(oid, None)
         if refsHere:
-            self._paintRefboxes(painter, rect, refsHere)
+            commit = index.data(CommitLogModel.Role.Commit)
+            summary = messageSummary(commit.message, "")[0] if hasattr(commit, "message") else ""
+            metrics = QFontMetrics(self.activeCommitFont if self.isBold(oid) else painter.font())
+            self._paintRefboxes(painter, rect, refsHere, metrics.horizontalAdvance(summary))
 
     def _paintGraphColumn(self, painter: QPainter, rect: QRect, oid: Oid | None):
         """

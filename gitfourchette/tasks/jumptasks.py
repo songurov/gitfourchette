@@ -919,6 +919,9 @@ class RefreshRepo(RepoTask):
             # Sync top of graphview
             clModel.resetCommitSequence(gsl.numRowsRemoved, gsl.numRowsAdded)
 
+            # Refs may have moved without any row coming or going: their chips take room too
+            graphView.clDelegate.invalidateTopOfHistory()
+
             # Hidden commits may have changed in RepoModel.syncTopOfGraph!
             # If new commits are part of a hidden branch, we must invalidate CommitLogFilter.
             clFilter.updateHiddenCommits()

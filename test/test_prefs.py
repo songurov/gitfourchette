@@ -131,6 +131,34 @@ def testPrefsComboBoxWithPreview(tempDir, mainWindow):
     dlg.reject()
 
 
+def testCompactDateFormatShowsItsNameInSettings(mainWindow):
+    from gitfourchette.toolbox.gitutils import COMPACT_DATE_FORMAT
+
+    def openDateFormat() -> tuple[PrefsDialog, QComboBox, QLabel]:
+        dlg = GFApplication.instance().openPrefsDialog("shortTimeFormat")
+        return dlg, dlg.findChild(QComboBox, "prefctl_shortTimeFormat"), dlg.findChild(QLabel, "prefnote_shortTimeFormat")
+
+    # The default reads as its name, not as the value that stands for it
+    assert settings.prefs.shortTimeFormat == COMPACT_DATE_FORMAT
+    dlg, comboBox, preview = openDateFormat()
+    assert comboBox.currentText() == "Compact"
+    compactPreview = preview.text()
+    dlg.reject()
+
+    # Another format shows its format string, which can be edited...
+    GFApplication.applyPrefs(shortTimeFormat="yyyy-MM-dd HH:mm")
+    dlg, comboBox, preview = openDateFormat()
+    assert comboBox.currentText() == "yyyy-MM-dd HH:mm"
+    assert preview.text() != compactPreview
+
+    # ...and picking Compact puts its name in the field, and Compact in the settings
+    qcbSetIndex(comboBox, "^Compact$")
+    assert comboBox.currentText() == "Compact"
+    assert preview.text() == compactPreview
+    dlg.accept()
+    assert settings.prefs.shortTimeFormat == COMPACT_DATE_FORMAT
+
+
 def testPrefsFontControl(tempDir, mainWindow):
     # Open a repo so that refreshPrefs functions are exercized in coverage
     wd = unpackRepo(tempDir)

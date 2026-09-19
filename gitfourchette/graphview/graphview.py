@@ -101,9 +101,22 @@ class GraphView(QListView):
         self.clDelegate = CommitLogDelegate(self.repoModel, infoSearch, parent=self)
         self.setItemDelegate(self.clDelegate)
 
+        # The author column and the room for the messages fit the top of the history
+        for signal in (self.clModel.modelReset, self.clModel.rowsInserted, self.clModel.rowsRemoved):
+            signal.connect(self.clDelegate.invalidateTopOfHistory)
+
         GFApplication.instance().prefsChanged.connect(self.refreshPrefs)
         GFApplication.instance().avatarCache.avatarReady.connect(self.viewport().update)
         self.refreshPrefs(invalidateMetrics=False)
+
+        # Compact dates show today's commits with the time alone: when the day
+        # changes, yesterday's must get their date back without waiting for
+        # something else to repaint them
+        self.dayChangeTimer = QTimer(self)
+        self.dayChangeTimer.setSingleShot(True)
+        self.dayChangeTimer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.dayChangeTimer.timeout.connect(self.onDayChange)
+        self.armDayChangeTimer()
 
         # Shortcut keys
         makeWidgetShortcut(self, self.searchBar.hideOrBeep, "Escape")
@@ -127,6 +140,15 @@ class GraphView(QListView):
             self.scrollTo(self.indexAt(event.pos()))  # mousePressEvent won't scroll to the item on its own
         else:
             super().mouseMoveEvent(event)
+
+    def armDayChangeTimer(self):
+        now = QDateTime.currentDateTime()
+        midnight = QDateTime(now.date().addDays(1), QTime(0, 0))
+        self.dayChangeTimer.start(max(1000, now.msecsTo(midnight) + 1000))
+
+    def onDayChange(self):
+        self.viewport().update()
+        self.armDayChangeTimer()
 
     def scrollContentsBy(self, dx: int, dy: int):
         super().scrollContentsBy(dx, dy)

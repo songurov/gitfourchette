@@ -8765,3 +8765,16 @@ msgstr "Rebase или изменение: {0} (впервые написан {1}
 #: trtables.py:468
 msgid "Mark rebased, amended or re-committed commits with *"
 msgstr "Отмечать * коммиты после rebase, изменения или повторного коммита"
+
+#: forms/prefsdialog.py:766
+msgctxt "date format"
+msgid "Compact"
+msgstr "Компактный"
+
+#: trtables.py:457
+msgid "Keep author and date next to the message"
+msgstr "Держать автора и дату рядом с сообщением"
+
+#: trtables.py:458
+msgid "In a wide window, the author, hash and date line up a little way past the commit messages instead of at the far right, so that a row reads in one sweep."
+msgstr "В широком окне автор, хеш и дата выстраиваются чуть правее сообщений коммитов, а не у правого края, чтобы строка читалась одним взглядом."

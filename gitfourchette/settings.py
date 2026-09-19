@@ -20,7 +20,7 @@ from gitfourchette.prefsfile import PrefsFile
 from gitfourchette.qt import *
 from gitfourchette.syntax import PygmentsPresets, ColorScheme
 from gitfourchette.toolbox.benchmark import BENCHMARK_LOGGING_LEVEL
-from gitfourchette.toolbox.gitutils import AuthorDisplayStyle
+from gitfourchette.toolbox.gitutils import COMPACT_DATE_FORMAT, AuthorDisplayStyle
 from gitfourchette.toolbox.pathutils import PathDisplayStyle
 from gitfourchette.toolbox.textutils import englishTitleCase
 
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 SHORT_DATE_PRESETS = {
+    "Compact": COMPACT_DATE_FORMAT,
     "ISO": "yyyy-MM-dd HH:mm",
     "Universal 1": "dd MMM yyyy HH:mm",
     "Universal 2": "ddd dd MMM yyyy HH:mm",
@@ -174,6 +175,9 @@ class Prefs(PrefsFile):
     graphRowLayout              : GraphRowLayout        = GraphRowLayout.GraphFirst
     """Messages that all start at the same x stay readable however busy the
     graph gets, and nothing is reserved for refs that most rows don't have."""
+    metadataNearMessage         : bool                  = True
+    """In a wide window, author, hash and date sit a set distance past the
+    commit messages instead of at the far right, 900 px away from them."""
     graphRowHeight              : GraphRowHeight        = GraphRowHeight.Relaxed
     refBoxMaxWidth              : GraphRefBoxWidth      = GraphRefBoxWidth.Standard
     authorDisplayStyle          : AuthorDisplayStyle    = AuthorDisplayStyle.FullName

@@ -492,6 +492,10 @@ def _prefKeyTable() -> dict[str, str]:
         "refBoxMaxWidth": _("Branch labels"),
         "refBoxMaxWidth_help": _("You can always hover over an indicator to display the full name of the ref."),
         "authorDisplayStyle": _("Author"),
+        "metadataNearMessage": _("Keep author and date next to the message"),
+        "metadataNearMessage_help": _(
+            "In a wide window, the author, hash and date line up a little way past the commit "
+            "messages instead of at the far right, so that a row reads in one sweep."),
         "showAvatars": _("Show author avatars"),
         "showAvatars_help": paragraphs(
             _("A chip with the author’s initials, colored from their email address, "

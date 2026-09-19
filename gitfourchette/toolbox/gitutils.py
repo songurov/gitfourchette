@@ -172,13 +172,41 @@ def signatureQDateTime(signature: Signature, localTime=False) -> QDateTime:
         return QDateTime.fromSecsSinceEpoch(signature.time, QTimeZone(signature.offset * 60))
 
 
+COMPACT_DATE_FORMAT = "compact"
+"""
+A short date format that says no more than it has to: "14:52" today,
+"3 Sep 14:52" earlier this year, "2025-12-31" before that.
+"""
+
+
+def compactDateFormat(dateTime: QDateTime, now: QDateTime | None = None) -> str:
+    """The QLocale date format that COMPACT_DATE_FORMAT stands for, for this date."""
+    today = (now or QDateTime.currentDateTime()).date()
+    date = dateTime.date()
+    if date == today:
+        return "HH:mm"
+    if date.year() == today.year():
+        return "d MMM HH:mm"
+    return "yyyy-MM-dd"
+
+
+def formatShortDate(dateTime: QDateTime, format: str, locale: QLocale | None = None, now: QDateTime | None = None) -> str:
+    """Format a date with the user's short date format, which may be COMPACT_DATE_FORMAT."""
+    if format == COMPACT_DATE_FORMAT:
+        format = compactDateFormat(dateTime, now)
+    return (locale or QLocale()).toString(dateTime, format)
+
+
 def signatureDateFormat(
         signature: Signature,
         format: str | QLocale.FormatType = QLocale.FormatType.LongFormat,
         localTime=False
 ) -> str:
     dateTime = signatureQDateTime(signature, localTime)
-    text = QLocale().toString(dateTime, format)
+    if isinstance(format, str):
+        text = formatShortDate(dateTime, format)
+    else:
+        text = QLocale().toString(dateTime, format)
     if not localTime and format != QLocale.FormatType.LongFormat:
         text += f" ({formatTimeOffset(signature.offset)})"
     return text

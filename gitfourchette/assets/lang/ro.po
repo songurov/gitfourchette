@@ -8725,3 +8725,16 @@ msgstr "Rebase sau modificare la {0} (scris inițial la {1})"
 #: trtables.py:468
 msgid "Mark rebased, amended or re-committed commits with *"
 msgstr "Marchează cu * commit-urile trecute prin rebase, modificate sau refăcute"
+
+#: forms/prefsdialog.py:766
+msgctxt "date format"
+msgid "Compact"
+msgstr "Compact"
+
+#: trtables.py:457
+msgid "Keep author and date next to the message"
+msgstr "Păstrează autorul și data lângă mesaj"
+
+#: trtables.py:458
+msgid "In a wide window, the author, hash and date line up a little way past the commit messages instead of at the far right, so that a row reads in one sweep."
+msgstr "Într-o fereastră lată, autorul, hash-ul și data se aliniază puțin după mesajele commit-urilor, nu la marginea din dreapta, ca un rând să se citească dintr-o privire."

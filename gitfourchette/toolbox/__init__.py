@@ -26,6 +26,9 @@ from .gitutils import (
     signatureEnvironmentVariables,
     signatureQDateTime,
     signatureDateFormat,
+    COMPACT_DATE_FORMAT,
+    compactDateFormat,
+    formatShortDate,
 )
 from .mactitlebar import MacTitleBar, titleBarDoubleClickAction
 from .memoryindicator import MemoryIndicator

@@ -1402,23 +1402,35 @@ class PrefsDialog(QDialog):
         currentDate = QDateTime.currentDateTime()
         sampleDate = QDateTime(QDate(currentDate.date().year(), 1, 30), QTime(9, 45))
 
+        # The Compact format isn't a format string: the field shows its name
+        compactCaption = _p("date format", "Compact")
+
+        def formatInField(text: str) -> str:
+            if text.strip().casefold() in (compactCaption.casefold(), COMPACT_DATE_FORMAT):
+                return COMPACT_DATE_FORMAT
+            return text
+
         def genPreview(f):
-            return QLocale().toString(sampleDate, f)
+            return formatShortDate(sampleDate, f)
 
         def onEditTextChanged(text):
-            preview.setText(genPreview(text))
-            self.assign(prefKey, text)
+            f = formatInField(text)
+            preview.setText(genPreview(f))
+            self.assign(prefKey, f)
 
         preview = self.makeNote(genPreview(prefValue), prefKey)
 
         control = QComboBoxWithPreview(self)
         control.setEditable(True)
         for presetName, presetFormat in presets.items():
-            control.addItemWithPreview(presetName, presetFormat, genPreview(presetFormat))
+            editText = ""
+            if presetFormat == COMPACT_DATE_FORMAT:
+                presetName = editText = compactCaption
+            control.addItemWithPreview(presetName, presetFormat, genPreview(presetFormat), editText)
             if prefValue == presetFormat:
                 control.setCurrentIndex(control.count()-1)
         control.setMinimumWidth(200)
-        control.setEditText(prefValue)
+        control.setEditText(compactCaption if prefValue == COMPACT_DATE_FORMAT else prefValue)
         control.editTextChanged.connect(onEditTextChanged)
 
         return control, preview

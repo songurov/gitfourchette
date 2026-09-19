@@ -121,7 +121,7 @@ def fileTooltip(
     if mTimeNS != -1:
         timeSecs = int(mTimeNS * 1e-9)  # Convert from nanoseconds
         timeQdt = QDateTime.fromSecsSinceEpoch(timeSecs)
-        timeText = locale.toString(timeQdt, settings.prefs.shortTimeFormat)
+        timeText = formatShortDate(timeQdt, settings.prefs.shortTimeFormat, locale)
         text += newLine(_("modified"), timeText)
 
     # Blob/Commit IDs

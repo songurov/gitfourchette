@@ -170,6 +170,7 @@ PANES: list[Pane] = [
         _section(
             "graph",
             Row("graphRowLayout", control="radio"),
+            Row("metadataNearMessage"),
             Row("graphRowHeight"),
             Row("flattenLanes"),
             Row("alternatingRowColors"),

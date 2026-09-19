@@ -13,6 +13,7 @@ class QComboBoxWithPreview(QComboBox):
     class Role:
         Data = Qt.ItemDataRole.UserRole + 0
         Preview = Qt.ItemDataRole.UserRole + 1
+        EditText = Qt.ItemDataRole.UserRole + 2
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
@@ -23,11 +24,18 @@ class QComboBoxWithPreview(QComboBox):
         self.setItemDelegate(delegate)
         self.activated.connect(self.onActivated)
 
-    def addItemWithPreview(self, caption: str, data: object, preview: str):
+    def addItemWithPreview(self, caption: str, data: object, preview: str, editText: str = ""):
+        """
+        Add a preset. Picking it puts `data` in the editable field, or
+        `editText` if the preset has one (a name for a value that means
+        nothing to the user).
+        """
         i = self.count()
         self.addItem(caption)
         self.setItemData(i, data, QComboBoxWithPreview.Role.Data)
         self.setItemData(i, preview, QComboBoxWithPreview.Role.Preview)
+        if editText:
+            self.setItemData(i, editText, QComboBoxWithPreview.Role.EditText)
 
         fontMetrics = self.fontMetrics()
         self.captionWidth = max(self.captionWidth, fontMetrics.horizontalAdvance(caption) + 20)
@@ -50,7 +58,8 @@ class QComboBoxWithPreview(QComboBox):
         self.dataPicked.emit(data)
 
         if self.isEditable():
-            self.setEditText(str(data))
+            editText = self.itemData(index, QComboBoxWithPreview.Role.EditText)
+            self.setEditText(editText or str(data))
 
 
 class QComboBoxWithPreviewDelegate(QStyledItemDelegate):

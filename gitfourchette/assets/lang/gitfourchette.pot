@@ -8653,3 +8653,16 @@ msgstr ""
 #: trtables.py:468
 msgid "Mark rebased, amended or re-committed commits with *"
 msgstr ""
+
+#: forms/prefsdialog.py:766
+msgctxt "date format"
+msgid "Compact"
+msgstr ""
+
+#: trtables.py:457
+msgid "Keep author and date next to the message"
+msgstr ""
+
+#: trtables.py:458
+msgid "In a wide window, the author, hash and date line up a little way past the commit messages instead of at the far right, so that a row reads in one sweep."
+msgstr ""

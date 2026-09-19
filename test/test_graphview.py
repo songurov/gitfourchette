@@ -17,7 +17,7 @@ from gitfourchette.graphview.graphpaint import LANE_WIDTH, flattenLanes, getColo
 from gitfourchette.repomodel import UC_FAKEID, findUnpushedCommits
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
-from gitfourchette.avatars import avatarColor, avatarInitials
+from gitfourchette.avatars import AVATAR_SIZE, AVATAR_SPACING, avatarColor, avatarInitials
 from gitfourchette.settings import GraphRefBoxWidth, GraphRowLayout, Prefs
 from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.themes import ThemeName, formatStyle
@@ -507,8 +507,9 @@ def testRefSortFavorsHeadBranch(tempDir, mainWindow):
 def testCommitToolTip(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
 
-    # The hash column doubles as dead space for tooltips, so pin the layout that has one
-    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst)
+    # The hash column doubles as dead space for tooltips, so pin the layout that has one,
+    # with the author at the right edge, where the tooltip is summoned
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst, metadataNearMessage=False)
 
     sig1 = TEST_SIGNATURE
     sig2 = Signature(sig1.name, sig1.email, sig1.time + 3600, sig1.offset)
@@ -908,7 +909,7 @@ def testGraphFirstLayoutMovesHashNextToAuthor(tempDir, mainWindow):
 
     hashLefts = []
     delegate = graphView.clDelegate
-    delegate._paintHash = lambda painter, rect, oid: hashLefts.append(rect.left())
+    delegate._paintHash = lambda painter, rect, oid, *_color: hashLefts.append(rect.left())
 
     GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst)
     QTest.qWait(0)
@@ -921,7 +922,8 @@ def testGraphFirstLayoutMovesHashNextToAuthor(tempDir, mainWindow):
     QTest.qWait(0)
     graphView.viewport().repaint()
     assert hashLefts, "the hash is still painted, just elsewhere"
-    assert min(hashLefts) > graphView.viewport().width() // 2
+    authorColumnX = graphView.clModel._authorColumnX
+    assert min(hashLefts) > authorColumnX > 100, "past the author, not before the message"
 
 
 def testNarrowWindowDropsHashColumn(tempDir, mainWindow):
@@ -1425,7 +1427,7 @@ def drawnText(graphView: GraphView, monkeypatch, oid: Oid) -> list[tuple[QRectF,
 
 def aheadOnChip(graphView: GraphView, monkeypatch, oid: Oid) -> list[str]:
     """Counts of commits to push drawn on a commit's row."""
-    return [text for _rect, text in drawnText(graphView, monkeypatch, oid) if text.startswith(SYMBOL_AHEAD)]
+    return [text for _rect, text in drawnText(graphView, monkeypatch, oid) if re.fullmatch(SYMBOL_AHEAD + r"\d+", text)]
 
 
 def testBranchChipSaysHowManyCommitsToPush(tempDir, mainWindow, monkeypatch):
@@ -1547,6 +1549,7 @@ def drawnRuns(graphView: GraphView, monkeypatch, oid: Oid, keepHover=False) -> l
     """Repaint the graph, and return the text drawn on a commit's row, where, in which color and weight."""
     if not keepHover:
         pointerAway(graphView)
+    graphView.viewport().repaint()  # may widen the reserved graph column, which moves everything else
     rowRect = QRectF(graphView.visualRect(graphView.getFilterIndexForCommit(oid)))
     drawn = []
     realDrawText = QPainter.drawText
@@ -1956,3 +1959,228 @@ def testCheckedOutBranchChipHasACheck(tempDir, mainWindow, monkeypatch):
     _runs, _fills, icons = chipCalls(rw.graphView, monkeypatch, rw.repo.head_commit_id)
     assert "check" in icons, "the checked-out branch is marked with a check, as in the sidebar"
     assert "git-head" not in icons
+
+
+# -----------------------------------------------------------------------------
+# Graph layout: where the metadata goes, how wide it is, who gives way
+
+
+def testAuthorAndDateStayNearTheMessages(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1920, 800)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    delegate = graphView.clDelegate
+    commit = rw.repo.revparse_single("master~1").peel(Commit)
+
+    def columns():
+        parts = rowParts(drawnRuns(graphView, monkeypatch, commit.id), commit)
+        return parts["message"][0].rect.left(), parts["author"][0].rect.left(), parts["date"][0].rect.right()
+
+    # In a wide window, the author starts a set distance past the graph, not at the far right
+    messageLeft, authorLeft, dateRight = columns()
+    assert graphView.viewport().width() - dateRight > 300, "not pinned to the right edge"
+    assert authorLeft - messageLeft <= delegate.hashCharWidth * 96 + AVATAR_SIZE + AVATAR_SPACING
+
+    # The setting puts them back at the right edge
+    GFApplication.applyPrefs(metadataNearMessage=False)
+    QTest.qWait(0)
+    messageLeft, authorLeft, dateRight = columns()
+    assert graphView.viewport().width() - dateRight < 2 * XMARGIN + delegate.hashCharWidth
+
+    assertTranslatedInForkLanguages(
+        "Keep author and date next to the message",
+        "In a wide window, the author, hash and date line up a little way past the commit "
+        "messages instead of at the far right, so that a row reads in one sweep.")
+
+
+def testAuthorAndDateStartPastTheWidestRowAtTheTop(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("git commit --allow-empty -m 'A subject of middling length, longer than the ones below it'", wd)
+    mainWindow.resize(1920, 800)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    delegate = graphView.clDelegate
+
+    def headRow() -> tuple[str, float, int]:
+        """The checked-out commit's message as drawn, where it ends, and where the author column starts."""
+        oid = rw.repo.head_commit_id
+        summary = rw.repo.peel_commit(oid).message.splitlines()[0]
+        run = next(run for run in drawnRuns(graphView, monkeypatch, oid) if run.text.startswith(summary[:10]))
+        messageRight = run.rect.left() + QFontMetrics(delegate.activeCommitFont).horizontalAdvance(run.text)
+        return run.text, messageRight, graphView.clModel._authorColumnX
+
+    # The checked-out commit has the widest row (a chip, and the longest
+    # message, in bold): it's drawn whole, and the author follows it closely
+    text, messageRight, authorX = headRow()
+    hcw = delegate.hashCharWidth
+    assert text == "A subject of middling length, longer than the ones below it"
+    assert 2 * hcw <= authorX - messageRight <= 4 * hcw
+    assert graphView.viewport().width() - authorX > 600, "nowhere near the right edge"
+
+    # A shorter one on top doesn't pull the column back: it stays put as commits come in
+    shell("git commit --allow-empty -m 'Short'", wd)
+    rw.refreshRepo()
+    _text, _messageRight, authorXAfterShort = headRow()
+    assert authorXAfterShort == authorX
+
+    # A longer one pushes it out just enough
+    longer = "A longer subject than all the others, which the author column makes room for right away"
+    shell(f"git commit --allow-empty -m '{longer}'", wd)
+    rw.refreshRepo()
+    text, messageRight, authorX = headRow()
+    assert text == longer
+    assert 2 * hcw <= authorX - messageRight <= 4 * hcw
+
+
+def testRefChipsKeepTheirNamesBesideAShortMessage(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("""
+        git commit --amend -m 'Tiny'
+        git update-ref refs/remotes/origin/a-remote-branch-with-a-rather-long-name HEAD
+        git tag a-tag-with-a-long-name-as-well HEAD
+    """, wd)
+    GFApplication.applyPrefs(refBoxMaxWidth=GraphRefBoxWidth.Wide)
+    mainWindow.resize(1280, 600)
+    rw = mainWindow.openRepo(wd)
+    runs = drawnRuns(rw.graphView, monkeypatch, rw.repo.head_commit_id)
+    texts = [run.text for run in runs]
+    assert "Tiny" in texts
+    assert any(text.startswith("a-remote-") for text in texts), "no need to cut a chip down to its icon"
+    assert any(text.startswith("a-tag-") for text in texts), "no need to cut a chip down to its icon"
+
+
+def testAuthorColumnIsAsWideAsTheAuthors(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(showAvatars=False)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+    rw.graphView.viewport().repaint()
+
+    widest = rw.graphView.fontMetrics().horizontalAdvance("A U Thor*")
+    assert widest <= delegate.authorMaxWidth < delegate.hashCharWidth * 20, \
+        "room for the names at the top of the history, not for 20 characters"
+
+
+def testAuthorColumnWidensForANewAuthor(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(showAvatars=False)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+    rw.graphView.viewport().repaint()
+
+    newcomer = Signature("Maria Delacroix", "maria@example.com")
+    newcomerWidth = rw.graphView.fontMetrics().horizontalAdvance(newcomer.name + "*")
+    assert delegate.authorMaxWidth < newcomerWidth < delegate.hashCharWidth * 20
+
+    # A commit comes in without any change to the settings
+    shell("echo hello > hello.txt && git add . && git commit -m 'Say hello'", wd, authorSig=newcomer)
+    rw.refreshRepo()
+    assert rw.graphView.clModel.index(1, 0).data(CommitLogModel.Role.Oid) == rw.repo.head_commit_id
+    rw.graphView.viewport().repaint()
+    assert delegate.authorMaxWidth >= newcomerWidth, "the new name fits without being condensed"
+
+
+def testCompactDateFormat():
+    from gitfourchette.toolbox.gitutils import COMPACT_DATE_FORMAT, formatShortDate
+
+    assert Prefs().shortTimeFormat == COMPACT_DATE_FORMAT, "the default"
+
+    locale = QLocale(QLocale.Language.English, QLocale.Country.UnitedStates)
+    now = QDateTime(QDate(2026, 9, 19), QTime(18, 30))
+
+    def fmt(y, mo, d, h, mi):
+        return formatShortDate(QDateTime(QDate(y, mo, d), QTime(h, mi)), COMPACT_DATE_FORMAT, locale, now)
+
+    assert fmt(2026, 9, 19, 14, 52) == "14:52", "today: the time"
+    assert fmt(2026, 9, 3, 9, 5) == "3 Sep 09:05", "this year: the day, the month and the time"
+    assert fmt(2025, 12, 31, 23, 59) == "2025-12-31", "before that: the date"
+    assert formatShortDate(QDateTime(QDate(2026, 9, 19), QTime(14, 52)), "yyyy-MM-dd HH:mm", locale, now) == "2026-09-19 14:52"
+
+    assertTranslatedInForkLanguages("Compact", context="date format")
+
+
+def testCompactDatesAreDrawnAgainWhenTheDayChanges(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    delegate = graphView.clDelegate
+
+    # Armed for the next midnight
+    timer = graphView.dayChangeTimer
+    now = QDateTime.currentDateTime()
+    untilMidnight = now.msecsTo(QDateTime(now.date().addDays(1), QTime(0, 0)))
+    assert timer.isActive()
+    assert untilMidnight - 5000 <= timer.remainingTime() <= untilMidnight + 5000
+
+    datesDrawn = []
+    paintDate = delegate._paintDate
+
+    def spyPaintDate(painter, rect, commit, starColor):
+        datesDrawn.append(commit.id)
+        paintDate(painter, rect, commit, starColor)
+
+    monkeypatch.setattr(delegate, "_paintDate", spyPaintDate)
+    QTest.qWait(50)
+    datesDrawn.clear()
+
+    # Nothing else happens on screen, and the day changes: today's times get their date
+    timer.timeout.emit()
+    QTest.qWait(50)
+    assert rw.repo.head_commit_id in datesDrawn
+    assert timer.isActive(), "armed again for the next day"
+
+
+def testRefChipsGiveWayToTheMessage(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    message = "A subject that is long enough to be cut short by a few long ref chips"
+    shell(f"""
+        git commit --amend -m '{message}'
+        git update-ref refs/remotes/origin/a-remote-branch-with-a-rather-long-name HEAD
+        git update-ref refs/remotes/origin/another-remote-branch-with-a-long-name HEAD
+        git tag a-tag-with-a-long-name-as-well HEAD
+    """, wd)
+    GFApplication.applyPrefs(refBoxMaxWidth=GraphRefBoxWidth.Wide)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    oid = rw.repo.head_commit_id
+
+    for width in (1000, 1280, 1600, 1920):
+        mainWindow.resize(width, 600)
+        QTest.qWait(0)
+        runs = drawnRuns(graphView, monkeypatch, oid)
+        shown = next((run.text for run in runs if run.text.startswith(message[:10])), "")
+        assert len(shown.removesuffix("…")) >= min(len(message), 40), f"at {width} px, the message keeps 40 characters"
+        assert [run.text for run in runs if re.fullmatch(SYMBOL_AHEAD + r"\d+", run.text)] == [f"{SYMBOL_AHEAD}2"], \
+            f"at {width} px, the branch's count of commits to push is whole"
+
+
+@pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with tooltips, but Qt 6 is fine")
+def testUnpushedCommitsHaveAnArrowBeforeTheirHash(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    def arrowAndHash(rev):
+        commit = rw.repo.revparse_single(rev).peel(Commit)
+        runs = drawnRuns(graphView, monkeypatch, commit.id)
+        hashRuns = rowParts(runs, commit)["hash"]
+        arrows = [run for run in runs if run.text == SYMBOL_AHEAD]
+        return commit, arrows, hashRuns
+
+    commit, arrows, hashRuns = arrowAndHash("master")
+    assert commit.id in rw.repoModel.unpushedCommits
+    assert len(arrows) == 1, "an arrow before the hash of a commit that isn't on any remote"
+    assert arrows[0].rect.left() < hashRuns[0].rect.left()
+    assert arrows[0].color == hashRuns[0].color, "in the hash's quiet color"
+
+    row = graphView.getFilterIndexForCommit(commit.id).row()
+    x = int(arrows[0].rect.left()) + 2
+    assert qlvSummonToolTip(graphView, row, x=x) == "This commit isn’t on any remote yet."
+
+    _commit, arrows, hashRuns = arrowAndHash("origin/master")
+    assert hashRuns and not arrows, "nothing before a pushed commit's hash"
