@@ -31,15 +31,24 @@ class _MissingTranslation(gettext.NullTranslations):
     def pgettext(self, context, message):
         return self.MISSING
 
+    def ngettext(self, msgid1, msgid2, n):
+        return self.MISSING
 
-def assertTranslatedInForkLanguages(*msgids: str, context=""):
+
+def assertTranslatedInForkLanguages(*msgids: str, context="", plural=""):
     for lang in FORK_LANGUAGES:
         with open(QFile(f"assets:lang/{lang}.mo").fileName(), "rb") as moFile:
             catalog = gettext.GNUTranslations(moFile)
         catalog.add_fallback(_MissingTranslation())
         for msgid in msgids:
-            text = catalog.pgettext(context, msgid) if context else catalog.gettext(msgid)
-            assert text not in ("", _MissingTranslation.MISSING), f"{lang}: {msgid!r} isn't translated"
+            if plural:
+                texts = [catalog.ngettext(msgid, plural, n) for n in (1, 2, 5)]
+            elif context:
+                texts = [catalog.pgettext(context, msgid)]
+            else:
+                texts = [catalog.gettext(msgid)]
+            for text in texts:
+                assert text not in ("", _MissingTranslation.MISSING), f"{lang}: {msgid!r} isn't translated"
 
 
 def testPrefsDialog(tempDir, mainWindow):
@@ -635,3 +644,49 @@ def testHintButtonsAreReachableFromTheKeyboard(mainWindow):
 
     dlg.reject()
     assertTranslatedInForkLanguages("Help: {setting}")
+
+
+def testHiddenMessagesCanBeBroughtBack(mainWindow):
+    settings.prefs.dontShowAgain = ["NoFastForwardingNecessary", "Another", "YetAnother"]
+
+    dlg = GFApplication.instance().openPrefsDialog("resetDontShowAgain")
+    button: QPushButton = dlg.findChild(QPushButton, "prefctl_resetDontShowAgain")
+    countLabel: QLabel = next(label for label in dlg.findChildren(QLabel)
+                              if re.fullmatch(r"\d+ messages? (is|are) hidden\.", label.text()))
+    assert button.text() == "Restore all “don’t show this again” messages"
+    assert button.isEnabled()
+    assert countLabel.text() == "3 messages are hidden."
+
+    button.click()
+    assert not button.isEnabled()
+    assert countLabel.text() == "0 messages are hidden."
+    dlg.accept()
+    assert settings.prefs.dontShowAgain == []
+
+    # Nothing left to bring back
+    dlg = GFApplication.instance().openPrefsDialog("resetDontShowAgain")
+    assert not dlg.findChild(QPushButton, "prefctl_resetDontShowAgain").isEnabled()
+    dlg.reject()
+
+    assertTranslatedInForkLanguages("{n} message is hidden.", plural="{n} messages are hidden.")
+
+
+def testPrefsFileWithTheRetiredRememberPassphrasesKeyStillLoads(mainWindow):
+    import json
+    from gitfourchette.settings import Prefs
+
+    class OldPrefs(Prefs):
+        _filename = "prefs-rememberpassphrases-test.json"
+
+    oldPrefs = OldPrefs()
+    assert not hasattr(oldPrefs, "rememberPassphrases")  # nothing ever read it
+
+    path = Path(oldPrefs.getParentDir(), OldPrefs._filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"rememberPassphrases": False, "tabSpaces": 8}), encoding="utf-8")
+    try:
+        assert oldPrefs.load()
+        assert oldPrefs.tabSpaces == 8
+        assert not hasattr(oldPrefs, "rememberPassphrases")
+    finally:
+        path.unlink()

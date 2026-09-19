@@ -2266,6 +2266,14 @@ msgstr "оставьте пустым"
 msgid "Leave blank for system default."
 msgstr "Оставьте пустым, чтобы использовать системное значение по умолчанию."
 
+#: forms/prefsdialog.py:609
+#, python-brace-format
+msgid "{n} message is hidden."
+msgid_plural "{n} messages are hidden."
+msgstr[0] "{n} сообщение скрыто."
+msgstr[1] "{n} сообщения скрыты."
+msgstr[2] "{n} сообщений скрыто."
+
 #: forms/prefsdialog.py:523
 #, python-brace-format
 msgid ""

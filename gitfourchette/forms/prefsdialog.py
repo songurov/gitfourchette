@@ -291,6 +291,8 @@ class PrefsDialog(QDialog):
 
         if key == "autoFetchMinutes":
             self.prependCheckBox(rowWidgets, "autoFetch", caption)
+        elif key == "resetDontShowAgain":
+            rowWidgets.append(self.dontShowAgainCountLabel(control))
 
         # Any help text? Then make a help button for it & set tooltip text on the main control
         tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix)
@@ -321,8 +323,8 @@ class PrefsDialog(QDialog):
         if isChild:
             self.dependentRowWidgets[key] = [w for w in rowWidgets if not isinstance(w, QHintButton)]
 
-        # No caption, make field span entire row
-        if not caption or isinstance(rowWidgets[0], QCheckBox):
+        # No caption (or the control carries it), make field span entire row
+        if not caption or isinstance(rowWidgets[0], QCheckBox | QPushButton):
             if isChild and isinstance(rowWidgets[0], QCheckBox):
                 # Line up a dependent checkbox's text with its parent's text
                 style = rowWidgets[0].style()
@@ -471,6 +473,8 @@ class PrefsDialog(QDialog):
                 validate=lambda cmd: ToolCommands.checkCommand(cmd, "$COMMAND"))
         elif key == "commands":
             return self.userCommandTextEditControl(key, value)
+        elif key == "resetDontShowAgain":
+            return QPushButton(caption, self)  # dontShowAgainCountLabel wires it up
         elif key in ["largeFileThresholdKB", "imageFileThresholdKB", "maxTrashFileKB"]:
             control = self.boundedIntControl(key, value, 0, 999_999)
             control.setSpecialValueText("\u221E")  # infinity
@@ -590,6 +594,28 @@ class PrefsDialog(QDialog):
         control.setPlainText(prefValue)
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
         return control
+
+    def dontShowAgainCountLabel(self, button: QPushButton) -> QLabel:
+        """
+        Say how many messages are hidden next to the button that brings them
+        back. With nothing hidden, the button has nothing to do.
+        """
+        countLabel = QLabel(self)
+        countLabel.setProperty("class", "secondary")
+
+        def refresh():
+            pending = self.getMostRecentValue("resetDontShowAgain")
+            count = 0 if pending else len(prefs.dontShowAgain)
+            countLabel.setText(_n("{n} message is hidden.", "{n} messages are hidden.", count))
+            button.setEnabled(count > 0)
+
+        def reset():
+            self.assign("resetDontShowAgain", True)
+            refresh()
+
+        button.clicked.connect(reset)
+        refresh()
+        return countLabel
 
     def boundedIntControl(self, prefKey, prefValue, minValue, maxValue, step=1):
         control = QSpinBox(self)

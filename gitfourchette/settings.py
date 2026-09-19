@@ -233,17 +233,17 @@ class Prefs(PrefsFile):
     pygmentsPlugins             : bool                  = False
     verbosity                   : LoggingLevel          = LoggingLevel.Debug if APP_TESTMODE else LoggingLevel.Warning
     forceQtApi                  : QtApiNames            = QtApiNames.Automatic
+    resetDontShowAgain          : bool                  = False
+    """Shown as a button that brings back every message the user asked not to see again."""
 
     _category_hidden            : int                   = 0
     # Hide autoFetch from PrefsDialog because autoFetchMinutes's control includes a checkbox
     autoFetch                   : bool                  = False
-    rememberPassphrases         : bool                  = True
     smoothScroll                : bool                  = True
     toolBarButtonStyle          : Qt.ToolButtonStyle    = Qt.ToolButtonStyle.ToolButtonTextBesideIcon
     toolBarIconSize             : int                   = 16
     defaultCloneLocation        : str                   = ""
     dontShowAgain               : list[str]             = dataclasses.field(default_factory=list)
-    resetDontShowAgain          : bool                  = False
     donatePrompt                : int                   = 0
     refSortClearTimestamp       : int                   = 0
 

@@ -2259,6 +2259,13 @@ msgstr ""
 msgid "Leave blank for system default."
 msgstr ""
 
+#: forms/prefsdialog.py:609
+#, python-brace-format
+msgid "{n} message is hidden."
+msgid_plural "{n} messages are hidden."
+msgstr[0] ""
+msgstr[1] ""
+
 #: forms/prefsdialog.py:523
 #, python-brace-format
 msgid ""

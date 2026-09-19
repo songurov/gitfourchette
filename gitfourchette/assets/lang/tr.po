@@ -2233,6 +2233,13 @@ msgstr "boş bırakın"
 msgid "Leave blank for system default."
 msgstr "Sistem varsayılanı için boş bırakın."
 
+#: forms/prefsdialog.py:609
+#, python-brace-format
+msgid "{n} message is hidden."
+msgid_plural "{n} messages are hidden."
+msgstr[0] "{n} ileti gizli."
+msgstr[1] "{n} ileti gizli."
+
 #: forms/prefsdialog.py:523
 #, python-brace-format
 msgid ""

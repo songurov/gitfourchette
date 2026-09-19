@@ -2265,6 +2265,14 @@ msgstr "lasă gol"
 msgid "Leave blank for system default."
 msgstr "Lasă gol pentru valoarea implicită din sistem."
 
+#: forms/prefsdialog.py:609
+#, python-brace-format
+msgid "{n} message is hidden."
+msgid_plural "{n} messages are hidden."
+msgstr[0] "{n} mesaj este ascuns."
+msgstr[1] "{n} mesaje sunt ascunse."
+msgstr[2] "{n} de mesaje sunt ascunse."
+
 #: forms/prefsdialog.py:523
 #, python-brace-format
 msgid ""
