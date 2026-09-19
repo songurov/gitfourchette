@@ -245,3 +245,149 @@ def testStatusTilesLookTheSameOnDarkThemes(mainWindow):
     # A corner of the tile, clear of the glyph, shows the tile's own color
     corner = light.pixelColor(5, 28)
     assert corner.name() == QColor(_statusIcons()["M"][1]).name()
+
+
+# -----------------------------------------------------------------------------
+# Line icons for the neutral look
+
+_iconDir = pathlib.Path(__file__).parents[1] / "gitfourchette/assets/icons"
+
+# New icons drawn for the neutral look. Nothing else draws these names.
+NEW_LINE_ICONS = [
+    "ai-sparkle", "close-small", "commit-history", "diff-side-by-side", "doc", "eye-files",
+    "filter", "folder-filled", "git-folder-open", "more-circle", "open-in", "quick-launch",
+    "sidebar-all-commits", "sidebar-left", "sidebar-local-changes", "view-list-tree",
+]
+
+# The neutral look's redraws of icons that keep their current drawing in every
+# other look. Each lives in icons/neutral/ under the name of the icon it redraws.
+NEUTRAL_REDRAWS = [
+    "chevron-down", "chevron-right", "chevron-up", "git-fetch", "git-pull", "git-push",
+    "git-stash", "git-workspace", "theme-dark", "theme-light",
+]
+
+LINE_ICONS = NEW_LINE_ICONS + [f"neutral/{name}" for name in NEUTRAL_REDRAWS]
+
+
+def testLineIconsAreDrawnForRecoloring():
+    """
+    The line icons share a 16x16 grid and one stroke weight, and bring no color
+    of their own: only `gray`, which RecolorSvgIconEngine replaces with the
+    palette's icon color (or a caller's). So they follow the dark and light
+    themes, and colorblind mode, which only changes the diff's line colors,
+    can't make two of them look alike.
+    """
+
+    from xml.etree import ElementTree
+
+    for iconId in LINE_ICONS:
+        svg = (_iconDir / f"{iconId}.svg").read_text("utf-8")
+
+        # The engine slips an opacity group in after the first '>' and fills in
+        # the colors with str.format_map: nothing may come before <svg>, and no braces.
+        assert svg.startswith("<svg "), iconId
+        assert not set("{}") & set(svg), iconId
+
+        root = ElementTree.fromstring(svg)
+        assert root.tag == "{http://www.w3.org/2000/svg}svg", iconId
+        assert root.get("viewBox") == "0 0 16 16", iconId
+
+        # One weight, set once for the whole icon (see testLineIconsKeepTheirShapeAt1x)
+        assert root.get("stroke-width") == "1.01", iconId
+        elements = list(root.iter())
+        assert not [e.tag for e in elements[1:] if e.get("stroke-width")], iconId
+
+        # Colors only through the attributes the engine rewrites
+        assert "#" not in svg, iconId
+        assert not [e.tag for e in elements if e.get("style")], iconId
+        colors = {e.get(attribute) for e in elements for attribute in ("fill", "stroke")} - {None}
+        assert colors == {"gray", "none"}, iconId
+
+
+def testNeutralRedrawsHaveTheNameOfAnExistingIcon():
+    """
+    A file in icons/neutral/ redraws the icon of the same name for the neutral
+    look. One without a counterpart would be a new icon filed in the wrong place.
+    """
+
+    from xml.etree import ElementTree
+
+    assert sorted(p.name for p in (_iconDir / "neutral").iterdir()) == sorted(f"{n}.svg" for n in NEUTRAL_REDRAWS)
+    for name in NEUTRAL_REDRAWS:
+        assert (_iconDir / f"{name}.svg").is_file(), name
+    for name in NEW_LINE_ICONS:
+        assert not (_iconDir / "neutral" / f"{name}.svg").exists(), name
+
+    # chevron-right joins chevron-up/down in every other look: painted in place
+    # of chevron-down when a node collapses, it must weigh the same
+    def strokeWidth(iconId):
+        return ElementTree.parse(_iconDir / f"{iconId}.svg").getroot().get("stroke-width")
+    assert strokeWidth("chevron-right") == strokeWidth("chevron-down")
+
+
+def testLineIconsFollowThePalette(mainWindow):
+    from gitfourchette.toolbox import iconbank
+    from gitfourchette.toolbox.qtutils import mixColors
+    from gitfourchette.toolbox.recolorsvgiconengine import RecolorSvgIconEngine
+
+    iconColors = RecolorSvgIconEngine.IconColors
+
+    def usePalette(background: str, foreground: str):
+        iconColors.background = QColor(background)
+        iconColors.foreground = QColor(foreground)
+        iconColors.highlight = QColor("#ffffff")
+        iconColors.mainColor = mixColors(iconColors.background, iconColors.foreground, .58)
+        iconColors.initialized = True
+        iconbank._stockIconCache.clear()
+        QPixmapCache.clear()
+
+    def strayColors(iconId: str, expected: QColor, colorTable="", mode=QIcon.Mode.Normal) -> list[str]:
+        icon = iconbank.stockIcon(iconId, colorTable)
+        image = icon.pixmap(QSize(32, 32), mode).toImage().convertToFormat(QImage.Format.Format_ARGB32)
+        drawn = [image.pixelColor(x, y) for y in range(image.height()) for x in range(image.width())]
+        drawn = [c for c in drawn if c.alpha() >= 128]  # un-premultiplied colors are exact enough there
+        assert len(drawn) >= 20, f"{iconId} draws nothing"
+        return [c.name() for c in drawn
+                if max(abs(c.red() - expected.red()), abs(c.green() - expected.green()),
+                       abs(c.blue() - expected.blue())) > 3]
+
+    accent = QColor("#3bb7e6")
+    try:
+        for background, foreground in [("#262626", "#e6e6e6"), ("#f4f4f4", "#1c1c1c")]:
+            usePalette(background, foreground)
+            for iconId in LINE_ICONS:
+                assert not strayColors(iconId, iconColors.mainColor), iconId
+                assert not strayColors(iconId, iconColors.highlight, mode=QIcon.Mode.Selected), iconId
+                assert not strayColors(iconId, accent, colorTable=f"gray={accent.name()}"), iconId
+    finally:
+        iconbank.clearStockIconCache()  # also makes the engine re-read the real palette
+        QPixmapCache.clear()
+
+
+def testLineIconsKeepTheirShapeAt1x(mainWindow):
+    """
+    Qt draws a pen no wider than one device pixel with its cosmetic stroker,
+    which renders 45-degree lines lopsided: one arm of a chevron comes out
+    crisp, the other smeared across two pixels. That's why the line icons are
+    stroked 1.01 wide, not 1: at 16 px on a 1x screen, they go through Qt's
+    regular stroker instead. A symmetric drawing must render symmetric.
+    """
+
+    from gitfourchette.toolbox import stockIcon
+
+    def alpha(iconId: str) -> list[list[int]]:
+        image = stockIcon(iconId).pixmap(QSize(16, 16)).toImage()
+        assert image.size() == QSize(16, 16)  # 1x
+        return [[image.pixelColor(x, y).alpha() for x in range(16)] for y in range(16)]
+
+    # These are drawn around the center of pixel (8, 8), so pixel 16-i mirrors pixel i
+    def leftRight(a):
+        return [[row[16 - x] if x > 0 else 0 for x in range(16)] for row in a]
+
+    def topBottom(a):
+        return [a[16 - y] if y > 0 else [0] * 16 for y in range(16)]
+
+    for iconId in ["neutral/chevron-down", "neutral/chevron-up", "close-small"]:
+        assert alpha(iconId) == leftRight(alpha(iconId)), iconId
+    for iconId in ["neutral/chevron-right", "close-small"]:
+        assert alpha(iconId) == topBottom(alpha(iconId)), iconId
