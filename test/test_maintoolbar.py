@@ -23,6 +23,7 @@ MODERN = f"{ThemeName.BuiltIn},dark"
 
 @pytest.fixture
 def neutral(mainWindow):
+    mainWindow.resize(1400, 800)  # room for the whole bar, box included
     GFApplication.applyPrefs(qtStyle=NEUTRAL, compactUi=False)
     yield
     GFApplication.applyPrefs(qtStyle="", compactUi=False)
@@ -36,6 +37,8 @@ def barItems(toolbar) -> list[str]:
             continue
         if action.isSeparator():
             items.append("|")
+        elif action is toolbar.repoBoxAction:
+            items.append("<repo>")
         elif isinstance(action, QWidgetAction):
             continue  # a spacer
         elif action is toolbar.repoAction:
@@ -78,7 +81,7 @@ def testNeutralPutsTheSyncButtonsFirstAndTheRepoInTheMiddle(tempDir, mainWindow,
 def testNeutralKeepsQuickLaunchOnHomeAndInARepo(tempDir, mainWindow, neutral):
     toolbar = mainWindow.mainToolBar
     # Home: the ways into a repo, after Quick Launch, which stays where it is
-    assert barItems(toolbar) == ["Quick Launch", "Open", "Clone", "New", "Theme", "Home"]
+    assert barItems(toolbar) == ["Quick Launch", "Open", "Clone", "New", "<repo>", "Theme", "Home"]
     assert ["Open", "Clone", "New"] == [stripAccelerators(a.text()) for a in toolbar.homeActions if a.isVisible()]
 
     mainWindow.openRepo(unpackRepo(tempDir))
@@ -92,7 +95,7 @@ def testNeutralKeepsQuickLaunchOnHomeAndInARepo(tempDir, mainWindow, neutral):
     palettes[0].close()
 
     mainWindow.closeAllTabs()
-    assert barItems(toolbar) == ["Quick Launch", "Open", "Clone", "New", "Theme", "Home"]
+    assert barItems(toolbar) == ["Quick Launch", "Open", "Clone", "New", "<repo>", "Theme", "Home"]
 
 
 def testNeutralSidebarButtonHidesTheSidebar(tempDir, mainWindow, neutral):
@@ -169,3 +172,111 @@ def testNeutralDividersAreLevelWithTheIcons(tempDir, mainWindow, neutral):
     assert iconTop - 2 <= drawn[0]
     assert drawn[-1] <= iconBottom
     assert drawn[-1] - drawn[0] >= 10
+
+
+def testNeutralBoxNamesTheRepoAndItsBranch(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    box = toolbar.repoBox
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    assert toolbar.widgetForAction(toolbar.repoBoxAction) is box
+    assert toolbar.widgetForAction(toolbar.repoAction) is None
+    assert box.isVisible()
+    assert (box.width(), box.height()) == (300, 40)
+    assert "TestGitRepository" == box.nameLabel.text()
+    assert box.nameLabel.font().bold()
+    assert "master" == box.branchButton.text()
+    assert "TestGitRepository on master" in box.toolTip()
+
+    # The tab already shows uncommitted work: no star in the box
+    writeFile(f"{wd}/dirty.txt", "work in progress")
+    rw.refreshRepo()
+    assert "TestGitRepository" == box.nameLabel.text()
+
+    # The branch opens the branch menu
+    assert box.branchButton.menu() is mainWindow.repoMenu2
+    mainWindow.fillRepoButtonMenu()
+    triggerMenuAction(mainWindow.repoMenu2, "no-parent")
+    acceptQMessageBox(rw, "switch to")
+    assert "no-parent" == box.branchButton.text()
+
+    rw.repo.checkout_commit(rw.repo.head_commit_id)
+    rw.refreshRepo()
+    assert "Detached HEAD" == box.branchButton.text()
+
+
+def testNeutralBoxNamesTheWorkspaceOnHome(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    box = toolbar.repoBox
+    assert box.isVisible()
+    assert "Home" == box.nameLabel.text()
+    assert box.branchButton.isHidden()
+
+    toolbar.setWorkspaceName("client work")
+    assert "client work" == box.nameLabel.text()
+
+    mainWindow.openRepo(unpackRepo(tempDir))
+    assert "TestGitRepository" == box.nameLabel.text()
+    assert not box.branchButton.isHidden()
+
+
+def testNeutralBoxStaysInTheMiddleOfTheBar(tempDir, mainWindow, neutral):
+    """The groups on either side of it differ in width; the box doesn't follow them."""
+    toolbar = mainWindow.mainToolBar
+    box = toolbar.repoBox
+
+    def offCenter():
+        QTest.qWait(50)  # the resize, then the spacer's new width
+        center = box.mapTo(toolbar, box.rect().center()).x()
+        return abs(center - toolbar.rect().center().x())
+
+    mainWindow.resize(1400, 800)
+    assert offCenter() <= 1
+
+    mainWindow.openRepo(unpackRepo(tempDir))  # more buttons on the left than on Home
+    assert offCenter() <= 1
+
+    mainWindow.resize(1700, 800)
+    assert offCenter() <= 1
+
+    # A narrow window keeps every button on the bar rather than the box in the middle
+    mainWindow.resize(1000, 800)
+    QTest.qWait(50)
+    stashButton = toolbar.widgetForAction(toolbar.stashAction)
+    assert stashButton.isVisible()
+    assert stashButton.geometry().right() < box.mapTo(toolbar, QPoint(0, 0)).x()
+
+
+def testNeutralBoxIsOneLineInCompactMode(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    box = toolbar.repoBox
+    mainWindow.openRepo(unpackRepo(tempDir))
+
+    GFApplication.applyPrefs(compactUi=True)
+    QTest.qWait(0)
+    assert box.height() == 24
+    assert box.nameLabel.geometry().center().y() == box.branchButton.geometry().center().y()
+    assert box.nameLabel.geometry().right() < box.branchButton.geometry().left()
+
+    GFApplication.applyPrefs(compactUi=False)
+    QTest.qWait(0)
+    assert box.height() == 40
+    assert box.nameLabel.geometry().bottom() <= box.branchButton.geometry().top()
+
+
+def testNeutralBoxBranchReadsOnTheBox(mainWindow, neutral):
+    from gitfourchette.toolbox import contrastRatio
+    branchColor = mainWindow.mainToolBar.repoBox.branchButton.palette().color(QPalette.ColorRole.ButtonText)
+    assert branchColor.name() == NEUTRAL_DARK.repoBoxDim
+    assert contrastRatio(branchColor, QColor(NEUTRAL_DARK.tabTrack)) >= 4.5
+
+
+def testClassicLayoutHasNoBox(tempDir, mainWindow):
+    toolbar = mainWindow.mainToolBar
+    mainWindow.openRepo(unpackRepo(tempDir))
+    assert toolbar.widgetForAction(toolbar.repoBoxAction) is None
+    assert not toolbar.repoBox.isVisible()
+    assert toolbar.repoButton is toolbar.widgetForAction(toolbar.repoAction)
+    assert "TestGitRepository\nmaster" == toolbar.repoAction.text()

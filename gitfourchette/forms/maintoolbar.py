@@ -34,6 +34,62 @@ class ToolbarArrangement:
     "Icons that this layout draws differently from another one."
 
 
+class RepoSummaryBox(QFrame):
+    """
+    The middle of the Centered toolbar: the repo in front of you, in bold, over
+    the branch it's on. The branch opens the branch menu. On Home, it names
+    the workspace instead.
+    """
+
+    Width = 300
+    Height = 40
+    CompactHeight = 24
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("GFRepoBox")
+
+        self.nameLabel = QElidedLabel(self)
+        self.nameLabel.setObjectName("GFRepoBoxName")
+        self.nameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.nameLabel.setElideMode(Qt.TextElideMode.ElideMiddle)
+
+        self.branchButton = QToolButton(self)
+        self.branchButton.setObjectName("GFRepoBoxBranch")
+        self.branchButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.branchButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.branchButton.setIconSize(QSize(12, 12))
+        self.branchButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.branchButton.setToolTip(_("Switch to branch"))
+
+        layout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self)
+        layout.setContentsMargins(8, 3, 8, 3)
+        layout.setSpacing(1)
+        layout.addWidget(self.nameLabel)
+        layout.addWidget(self.branchButton, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self.setCompact(False)
+
+    def setCompact(self, compact: bool):
+        """Name and branch side by side in compact mode, where the bar is one line high."""
+        layout = self.layout()
+        assert isinstance(layout, QBoxLayout)
+        if compact:
+            layout.setDirection(QBoxLayout.Direction.LeftToRight)
+            self.setFixedSize(RepoSummaryBox.Width, RepoSummaryBox.CompactHeight)
+        else:
+            layout.setDirection(QBoxLayout.Direction.TopToBottom)
+            self.setFixedSize(RepoSummaryBox.Width, RepoSummaryBox.Height)
+
+    def setSummary(self, title: str, branch: str = "", tip: str = ""):
+        self.nameLabel.setText(title)
+        # Leave the name room to breathe: a long branch is cut in the middle
+        metrics = QFontMetrics(self.branchButton.font())
+        self.branchButton.setText(metrics.elidedText(branch, Qt.TextElideMode.ElideMiddle, RepoSummaryBox.Width - 60))
+        self.branchButton.setVisible(bool(branch))
+        self.setToolTip(tip)
+
+
 class MainToolBar(QToolBar):
     openPrefs = Signal()
     setDarkThemeRequested = Signal(bool)
@@ -60,6 +116,9 @@ class MainToolBar(QToolBar):
         self.repoOpen = False
         self.arrangementName = ""
         self.repoButton: QToolButton | None = None
+        self.repoSummary = ("", "", False)
+        "Repo name, branch name, and whether HEAD is detached (see setRepoSummary)."
+        self.workspaceName = ""
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onCustomContextMenuRequested)
@@ -133,6 +192,11 @@ class MainToolBar(QToolBar):
             tip=_("Current repo and branch")
         ).toQAction(self)
 
+        # The same, as a box of its own in the middle of the Centered layout
+        self.repoBox = RepoSummaryBox(self)
+        self.repoBoxAction = QWidgetAction(self)
+        self.repoBoxAction.setDefaultWidget(self.repoBox)
+
         self.themeAction = ActionDef(
             _("Theme"), icon="theme-dark",
         ).toQAction(self)
@@ -150,6 +214,12 @@ class MainToolBar(QToolBar):
             ToolbarLayout.Classic: self.classicArrangement(),
             ToolbarLayout.Centered: self.centeredArrangement(),
         }
+
+        # Keeps the Centered layout's box in the middle of the bar (see centerRepoBox)
+        self.centeringTimer = QTimer(self)
+        self.centeringTimer.setSingleShot(True)
+        self.centeringTimer.setInterval(0)
+        self.centeringTimer.timeout.connect(self.centerRepoBox)
 
         # The workspace button has no action of its own: clicking it opens the list.
         self.setWorkspaceName("")
@@ -233,6 +303,10 @@ class MainToolBar(QToolBar):
         Back, forward and Settings aren't on the bar: they have their menu
         items, keys and mouse buttons.
         """
+        # Sized by centerRepoBox, so the box sits in the middle of the bar
+        # whatever the widths of the groups on either side of it
+        self.boxLeftSpacer = self.spacerAction(1)
+        self.boxRightSpacer = self.spacerAction()
         sidebarGap = self.spacerAction(12)
         syncGap = self.spacerAction(14)
         stashGap = self.spacerAction(14)
@@ -253,11 +327,11 @@ class MainToolBar(QToolBar):
             self.pushAction,
             stashGap,
             self.stashAction,
-            self.spacerAction(),
+            self.boxLeftSpacer,
 
-            self.repoAction,
+            self.repoBoxAction,
             self.branchAction,
-            self.spacerAction(),
+            self.boxRightSpacer,
 
             # Until the sidebar has rows that go to the working directory and
             # to HEAD, these two wait on the right, out of the way of the
@@ -274,7 +348,7 @@ class MainToolBar(QToolBar):
             self.sidebarAction, sidebarGap, syncGap,
             self.fetchAction, *syncSeparators, self.pullAction, self.pushAction, stashGap,
             self.stashAction,
-            self.repoAction, self.branchAction,
+            self.branchAction,
             self.workdirAction, self.headAction,
             self.openInAction,
         ]
@@ -316,11 +390,12 @@ class MainToolBar(QToolBar):
             assert isinstance(button, QToolButton)
             button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
+        # Classic only: the Centered layout has the box instead
         repoButton = self.widgetForAction(self.repoAction)
-        assert isinstance(repoButton, QToolButton)
-        repoButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        repoButton.setObjectName("GFToolbarRepoButton")
+        if isinstance(repoButton, QToolButton):
+            repoButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            repoButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            repoButton.setObjectName("GFToolbarRepoButton")
         self.repoButton = repoButton
 
         sidebarButton = self.widgetForAction(self.sidebarAction)
@@ -329,6 +404,58 @@ class MainToolBar(QToolBar):
 
         self.setToolButtonStyle(self.toolButtonStyle())
         self.setRepoScopedActionsVisible(self.repoOpen)
+
+    def centerRepoBox(self):
+        """
+        Put the Centered layout's box in the middle of the bar, as a title
+        would be, rather than halfway between the groups on either side of it,
+        which aren't the same width. The spacer on its left takes up the
+        difference; the one on its right stretches as usual.
+
+        Worked out from the items' widths rather than from where the bar last
+        put them, which may be out of date while it lays itself out again.
+        """
+        if self.arrangementName != ToolbarLayout.Centered:
+            return
+        leftSpacer = self.widgetForAction(self.boxLeftSpacer)
+        if leftSpacer is None:
+            return
+
+        layout = self.layout()
+        margins = layout.contentsMargins()
+        spacing = layout.spacing()
+
+        def itemWidth(action: QAction) -> int:
+            widget = self.widgetForAction(action)
+            if widget is None or not action.isVisible():
+                return 0
+            hint = widget.sizeHint().width()
+            return min(max(hint, widget.minimumWidth()), widget.maximumWidth()) + spacing
+
+        actions = self.actions()
+        spacerIndex = actions.index(self.boxLeftSpacer)
+        leftOfBox = margins.left() + sum(itemWidth(a) for a in actions[:spacerIndex])
+        fixedWidths = sum(itemWidth(a) for a in actions if a not in (self.boxLeftSpacer, self.boxRightSpacer))
+
+        width = self.width() // 2 - RepoSummaryBox.Width // 2 - spacing - leftOfBox
+        # Never at the expense of the buttons: the bar would push them into its overflow menu
+        room = self.width() - margins.left() - margins.right() - fixedWidths - 2 * spacing - 8
+        width = max(8, min(width, room))
+        if width != leftSpacer.minimumWidth():
+            leftSpacer.setFixedWidth(width)
+            # The bar keeps its items' sizes: have it take the new width into account now
+            layout.invalidate()
+            layout.activate()
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        self.centeringTimer.start()
+
+    def event(self, event: QEvent) -> bool:
+        # Something on the bar changed size (a label, a hidden button)
+        if event.type() == QEvent.Type.LayoutRequest:
+            self.centeringTimer.start()
+        return super().event(event)
 
     def setRepoScopedActionsVisible(self, visible: bool):
         """
@@ -342,6 +469,7 @@ class MainToolBar(QToolBar):
             action.setVisible(visible)
         for action in self.homeActions:
             action.setVisible(not visible)
+        self.refreshRepoBox()
 
     def fillThemeMenu(self):
         dark = self.darkTheme
@@ -366,8 +494,11 @@ class MainToolBar(QToolBar):
         self.themeMenu.clear()
         ActionDef.addToQMenu(self.themeMenu, *actions)
 
-    def setRepoSummary(self, repoName: str, branchName: str, dirty: bool):
+    def setRepoSummary(self, repoName: str, branchName: str, dirty: bool, detached: bool = False):
         """Say which repo is in front of you, and what it's checked out on."""
+        self.repoSummary = (repoName, branchName, detached)
+        self.refreshRepoBox()
+
         star = "*" if dirty else ""
         if not repoName:
             self.repoAction.setText("")
@@ -378,6 +509,27 @@ class MainToolBar(QToolBar):
         self.repoAction.setText(f"{repoName}{star}{separator}{branchName}")
         self.repoAction.setToolTip(
             _("{0} on {1}", repoName, branchName) if branchName else repoName)
+
+    def refreshRepoBox(self):
+        """
+        The box names the repo and its branch. The tab already shows whether
+        there's uncommitted work, so the box doesn't star the name. On Home, it
+        names the workspace; an unloaded tab has nothing to say yet.
+        """
+        repoName, branchName, detached = self.repoSummary
+        if not repoName:
+            title = "" if self.repoOpen else (self.workspaceName or _("Home"))
+            self.repoBox.setSummary(title)
+            return
+        if detached:
+            branchName = _("Detached HEAD")
+        tip = _("{0} on {1}", repoName, branchName) if branchName else repoName
+        self.repoBox.setSummary(repoName, branchName, tip)
+
+    def setRepoMenu(self, menu: QMenu):
+        """The branch menu, opened by the repo button or by the box's branch."""
+        self.repoAction.setMenu(menu)
+        self.repoBox.branchButton.setMenu(menu)
 
     def applyCompact(self, compact: bool):
         """
@@ -421,6 +573,15 @@ class MainToolBar(QToolBar):
             if iconId:
                 action.setIcon(stockIcon(iconId, self.iconColorTable))
 
+        # The box: the repo's name in bold at the normal size, the branch at the labels' size
+        nameFont = QApplication.font()
+        nameFont.setBold(True)
+        self.repoBox.nameLabel.setFont(nameFont)
+        self.repoBox.branchButton.setFont(labelFont)
+        self.repoBox.branchButton.setIcon(stockIcon("git-branch"))
+        self.repoBox.setCompact(compact)
+        self.refreshRepoBox()
+
     def setDarkTheme(self, dark: bool):
         """Show which way the theme is set, right on the button."""
         self.darkTheme = dark
@@ -431,6 +592,8 @@ class MainToolBar(QToolBar):
 
     def setWorkspaceName(self, name: str):
         """Show which workspace is active - or that none is - right on the button."""
+        self.workspaceName = name
+        self.refreshRepoBox()
         if name:
             self.workspaceAction.setText(elide(name, ems=14))
             self.workspaceAction.setToolTip(_("Workspace: {0}", name))

@@ -477,7 +477,8 @@ def _toolbarLooks(mainWindow, iconId="git-workspace"):
         "labelPoints": button.font().pointSizeF(),
         "labelColor": button.palette().color(QPalette.ColorRole.ButtonText).name(),
         "iconColor": inked[0].name() if inked else "",
-        "repoPoints": toolbar.repoButton.font().pointSizeF(),
+        # The repo button (Classic), or the repo's name in the box (Centered)
+        "repoPoints": (toolbar.repoButton or toolbar.repoBox.nameLabel).font().pointSizeF(),
     }
 
 

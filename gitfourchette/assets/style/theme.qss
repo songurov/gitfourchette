@@ -845,6 +845,37 @@ ${neutralOnly}QToolBar#GFToolbar[compact="true"]::separator {
     margin: 5px 2px;
 }
 
+/* The box in the middle: the repo in bold, over its branch */
+#GFRepoBox {
+    background: ${tabTrack};
+    border-radius: ${outerRadius};
+}
+
+#GFRepoBox QLabel {
+    color: ${text};
+}
+
+#GFRepoBox QToolButton {
+    color: ${repoBoxDim};
+    background: transparent;
+    border: none;
+    padding: 0px 12px 0px 0px;
+}
+
+#GFRepoBox QToolButton:hover,
+#GFRepoBox QToolButton:pressed {
+    color: ${text};
+    background: transparent;
+}
+
+#GFRepoBox QToolButton#GFRepoBoxBranch::menu-indicator {
+    image: url(assets:icons/qss-chevron-down.svg);
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 8px;
+    height: 8px;
+}
+
 /* No drop-down marks under Open In, Theme and Workspace: a click opens their menu */
 ${neutralOnly}#GFToolbar QToolButton::menu-indicator {
     image: none;
