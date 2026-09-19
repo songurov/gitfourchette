@@ -170,6 +170,14 @@ class MainToolBar(QToolBar):
         self.pullAction = taskAction(tasks.PullBranch)
         self.pushAction = taskAction(tasks.PushBranch)
 
+        # In the Centered layout, Stash and Branch are split buttons: a click
+        # stashes or starts a branch, as always, and the chevron beside the icon
+        # lists the stashes or the branches. MainWindow fills both menus.
+        self.stashMenu = QMenu(self)
+        self.stashMenu.setObjectName("ToolBarStashMenu")
+        self.stashMenu.setToolTipsVisible(True)
+        self.repoMenu: QMenu | None = None
+
         # One button for every "take this repo somewhere else": the file
         # manager, a terminal, an editor. Its menu is filled by MainWindow,
         # which is the one that knows which repo is in front of you.
@@ -390,6 +398,15 @@ class MainToolBar(QToolBar):
             assert isinstance(button, QToolButton)
             button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
+        splitButtons = {self.stashAction: self.stashMenu, self.branchAction: self.repoMenu}
+        for action, menu in splitButtons.items():
+            split = name == ToolbarLayout.Centered and menu is not None
+            action.setMenu(menu if split else None)
+            button = self.widgetForAction(action)
+            assert isinstance(button, QToolButton)
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup if split
+                                else QToolButton.ToolButtonPopupMode.DelayedPopup)
+
         # Classic only: the Centered layout has the box instead
         repoButton = self.widgetForAction(self.repoAction)
         if isinstance(repoButton, QToolButton):
@@ -527,9 +544,15 @@ class MainToolBar(QToolBar):
         self.repoBox.setSummary(repoName, branchName, tip)
 
     def setRepoMenu(self, menu: QMenu):
-        """The branch menu, opened by the repo button or by the box's branch."""
+        """The branch menu, opened by the repo button, or by the box's branch and Branch's chevron."""
+        self.repoMenu = menu
         self.repoAction.setMenu(menu)
         self.repoBox.branchButton.setMenu(menu)
+        if self.arrangementName == ToolbarLayout.Centered:
+            self.branchAction.setMenu(menu)
+            button = self.widgetForAction(self.branchAction)
+            assert isinstance(button, QToolButton)
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
     def applyCompact(self, compact: bool):
         """

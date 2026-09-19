@@ -133,6 +133,8 @@ class MainWindow(QMainWindow):
         self.repoMenu2.aboutToShow.connect(self.fillRepoButtonMenu)
         self.mainToolBar.setRepoMenu(self.repoMenu2)
 
+        self.mainToolBar.stashMenu.aboutToShow.connect(self.fillStashMenu)
+
         self.openInMenu = QMenu(self)
         self.openInMenu.setObjectName("OpenInMenu")
         self.openInMenu.setToolTipsVisible(True)
@@ -688,6 +690,36 @@ class MainWindow(QMainWindow):
         # the keyboard, even though Ctrl+B is displayed beside the action.
         newBranchAction = self.repoMenu2.actions()[-1]
         newBranchAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+
+    def fillStashMenu(self) -> None:
+        """Stash's chevron: stash again, or pick up a stash where you left it."""
+        try:
+            rw = self.currentRepoWidget()
+        except NoRepoWidgetError:  # pragma: no cover - the button hides without a repo
+            return
+
+        actions = [TaskBook.action(self, tasks.NewStash, accel="S")]
+        stashes = rw.repo.listall_stashes()
+        if stashes:
+            actions.append(ActionDef.SEPARATOR)
+        for stash in stashes:
+            oid = stash.commit_id
+            actions.append(ActionDef(
+                escamp(elide(strip_stash_message(stash.message), ems=30)),
+                icon="git-stash",
+                submenu=[
+                    TaskBook.action(self, tasks.ApplyStash, accel="A", taskArgs=oid),
+                    TaskBook.action(self, tasks.ExportStashAsPatch, accel="X", taskArgs=oid),
+                    ActionDef.SEPARATOR,
+                    TaskBook.action(self, tasks.DropStash, accel="D", taskArgs=oid),
+                ]))
+
+        menu = self.mainToolBar.stashMenu
+        # Submenus from a previous showing are children of the menu: let them go
+        for submenu in menu.findChildren(QMenu, options=Qt.FindChildOption.FindDirectChildrenOnly):
+            submenu.deleteLater()
+        menu.clear()
+        ActionDef.addToQMenu(menu, *actions)
 
     def refreshRepoButton(self) -> None:
         try:
