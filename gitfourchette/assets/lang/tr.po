@@ -5966,13 +5966,13 @@ msgid_plural "Commit {n} files"
 msgstr[0] "{n} dosyayı işle"
 msgstr[1] "{n} dosyayı işle"
 
-#: tasks/jumptasks.py:337
-msgid "The working directory is clean."
-msgstr "Çalışma dizini temiz."
+#: tasks/jumptasks.py:364
+msgid "Nothing to commit"
+msgstr "İşlenecek bir şey yok"
 
-#: tasks/jumptasks.py:338
-msgid "There aren’t any changes to commit."
-msgstr "İşlenecek değişiklik yok."
+#: tasks/jumptasks.py:375
+msgid "Files you change in the working directory will show up here."
+msgstr "Çalışma dizininde değiştirdiğiniz dosyalar burada görünecek."
 
 #: tasks/jumptasks.py:377
 msgid "Shallow clone – End of available history."

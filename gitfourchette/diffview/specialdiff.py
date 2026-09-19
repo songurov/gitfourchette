@@ -90,12 +90,16 @@ class SpecialDiffError:
             icon: str = "SP_MessageBoxInformation",
             preformatted: str = "",
             longform: str = "",
+            centered: bool = False,
     ):
         self.message = message
         self.details = details
         self.icon = icon
         self.preformatted = preformatted
         self.longform = longform
+        # A short page with nothing wrong, e.g. a clean working directory:
+        # shown in the middle of the view, with a small icon
+        self.centered = centered
         self.links = DocumentLinks()
         self.taskInvoker: QObject | None = None
 

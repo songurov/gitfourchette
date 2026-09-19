@@ -13,6 +13,7 @@ from gitfourchette.diffview.diffview import DiffView
 from gitfourchette.nav import NavLocator
 from gitfourchette.settings import WhitespaceMode
 from gitfourchette.themes import ThemeName, formatStyle
+from gitfourchette.toolbox import contrastRatio
 from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
@@ -1631,3 +1632,65 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
         "{0}: on", "{0}: off", "Side-by-side diff", "File display", "Show as list or folder tree",
         "Stage all files", "Unstage all files", "Ask AI about the selected files",
         "AI message language", "AI message detail")
+
+
+# -----------------------------------------------------------------------------
+# A clean working directory
+
+
+def testCleanWorkdirSaysNothingToCommitAndOffersPush(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    area = rw.diffArea
+    view = rw.specialDiffView
+
+    # master is 2 commits ahead of origin/master. The page says it once, in
+    # the words of the graph's chip and the tab, and offers the push
+    assert rw.navLocator.context.isWorkdir()
+    assert view.isVisible()
+    text = view.toPlainText()
+    assert re.search(r"^\W*Nothing to commit\n2 commits not pushed to origin/master\W+Push…$", text), text
+
+    # No file, no options for showing it
+    assert not area.diffButtons.isVisible()
+
+    # A small icon, not an alert: good news in the middle of the view
+    icon: QPixmap = view.document().resource(QTextDocument.ResourceType.ImageResource, QUrl("icon"))
+    assert icon.deviceIndependentSize().width() <= 32
+    qteFind(view, "Nothing to commit")
+    title = view.textCursor()
+    titleStart = view.cursorRect(QTextCursor(view.document().findBlock(title.selectionStart())))
+    titleEnd = view.cursorRect()
+    viewport = view.viewport().rect()
+    assert abs((titleStart.left() + titleEnd.left()) // 2 - viewport.center().x()) < viewport.width() // 10
+    assert titleStart.top() > viewport.height() // 5
+
+    # The details are a step back from the message, still readable
+    foreground, background = view.textColors()
+    qteFind(view, "not pushed")
+    detailsColor = view.textCursor().charFormat().foreground().color()
+    assert detailsColor != foreground
+    assert 4.5 <= contrastRatio(detailsColor, background) < contrastRatio(foreground, background)
+
+    # The link opens the push dialog for the branch
+    qteClickLink(view, r"Push…")
+    dlg = findQDialog(rw, "push.+branch")
+    assert dlg.currentLocalBranch.shorthand == "master"
+    dlg.reject()
+
+    # Once pushed, there's nothing to offer
+    shell("git update-ref refs/remotes/origin/master master", wd)
+    rw.refreshRepo()
+    text = view.toPlainText()
+    assert "Nothing to commit" in text
+    assert "not pushed" not in text
+    assert "Files you change in the working directory will show up here." in text
+
+    # A file's diff brings the options back
+    writeFile(f"{wd}/master.txt", "an edit\n")
+    rw.refreshRepo()
+    qlvClickNthRow(rw.dirtyFiles, 0)
+    assert rw.diffView.isVisible()
+    assert area.diffButtons.isVisible()
+
+    assertTranslatedInForkLanguages("Nothing to commit", "Files you change in the working directory will show up here.")

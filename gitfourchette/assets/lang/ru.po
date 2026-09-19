@@ -5685,13 +5685,13 @@ msgstr[0] "Закоммитить {n} файл"
 msgstr[1] "Закоммитить {n} файла"
 msgstr[2] "Закоммитить {n} файлов"
 
-#: tasks/jumptasks.py:337
-msgid "The working directory is clean."
-msgstr "В рабочей директории нет изменений."
+#: tasks/jumptasks.py:364
+msgid "Nothing to commit"
+msgstr "Нечего коммитить"
 
-#: tasks/jumptasks.py:338
-msgid "There aren’t any changes to commit."
-msgstr "Нет изменений для коммита."
+#: tasks/jumptasks.py:375
+msgid "Files you change in the working directory will show up here."
+msgstr "Файлы, которые вы измените в рабочей директории, появятся здесь."
 
 #: tasks/jumptasks.py:377
 msgid "Shallow clone – End of available history."

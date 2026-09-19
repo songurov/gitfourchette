@@ -9,7 +9,21 @@ from gitfourchette.application import GFApplication
 from gitfourchette.diffview.specialdiff import SpecialDiffError, ImageDelta
 from gitfourchette.localization import *
 from gitfourchette.qt import *
-from gitfourchette.toolbox import stockIcon, escape, DocumentLinks
+from gitfourchette.toolbox import stockIcon, escape, DocumentLinks, contrastRatio, mixColors
+
+
+def secondaryTextColor(foreground: QColor, background: QColor) -> QColor:
+    """
+    The dimmest blend of the foreground into the background, from 45% down,
+    that still reads at 4.5:1 on the background.
+    """
+    ratio = .45
+    while ratio > 0:
+        color = mixColors(foreground, background, ratio)
+        if contrastRatio(color, background) >= 4.5:
+            return color
+        ratio = round(ratio - .05, 2)
+    return QColor(foreground)
 
 
 class SpecialDiffView(QTextBrowser):
@@ -20,6 +34,7 @@ class SpecialDiffView(QTextBrowser):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.documentLinks = None
+        self.centered = False
         self.anchorClicked.connect(self.onAnchorClicked)
         GFApplication.instance().restyle.connect(self.refreshPrefs)
         GFApplication.instance().prefsChanged.connect(self.refreshPrefs)
@@ -38,6 +53,7 @@ class SpecialDiffView(QTextBrowser):
 
     def replaceDocument(self, newDocument: QTextDocument):
         self.documentLinks = None
+        self.centered = False
 
         if self.document():
             self.document().deleteLater()
@@ -47,25 +63,50 @@ class SpecialDiffView(QTextBrowser):
 
         self.setOpenLinks(False)
 
+    def textColors(self) -> tuple[QColor, QColor]:
+        """Foreground and background of the text, as the syntax scheme paints them."""
+        scheme = settings.prefs.syntaxHighlightingScheme()
+        if scheme:
+            return scheme.foregroundColor, scheme.backgroundColor
+        palette = self.palette()
+        return palette.color(QPalette.ColorRole.Text), palette.color(QPalette.ColorRole.Base)
+
     def displaySpecialDiffError(self, err: SpecialDiffError):
         document = QTextDocument(self)
         document.setObjectName("DiffErrorDocument")
 
-        icon = stockIcon(err.icon)
-        pixmap: QPixmap = icon.pixmap(48, 48)
-        document.addResource(QTextDocument.ResourceType.ImageResource, QUrl("icon"), pixmap)
+        # The message reads first; the details are a step back
+        foreground, background = self.textColors()
+        dim = secondaryTextColor(foreground, background).name()
+        details = f"<span style='color: {dim};'>{err.details}</span>" if err.details else ""
 
-        markup = (
-            f"{self.htmlHeader}"
-            "<table width='100%'>"
-            "<tr>"
-            f"<td width='{pixmap.width()}px'><img src='icon'/></td>"
-            "<td width='100%' style='padding-left: 8px; padding-top: 8px;'>"
-            f"<big>{err.message}</big>"
-            f"<br/>{err.details}"
-            "</td>"
-            "</tr>"
-            "</table>")
+        if err.centered:
+            # Good news needs no alarm-sized icon: a small one, as quiet as the details
+            icon = stockIcon(err.icon, f"gray={dim}")
+            pixmap: QPixmap = icon.pixmap(28, 28)
+            markup = (
+                f"{self.htmlHeader}"
+                "<table align='center' cellspacing='0' cellpadding='0'>"
+                "<tr><td align='center'><img src='icon'/></td></tr>"
+                f"<tr><td align='center' style='padding-top: 8px;'><big>{err.message}</big></td></tr>"
+                f"<tr><td align='center' style='padding-top: 4px;'>{details}</td></tr>"
+                "</table>")
+        else:
+            icon = stockIcon(err.icon)
+            pixmap = icon.pixmap(48, 48)
+            markup = (
+                f"{self.htmlHeader}"
+                "<table width='100%'>"
+                "<tr>"
+                f"<td width='{pixmap.width()}px'><img src='icon'/></td>"
+                "<td width='100%' style='padding-left: 8px; padding-top: 8px;'>"
+                f"<big>{err.message}</big>"
+                f"<br/>{details}"
+                "</td>"
+                "</tr>"
+                "</table>")
+
+        document.addResource(QTextDocument.ResourceType.ImageResource, QUrl("icon"), pixmap)
 
         if err.preformatted:
             markup += F"<pre>{escape(err.preformatted)}</pre>"
@@ -80,6 +121,26 @@ class SpecialDiffView(QTextBrowser):
 
         # Let DocumentLinks callbacks invoke RepoTasks using this QObject chain
         err.taskInvoker = document
+
+        self.centered = err.centered
+        self.placeVertically()
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        self.placeVertically()
+
+    def placeVertically(self):
+        """Hold a centered page a little above the middle of the view, whatever its height."""
+        if not self.centered:
+            return
+        document = self.document()
+        frame = document.rootFrame()
+        frameFormat = frame.frameFormat()
+        contentHeight = document.size().height() - frameFormat.topMargin() - frameFormat.bottomMargin()
+        top = max(document.documentMargin(), (self.viewport().height() - contentHeight) * .4)
+        if abs(frameFormat.topMargin() - top) >= 1:
+            frameFormat.setTopMargin(top)
+            frame.setFrameFormat(frameFormat)
 
     def displayImageDelta(self, delta: ImageDelta):
         """

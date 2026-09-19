@@ -6045,13 +6045,13 @@ msgstr[0] "Fă commit la {n} fișier"
 msgstr[1] "Fă commit la {n} fișiere"
 msgstr[2] "Fă commit la {n} de fișiere"
 
-#: tasks/jumptasks.py:337
-msgid "The working directory is clean."
-msgstr "Directorul de lucru este curat."
+#: tasks/jumptasks.py:364
+msgid "Nothing to commit"
+msgstr "Nimic pentru commit"
 
-#: tasks/jumptasks.py:338
-msgid "There aren’t any changes to commit."
-msgstr "Nu există modificări pentru commit."
+#: tasks/jumptasks.py:375
+msgid "Files you change in the working directory will show up here."
+msgstr "Fișierele pe care le modifici în directorul de lucru vor apărea aici."
 
 #: tasks/jumptasks.py:377
 msgid "Shallow clone – End of available history."

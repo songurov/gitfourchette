@@ -5988,12 +5988,12 @@ msgid_plural "Commit {n} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: tasks/jumptasks.py:337
-msgid "The working directory is clean."
+#: tasks/jumptasks.py:364
+msgid "Nothing to commit"
 msgstr ""
 
-#: tasks/jumptasks.py:338
-msgid "There aren’t any changes to commit."
+#: tasks/jumptasks.py:375
+msgid "Files you change in the working directory will show up here."
 msgstr ""
 
 #: tasks/jumptasks.py:377

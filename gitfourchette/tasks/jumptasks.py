@@ -333,10 +333,7 @@ class Jump(RepoTask):
         # Early out if workdir is clean
         if rw.dirtyFiles.isEmpty() and rw.stagedFiles.isEmpty():
             locator = locator.replace(path="")
-            sde = SpecialDiffError(
-                _("The working directory is clean."),
-                _("There aren’t any changes to commit."))
-            raise Jump.Result(locator, sde)
+            raise Jump.Result(locator, self.nothingToCommit())
 
         assert not locator.hasFlags(NavFlags.FuzzyPath), "FuzzyPath should not occur in the workdir"
 
@@ -355,6 +352,32 @@ class Jump(RepoTask):
             locator = rw.navHistory.refine(locator)
 
         return locator
+
+    def nothingToCommit(self) -> SpecialDiffError:
+        """
+        A clean working directory is good news. It says so once, and offers
+        the next step if there is one: commits waiting to be pushed.
+        """
+        from gitfourchette.tasks.nettasks import PushBranch
+
+        repoModel = self.repoModel
+        sde = SpecialDiffError(_("Nothing to commit"), icon="check", centered=True)
+
+        ahead, upstream = 0, ""
+        if repoModel.homeBranch:
+            ahead, upstream = repoModel.countUnpushed(repoModel.homeBranch)
+
+        if ahead and upstream:
+            unpushed = _n("{n} commit not pushed to {0}", "{n} commits not pushed to {0}", ahead, upstream)
+        elif ahead:
+            unpushed = _n("{n} commit not pushed to any remote", "{n} commits not pushed to any remote", ahead)
+        else:
+            sde.details = _("Files you change in the working directory will show up here.")
+            return sde
+
+        pushLink = linkify(_("Push…"), sde.taskLink(PushBranch))
+        sde.details = f"{escape(unpushed)} &nbsp;&middot;&nbsp; {pushLink}"
+        return sde
 
     def showSpecial(self, locator: NavLocator):
         rw = self.rw
@@ -560,6 +583,9 @@ class Jump(RepoTask):
                          and result.delta.new.path.lower().endswith(".svg")
                          and isImageFormatSupported("file.svg"))
         area.diffButtons.svgButton.setVisible(showSvgButton)
+
+        # No file, no options for showing it (e.g. a clean working directory)
+        area.diffButtons.setVisible(result.delta is not None and not isinstance(document, GitConflict))
 
         # Set document
         if document is None:
