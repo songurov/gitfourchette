@@ -17,6 +17,7 @@ from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import avatarColor, avatarInitials
 from gitfourchette.settings import GraphRowLayout
+from gitfourchette.themes import ThemeName, formatStyle
 from gitfourchette.tasks import QueryCommitsTouchingPath
 from .util import *
 
@@ -1265,10 +1266,19 @@ def colorDistance(a: QColor, b: QColor) -> int:
     return max(abs(a.red() - b.red()), abs(a.green() - b.green()), abs(a.blue() - b.blue()))
 
 
+def grabAt1x(widget: QWidget) -> QImage:
+    """Paint a widget into an image at 1x, whatever the screen's scale."""
+    image = QImage(widget.size(), QImage.Format.Format_ARGB32)
+    image.setDevicePixelRatio(1)
+    widget.render(image)
+    return image
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 @pytest.mark.parametrize("layout", [GraphRowLayout.GraphFirst, GraphRowLayout.HashFirst])
-def testUnpushedCommitsHaveHollowBulletPoints(tempDir, mainWindow, monkeypatch, layout):
+def testUnpushedCommitsHaveHollowBulletPoints(tempDir, mainWindow, monkeypatch, layout, theme):
     wd = unpackRepo(tempDir)
-    GFApplication.applyPrefs(graphRowLayout=layout)
+    GFApplication.applyPrefs(graphRowLayout=layout, qtStyle=formatStyle(ThemeName.BuiltIn, theme))
     mainWindow.resize(1200, 600)
     rw = mainWindow.openRepo(wd)
     graphView = rw.graphView
@@ -1283,43 +1293,57 @@ def testUnpushedCommitsHaveHollowBulletPoints(tempDir, mainWindow, monkeypatch, 
     painted = spyOnGraphFrames(graphView, monkeypatch)
 
     def sample(oid: Oid):
-        graphView.viewport().repaint()
-        image = graphView.viewport().grab().toImage()
-        dpr = image.devicePixelRatio()
+        """
+        At 1x: the row's background, left of the graph; the pixels across
+        the bullet point's middle, horizontally and vertically; the pixels
+        where a ring's stroke goes, on either side; and the lane's color.
+        """
+        image = grabAt1x(graphView.viewport())
         center, laneColor = bulletPoint(repoModel, oid, painted[oid])
+        x, y = center.x(), center.y()
+        # The bullet point's center is a pixel corner: the 6 pixels from x-3
+        # to x+2 are the ones inside a hole of radius 3.
+        background = image.pixelColor(2, y)
+        across = [image.pixelColor(x + d, y) for d in range(-3, 3)]
+        down = [image.pixelColor(x, y + d) for d in range(-3, 3)]
+        ring = [image.pixelColor(x + d, y) for d in (-5, -4, 3, 4)]
+        return background, across, down, ring, laneColor
 
-        def pixel(dx: int):
-            return image.pixelColor(int((center.x() + dx) * dpr), int(center.y() * dpr))
+    def assertHollow(oid: Oid, holeColor: QColor):
+        _background, across, down, ring, laneColor = sample(oid)
+        assert all(colorDistance(p, laneColor) < 32 for p in ring), "the ring is in the lane's color"
+        assert all(colorDistance(p, holeColor) < 32 for p in across), "a hole 6 px wide"
+        assert all(colorDistance(p, holeColor) < 32 for p in down), "the lane's line doesn't show in the hole"
 
-        # Bullet point's middle, its edge (the ring on a hollow bullet point),
-        # and the row background in the margin to the left of the graph
-        background = image.pixelColor(int(2 * dpr), int(center.y() * dpr))
-        return pixel(0), pixel(2), background, laneColor
-
-    # Commit that isn't on any remote: a ring in the lane color, hollow in the middle
-    middle, ring, background, laneColor = sample(unpushedOid)
-    assert colorDistance(ring, laneColor) < 32
-    assert colorDistance(middle, laneColor) > 64
-    assert colorDistance(middle, background) < 32
+    # Commit that isn't on any remote: a ring in the lane color, around a
+    # hole that shows the background and is wide enough to tell at 1x
+    background, _across, _down, _ring, _laneColor = sample(unpushedOid)
+    assertHollow(unpushedOid, holeColor=background)
 
     # Pushed commit: a solid dot
-    middle, ring, background, laneColor = sample(pushedOid)
-    assert colorDistance(middle, laneColor) < 32
-    assert colorDistance(ring, laneColor) < 32
+    _background, across, _down, _ring, laneColor = sample(pushedOid)
+    assert all(colorDistance(p, laneColor) < 32 for p in across[1:5])
 
-    # A selected row must still show a hollow bullet point
+    # On a selected row, the hole keeps the color that outlines every line
+    # and bullet point in the graph, so it stands out from the ring even if
+    # the accent color is the lane's
     rw.jump(NavLocator.inCommit(unpushedOid))
     assert graphView.currentCommitId == unpushedOid
-    middle, ring, _background, laneColor = sample(unpushedOid)
-    assert colorDistance(ring, laneColor) < 32
-    assert colorDistance(middle, laneColor) > 64
+    base = graphView.palette().color(QPalette.ColorRole.Base)
+    selected, _across, _down, _ring, laneColor = sample(unpushedOid)
+    assert colorDistance(selected, base) > 32, "expecting a highlighted row"
+    assertHollow(unpushedOid, holeColor=base)
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, theme, laneColor.name()))
+    selected, _across, _down, _ring, laneColor = sample(unpushedOid)
+    assert colorDistance(selected, laneColor) < 32, "expecting a row highlighted in the lane's color"
+    assertHollow(unpushedOid, holeColor=base)
 
     # Once the commits are pushed, the bullet point is solid again
     shell("git update-ref refs/remotes/origin/master master", wd)
     rw.refreshRepo()
     assert not repoModel.unpushedCommits
-    middle, _ring, _background, laneColor = sample(unpushedOid)
-    assert colorDistance(middle, laneColor) < 32
+    _background, across, _down, _ring, laneColor = sample(unpushedOid)
+    assert all(colorDistance(p, laneColor) < 32 for p in across[1:5])
 
 
 def testNoHollowBulletPointsWithoutRemoteBranches(tempDir, mainWindow, monkeypatch):

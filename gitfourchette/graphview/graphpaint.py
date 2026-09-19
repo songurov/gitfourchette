@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 LANE_WIDTH = 10
 LANE_THICKNESS = 2
 DOT_RADIUS = 3
+HOLLOW_RADIUS = 4
+"""Radius of the ring that stands for a commit that isn't on any remote yet,
+to the middle of its stroke, which is as thick as a lane. At 1x the ring is
+10 px across, against 6 for a solid dot, and its hole is 6 px wide. At the
+solid dot's radius, the ring was 8 px across with a 4 px hole, and passed for
+a dot. A radius of 4 also puts both edges of the stroke on whole pixels at 1x
+and 2x, where 3.5 or 4.5 would blur them."""
 UC_COLOR = colors.gray
 UC_STIPPLE = 12
 
@@ -137,12 +144,14 @@ def paintGraphFrame(
     rect.setRight(x + (numFlattenedColumns - 1) * LANE_WIDTH)
     mx = x + myColumn * LANE_WIDTH  # the screen X of this commit's bullet point
 
+    radius = DOT_RADIUS if not hollow else HOLLOW_RADIUS
+
     # draw bullet point _outline_ for this commit, beneath everything else
     # (a hollow bullet point is a ring as thick as a lane, so outline it like a lane)
     outlineThickness = 2 if not hollow else LANE_THICKNESS + 2
     painter.setPen(QPen(outlineColor, outlineThickness, Qt.PenStyle.SolidLine))
     painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawEllipse(QPoint(mx, middle), DOT_RADIUS, DOT_RADIUS)
+    painter.drawEllipse(QPoint(mx, middle), radius, radius)
 
     path = QPainterPath()
 
@@ -230,10 +239,12 @@ def paintGraphFrame(
         painter.setBrush(getColor(commitLane) if oid != UC_FAKEID else UC_COLOR)
     else:
         # Ring in the lane's color. Fill its middle with the outline color
-        # to hide the ends of the lines that meet at the commit.
+        # to hide the ends of the lines that meet at the commit. On a selected
+        # row, that keeps the hole apart from a ring whose lane color is close
+        # to the selection's.
         painter.setPen(QPen(getColor(commitLane), LANE_THICKNESS))
         painter.setBrush(outlineColor)
-    painter.drawEllipse(QPoint(mx, middle), DOT_RADIUS, DOT_RADIUS)
+    painter.drawEllipse(QPoint(mx, middle), radius, radius)
 
     # we're done, clean up
     painter.restore()
