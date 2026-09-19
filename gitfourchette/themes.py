@@ -223,6 +223,8 @@ class ThemeColors:
     "How far each folder level of a file tree steps in; 0 leaves it to the style."
     fileListInset: int = 0
     "Room between a file list's edges and its rows, around Neutral's rounded selection."
+    fileHeaderHeight: int = 24
+    "The strip over a file list, with its name and buttons (Unstaged, Staged)."
     scrollHandleMargin: str = "3px"
     "Room on each side of a scroll bar's handle, across the bar."
 
@@ -283,6 +285,7 @@ class ThemeColors:
     textFaint: str = "#f0f"
     controlBorder: str = "#f0f"
     inputDisabled: str = "#f0f"
+    pillDisabled: str = "#f0f"
     light: str = "#f0f"
     midlight: str = "#f0f"
     mid: str = "#f0f"
@@ -360,6 +363,7 @@ class ThemeColors:
         self.newTabButton       = self.newTabButton or self.tabPill
         self.newTabButtonEdge   = self.newTabButtonEdge or self.tabPillEdge
         self.newTabButtonShade  = self.newTabButtonShade or self.newTabButtonEdge
+        self.pillDisabled       = mix(self.button, self.panelHeader, .5)
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
@@ -545,6 +549,7 @@ NEUTRAL_DARK = ThemeColors(
     fileIconSize       = 14,
     fileTreeIndent     = 16,
     fileListInset      = 10,
+    fileHeaderHeight   = 30,
     scrollHandleMargin = "2px",
     fieldBg            = "#242424",
     fieldBorder        = "#4a4a4a",
@@ -605,6 +610,7 @@ NEUTRAL_LIGHT = ThemeColors(
     fileIconSize       = 14,
     fileTreeIndent     = 16,
     fileListInset      = 10,
+    fileHeaderHeight   = 30,
     scrollHandleMargin = "2px",
     fieldBorder        = "#c8c8c8",
     splitterHandle     = "#dcdcdc",

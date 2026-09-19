@@ -108,3 +108,91 @@ def testNeutralFileRowsLookLikeForks(tempDir, mainWindow):
         assert _rowLooks(files) == modern
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+def _headerLooks(title: QLabel) -> dict:
+    """A file list's title and the buttons on its line, whatever holds them."""
+    buttons = title.parentWidget().findChildren(QToolButton, options=Qt.FindChildOption.FindDirectChildrenOnly)
+    buttons = [b for b in buttons if b.isVisible()]
+    return {
+        "height": title.height(),
+        "order": [w.objectName() for w in sorted([title, *buttons], key=lambda w: w.x())],
+        "titleFont": (title.font().pointSize(), title.font().bold()),
+        "buttons": {b.objectName(): (b.toolButtonStyle(), b.autoRaise(), b.icon().isNull(), b.font().pointSize(),
+                                     b.maximumHeight())
+                    for b in buttons},
+    }
+
+
+def testNeutralFileListHeadersHaveStagePills(tempDir, mainWindow):
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark")
+    try:
+        rw = _openTree(tempDir, mainWindow)
+        area = rw.diffArea
+        QTest.qWait(0)
+        modern = (_headerLooks(area.dirtyHeader), _headerLooks(area.stagedHeader))
+
+        GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral")
+        rw.jump(NavLocator.inUnstaged("lib/ui/view.dart"), check=True)
+        QTest.qWait(0)
+        appPoints = QApplication.font().pointSize()
+        textOnly, iconOnly = Qt.ToolButtonStyle.ToolButtonTextOnly, Qt.ToolButtonStyle.ToolButtonIconOnly
+        smallPoints = round(appPoints * .9)
+
+        # 30 px, as Fork's. The pill comes last, the other buttons are icons
+        # in the reverse order, so that "Stage All" sits next to "Stage".
+        assert _headerLooks(area.dirtyHeader) == {
+            "height": 30,
+            "order": ["dirtyHeader", "fileViewButton", "worktreeAiButton", "discardButton", "stageAllButton",
+                      "stageButton"],
+            "titleFont": (appPoints, True),
+            "buttons": {
+                "stageAllButton": (iconOnly, True, False, smallPoints, 24),
+                "stageButton": (textOnly, False, False, appPoints, 24),
+                "discardButton": (iconOnly, True, False, smallPoints, 24),
+                "worktreeAiButton": (iconOnly, True, False, smallPoints, 24),  # a sparkle, not "AI"
+                "fileViewButton": (iconOnly, True, False, appPoints, 24),  # a tree, not "☰"
+            },
+        }
+        assert _headerLooks(area.stagedHeader)["order"] == [
+            "stagedHeader", "fileViewButton", "unstageAllButton", "unstageButton"]
+
+        # The pill ends where the rows' selection does, and has the button color
+        dirtyHeader = area.stageButton.parentWidget()
+        stagedHeader = area.unstageButton.parentWidget()
+        assert dirtyHeader.height() == 31  # and a line under it
+        pill = area.stageButton
+        assert pill.text() == "Stage"
+        assert pill.geometry().right() == dirtyHeader.width() - 1 - NEUTRAL_DARK.fileListInset
+        image = dirtyHeader.grab().toImage()
+        assert image.pixelColor(pill.x() + 3, pill.geometry().center().y()).name() == NEUTRAL_DARK.button
+        # Nothing to unstage: the other pill is grayed out, but still a pill
+        unstagePill = area.unstageButton
+        assert not unstagePill.isEnabled()
+        image2 = stagedHeader.grab().toImage()
+        assert image2.pixelColor(unstagePill.x() + 3, unstagePill.geometry().center().y()).name() == \
+            NEUTRAL_DARK.pillDisabled
+
+        # The strip has the panel color, with a line under it
+        title = area.dirtyHeader
+        assert image.pixelColor(title.geometry().right() - 2, 3).name() == NEUTRAL_DARK.panelHeader
+        assert image.pixelColor(title.geometry().right() - 2, dirtyHeader.height() - 1).name() == NEUTRAL_DARK.border
+
+        # The name is bold and bright, the count dim
+        assert title.countSplit() == ("Unstaged", " (2)")
+        assert title.countColor == QColor(NEUTRAL_DARK.textDim)
+        assert title.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText).name() == \
+            NEUTRAL_DARK.text
+
+        # The pill still stages
+        pill.click()
+        assert rw.stagedFiles.fileCount() == 1
+        assert rw.dirtyFiles.fileCount() == 1
+
+        # Back to Modern: every header is as it was
+        GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark")
+        QTest.qWait(0)
+        assert (_headerLooks(area.dirtyHeader), _headerLooks(area.stagedHeader)) == modern
+        assert area.dirtyHeader.countColor is None
+    finally:
+        GFApplication.applyPrefs(qtStyle="")

@@ -778,3 +778,40 @@ ${neutralOnly}FileList::item:selected,
 ${neutralOnly}FileList::item:selected:active {
     background: transparent;
 }
+
+/* The strip over a file list: its name in bold, the main action as a pill */
+${neutralOnly}DiffArea #fileListHeader {
+    background: ${panelHeader};
+    border-bottom: 1px solid ${border};
+}
+
+${neutralOnly}DiffArea #fileListHeader QLabel.panelTitle {
+    color: ${text};
+}
+
+${neutralOnly}DiffArea #fileListHeader QToolButton.pill {
+    background: ${button};
+    color: ${text};
+    border: none;
+    border-radius: ${outerRadius};
+    padding: 0px 7px;
+}
+
+${neutralOnly}DiffArea #fileListHeader QToolButton.pill:hover {
+    background: ${buttonHover};
+}
+
+${neutralOnly}DiffArea #fileListHeader QToolButton.pill:pressed {
+    background: ${buttonPressed};
+}
+
+${neutralOnly}DiffArea #fileListHeader QToolButton.pill:disabled {
+    background: ${pillDisabled};
+    color: ${textFaint};
+}
+
+/* The list/tree switch is a plain icon, like Fork's: no arrow for its menu */
+${neutralOnly}DiffArea #fileListHeader QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
+}

@@ -20,6 +20,7 @@ from gitfourchette.diffview.sidebysidediffview import SideBySideDiffView
 from gitfourchette.filelists.committedfiles import CommittedFiles
 from gitfourchette.filelists.dirtyfiles import DirtyFiles
 from gitfourchette.filelists.filelist import FileList
+from gitfourchette.filelists.filelistheader import FileListHeader, FileListTitle
 from gitfourchette.filelists.stagedfiles import StagedFiles
 from gitfourchette.exttools.aichat import availableProviders, cliArguments, configuredModel, ResponseStream
 from gitfourchette.forms.banner import Banner
@@ -31,6 +32,7 @@ from gitfourchette.localization import *
 from gitfourchette.nav import NavContext, NavLocator, NavFlags
 from gitfourchette.qt import *
 from gitfourchette.tasks import TaskBook, AmendCommit, NewCommit, NewStash
+from gitfourchette.themes import ThemeVariant, activeTheme
 from gitfourchette.toolbox import *
 
 FileStackPage = Literal["workdir", "commit"]
@@ -39,10 +41,6 @@ DiffStackPage = Literal["text", "special", "conflict"]
 FILEHEADER_HEIGHT = 24
 
 logger = logging.getLogger(__name__)
-
-
-def gridPadding():
-    return QSpacerItem(3, 1, QSizePolicy.Policy.Fixed)
 
 
 class DiffArea(QWidget):
@@ -57,6 +55,9 @@ class DiffArea(QWidget):
         self.inlineCommitPending = False
         self.commitAiProviders = availableProviders()
         self.fileViewActions = []
+        self.fileListHeaders: list[FileListHeader] = []
+        self.fileListGaps: list[QSpacerItem] = []
+        "The pixel between each header and its list, where Neutral draws a line instead"
 
         fileStack = self._makeFileStack(repoModel)
         diffContainer = self._makeDiffContainer(repoModel)
@@ -227,8 +228,13 @@ class DiffArea(QWidget):
         fileStack.addWidget(committedFilesContainer)
         return fileStack
 
+    def _makeFileListGap(self) -> QSpacerItem:
+        gap = QSpacerItem(1, 1)
+        self.fileListGaps.append(gap)
+        return gap
+
     def _makeDirtyContainer(self, repoModel):
-        header = QElidedLabel(" ")
+        header = FileListTitle(" ")
         header.setProperty("class", "panelTitle")
         header.setObjectName("dirtyHeader")
         header.setToolTip(_("Unstaged files: will not be included in the commit unless you stage them."))
@@ -264,24 +270,21 @@ class DiffArea(QWidget):
         discardButton.setAccessibleName(discardButton.toolTip())
         appendShortcutToToolTip(discardButton, GlobalShortcuts.discardHotkeys[0])
 
+        headerBar = FileListHeader(
+            self, header, [stageAllButton, stageButton, discardButton, worktreeAiButton, fileViewButton],
+            pill=stageButton)
+        headerBar.setNeutralIcon(worktreeAiButton, "ai-sparkle")
+        headerBar.setNeutralIcon(fileViewButton, "view-list-tree")
+        self.fileListHeaders.append(headerBar)
+
         container = QWidget(self)
         layout = QGridLayout(container)
         layout.setSpacing(0)  # automatic frameless list views on KDE Plasma 6 Breeze
         layout.setContentsMargins(QMargins())
-        # Row 0
-        layout.addItem(gridPadding(),           0, 0)
-        layout.addWidget(header,                0, 1)
-        layout.addWidget(stageAllButton,        0, 2)
-        layout.addWidget(stageButton,           0, 3)
-        layout.addWidget(discardButton,         0, 4)
-        layout.addWidget(worktreeAiButton,      0, 5)
-        layout.addWidget(fileViewButton,        0, 6)
-        # Row 1
-        layout.addItem(QSpacerItem(1, 1),       1, 0, 1, 7)
-        # Row 2
-        layout.addWidget(dirtyFiles.searchBar,  2, 0, 1, 7)
-        # Row 3
-        layout.addWidget(dirtyFiles,            3, 0, 1, 7)
+        layout.addWidget(headerBar,             0, 0)
+        layout.addItem(self._makeFileListGap(), 1, 0)
+        layout.addWidget(dirtyFiles.searchBar,  2, 0)
+        layout.addWidget(dirtyFiles,            3, 0)
         layout.setRowStretch(3, 100)
 
         stageAllButton.clicked.connect(dirtyFiles.stageAll)
@@ -304,7 +307,7 @@ class DiffArea(QWidget):
         return container
 
     def _makeStageContainer(self, repoModel):
-        header = QElidedLabel(" ")
+        header = FileListTitle(" ")
         header.setObjectName("stagedHeader")
         header.setProperty("class", "panelTitle")
         header.setToolTip(_("Staged files: will be included in the commit."))
@@ -492,23 +495,20 @@ class DiffArea(QWidget):
         stageCommitFormLayout.setSpacing(0)
         stageCommitFormLayout.addWidget(commitForm)
 
+        headerBar = FileListHeader(self, header, [unstageAllButton, unstageButton, fileViewButton], pill=unstageButton)
+        headerBar.setNeutralIcon(fileViewButton, "view-list-tree")
+        self.fileListHeaders.append(headerBar)
+
         # Lay out container
         container = QWidget(self)
         layout = QGridLayout(container)
         layout.setContentsMargins(QMargins())
         layout.setSpacing(0)  # automatic frameless list views on KDE Plasma 6 Breeze
-        # Row 0
-        layout.addItem(gridPadding(),           0, 0)
-        layout.addWidget(header,                0, 1)
-        layout.addWidget(unstageAllButton,      0, 2)
-        layout.addWidget(unstageButton,         0, 3)
-        layout.addWidget(fileViewButton,        0, 4)
-        # Row 1
-        layout.addItem(QSpacerItem(1, 1),       1, 0)
-        # Row 2
-        layout.addWidget(stagedFiles.searchBar, 2, 0, 1, 5)  # row col rowspan colspan
-        layout.addWidget(stagedFiles,           3, 0, 1, 5)
-        layout.addWidget(stageCommitFormHost,   4, 0, 1, 5)
+        layout.addWidget(headerBar,             0, 0)
+        layout.addItem(self._makeFileListGap(), 1, 0)
+        layout.addWidget(stagedFiles.searchBar, 2, 0)
+        layout.addWidget(stagedFiles,           3, 0)
+        layout.addWidget(stageCommitFormHost,   4, 0)
         layout.setRowStretch(3, 100)
 
         # Save references
@@ -714,22 +714,24 @@ class DiffArea(QWidget):
     def _makeCommittedFilesContainer(self, repoModel):
         committedFiles = CommittedFiles(repoModel, self)
         fileViewButton = self._makeFileViewButton()
-        header = QElidedLabel(" ")
+        header = FileListTitle(" ")
         header.setObjectName("committedHeader")
         header.setProperty("class", "panelTitle")
         header.setMinimumHeight(FILEHEADER_HEIGHT)
         header.setEnabled(False)
 
+        headerBar = FileListHeader(self, header, [fileViewButton])
+        headerBar.setNeutralIcon(fileViewButton, "view-list-tree")
+        self.fileListHeaders.append(headerBar)
+
         container = QWidget(self)
         layout = QGridLayout(container)
         layout.setContentsMargins(QMargins())
         layout.setSpacing(0)  # automatic frameless list views on KDE Plasma 6 Breeze
-        layout.addItem(gridPadding(),               0, 0)
-        layout.addWidget(header,                    0, 1)
-        layout.addWidget(fileViewButton,            0, 2)
-        layout.addWidget(committedFiles.searchBar,  1, 0, 1, 3)
-        layout.addItem(QSpacerItem(1, 1),           2, 0, 1, 3)
-        layout.addWidget(committedFiles,            3, 0, 1, 3)
+        layout.addWidget(headerBar,                 0, 0)
+        layout.addWidget(committedFiles.searchBar,  1, 0)
+        layout.addItem(self._makeFileListGap(),     2, 0)
+        layout.addWidget(committedFiles,            3, 0)
 
         self.committedFiles = committedFiles
         self.committedHeader = header
@@ -866,6 +868,9 @@ class DiffArea(QWidget):
         for button in self.stageButton, self.unstageButton, self.discardButton:
             button.setEnabled(False)
 
+        GFApplication.instance().prefsChanged.connect(self.refreshTheme)
+        GFApplication.instance().restyle.connect(self.refreshTheme)
+
         # Smaller font for header text
         for smallWidget in (
                 self.contextHeader,
@@ -882,6 +887,20 @@ class DiffArea(QWidget):
                 *self.diffButtons.buttons,
         ):
             tweakWidgetFont(smallWidget, 90)
+
+        self.refreshTheme()
+
+    def refreshTheme(self):
+        """Neutral gives the file lists' headers Fork's shape (see FileListHeader)."""
+        theme = activeTheme()
+        for header in self.fileListHeaders:
+            header.applyTheme(theme)
+        # Neutral's headers draw the line under them themselves
+        neutral = theme is not None and theme.variant == ThemeVariant.Neutral
+        for gap in self.fileListGaps:
+            gap.changeSize(1, 0 if neutral else 1)
+        for header in self.fileListHeaders:
+            header.parentWidget().layout().invalidate()
 
     # -------------------------------------------------------------------------
     # File navigation
