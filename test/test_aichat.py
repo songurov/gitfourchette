@@ -72,7 +72,20 @@ def testModelCommands(aiDialog):
 
 
 def fakeCli(monkeypatch, code):
+    # The fake CLI's source code travels through argv. On macOS, QProcess encodes arguments
+    # with QFile.encodeName(), which decomposes accented letters (NFD): a literal such as
+    # 'Français' would then differ from the NFC text that the dialog writes to stdin.
+    # Escape non-ASCII characters so the script's string literals reach Python unchanged.
+    code = code.encode("ascii", "backslashreplace").decode("ascii")
     monkeypatch.setattr(aichatdialog, "cliArguments", lambda *args: ["-c", code])
+
+
+def fakeProviders(monkeypatch, providers):
+    """Pretend that exactly these AI CLIs are installed, whatever is on the real PATH."""
+    monkeypatch.setattr(aichat, "availableProviders", lambda: dict(providers))
+    monkeypatch.setattr(aichatdialog, "availableProviders", lambda: dict(providers))
+    monkeypatch.setattr(aichatdialog, "configuredModel", lambda provider: "configured-model")
+    monkeypatch.setattr(aichatdialog, "modelChoices", lambda provider: ["other-model"])
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude"])
@@ -290,16 +303,55 @@ print(json.dumps({'type': 'item.completed', 'item': {'id': '1', 'type': 'agent_m
 
 @pytest.mark.parametrize("ref", ["refs/heads/master", "refs/remotes/origin/master"])
 def testBranchPresetMenu(tempDir, mainWindow, monkeypatch, ref):
-    monkeypatch.setattr(aichat, "availableProviders", lambda: {"codex": "/bin/codex"})
+    fakeProviders(monkeypatch, {"codex": "/bin/codex"})
     rw = mainWindow.openRepo(unpackRepo(tempDir))
     menu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByRef(ref))
     assert menu.actions()[0].text() == "Ask AI about branch…"
     assert [a.text() for a in menu.actions()[1:6]] == [caption + "…" for caption, _prompt in aichat.PRESETS.values()]
+    # The test repo's origin is on GitHub: the pull request action follows the presets
+    assert menu.actions()[6].text() == "Create or Open Pull Request…"
+    assert menu.actions()[7].isSeparator()
     menu.actions()[1].trigger()
     dlg = rw.sidebar.findChild(AiChatDialog)
     waitUntilTrue(lambda: dlg.process is None)
     assert dlg.branch == ref
     assert dlg.input.toPlainText() == aichat.PRESETS["review"][1]
+    assert not dlg.messages
+    dlg.reject()
+
+
+@pytest.mark.parametrize("installed", [False, True])
+@pytest.mark.parametrize("ref", ["refs/heads/master", "refs/remotes/origin/master"])
+def testChangeRequestAction(tempDir, mainWindow, monkeypatch, ref, installed):
+    fakeProviders(monkeypatch, {"codex": "/bin/codex"} if installed else {})
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    menu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByRef(ref))
+    assert menu.actions()[0].text() == "Ask AI about branch…"
+    assert menu.actions()[0].isEnabled() == installed
+    action = menu.actions()[6]
+    assert action.text() == "Create or Open Pull Request…"
+    assert action.isEnabled()
+
+    with MockDesktopServicesContext() as services:
+        action.trigger()
+        openedUrls = list(services.urls)
+    dlg = rw.sidebar.findChild(AiChatDialog)
+
+    if not installed:
+        # Without an AI CLI, the action opens an empty pull request page in the browser
+        assert dlg is None
+        assert openedUrls == [QUrl("https://github.com/libgit2/TestGitRepository/pull/new/master?expand=1")]
+        return
+
+    assert not openedUrls
+    waitUntilTrue(lambda: dlg.process is None)
+    # The chat keeps the five general-purpose presets; the request summary is not one of them
+    assert [b.text() for b in dlg.presetButtons] == ["Code review", "Find bugs", "Performance", "Security", "Summary"]
+    assert dlg.branch == ref
+    assert dlg.changeRequest == ("https://github.com/libgit2/TestGitRepository", "master")
+    assert dlg.changeRequestButton.text() == "Open Pull Request"
+    # The request summary prompt is ready to send, but nothing is sent without the user
+    assert dlg.input.toPlainText() == aichat.CHANGE_REQUEST_PROMPT
     assert not dlg.messages
     dlg.reject()
 

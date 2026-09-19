@@ -9,7 +9,7 @@ from pathlib import Path
 
 from gitfourchette import settings
 from gitfourchette.exttools.aichat import availableProviders, configuredModel, modelChoices, cliArguments, ResponseStream, makePrompt, makeWorktreePrompt
-from gitfourchette.exttools.aichat import PRESETS
+from gitfourchette.exttools.aichat import CHANGE_REQUEST_PROMPT, PRESETS
 from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.localization import _, _n
 from gitfourchette.qt import *
@@ -185,6 +185,7 @@ class AiChatDialog(QDialog):
             self.changeRequestButton.setAutoDefault(False)
             self.changeRequestButton.clicked.connect(self.openChangeRequest)
             buttons.addWidget(self.changeRequestButton)
+            self.input.setPlainText(_(CHANGE_REQUEST_PROMPT))
         self.sendButton = QPushButton(_("Send"))
         self.sendButton.setAutoDefault(False)
         self.sendButton.clicked.connect(self.send)

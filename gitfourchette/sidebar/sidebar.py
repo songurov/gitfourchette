@@ -539,7 +539,8 @@ class Sidebar(QTreeView):
                 caption = _("Create or Open Pull Request…") if hostName == "GitHub" else _("Create or Open Merge Request…")
                 changeRequestActions = [ActionDef(caption, lambda: self.openChangeRequest(data),
                                                   icon="host-github" if hostName == "GitHub" else "host-gitlab")]
-            actions = [*changeRequestActions, *aiActions, ActionDef.SEPARATOR, *actions]
+            # "Ask AI about branch…" stays the first entry, followed by the presets.
+            actions = [*aiActions, *changeRequestActions, ActionDef.SEPARATOR, *actions]
 
         if not actions:
             return None
@@ -590,7 +591,6 @@ class Sidebar(QTreeView):
             dialog = AiChatDialog(
                 self.sidebarModel.repo, [], self, branch=ref,
                 changeRequest=(remoteUrl, sourceBranch))
-            dialog.usePreset("change_request")
             dialog.open()
             return
         url, _host = WebHost.makeChangeRequestLink(remoteUrl, sourceBranch)
