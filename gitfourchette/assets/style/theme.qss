@@ -876,6 +876,31 @@ ${neutralOnly}QToolBar#GFToolbar[compact="true"]::separator {
     height: 8px;
 }
 
+/* Stash and Branch: a small chevron beside the icon opens their menu */
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"] {
+    padding-right: 10px;
+}
+
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"]::menu-button {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 11px;
+    height: 20px;
+    border: none;
+    border-radius: ${innerRadius};
+    background: transparent;
+}
+
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"]::menu-button:hover {
+    background: ${hover};
+}
+
+${neutralOnly}#GFToolbar QToolButton::menu-arrow {
+    image: url(assets:icons/qss-chevron-down.svg);
+    width: 8px;
+    height: 8px;
+}
+
 /* No drop-down marks under Open In, Theme and Workspace: a click opens their menu */
 ${neutralOnly}#GFToolbar QToolButton::menu-indicator {
     image: none;

@@ -280,3 +280,87 @@ def testClassicLayoutHasNoBox(tempDir, mainWindow):
     assert not toolbar.repoBox.isVisible()
     assert toolbar.repoButton is toolbar.widgetForAction(toolbar.repoAction)
     assert "TestGitRepository\nmaster" == toolbar.repoAction.text()
+
+
+def testNeutralStashAndBranchAreSplitButtons(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    mainWindow.openRepo(unpackRepo(tempDir))
+    split = QToolButton.ToolButtonPopupMode.MenuButtonPopup
+
+    stashButton = toolbar.widgetForAction(toolbar.stashAction)
+    branchButton = toolbar.widgetForAction(toolbar.branchAction)
+    assert stashButton.popupMode() == split
+    assert branchButton.popupMode() == split
+    assert toolbar.stashAction.menu() is toolbar.stashMenu
+    assert toolbar.branchAction.menu() is mainWindow.repoMenu2
+
+    # Modern keeps plain buttons
+    GFApplication.applyPrefs(qtStyle=MODERN)
+    for action in toolbar.stashAction, toolbar.branchAction:
+        assert toolbar.widgetForAction(action).popupMode() != split
+        assert action.menu() is None
+
+    # And back
+    GFApplication.applyPrefs(qtStyle=NEUTRAL)
+    assert toolbar.widgetForAction(toolbar.branchAction).popupMode() == split
+    assert toolbar.branchAction.menu() is mainWindow.repoMenu2
+
+
+def testNeutralStashButtonStillStashesOnClick(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "work in progress")
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    toolbar.widgetForAction(toolbar.stashAction).click()
+    dlg = findQDialog(rw, "new stash")
+    dlg.reject()
+
+
+def testNeutralStashMenuListsTheStashes(tempDir, mainWindow, neutral):
+    from . import reposcenario
+
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    reposcenario.stashedChange(wd)
+    writeFile(f"{wd}/a/a2.txt", "more")
+    shell("git stash -m 'second one'", wd)
+    rw = mainWindow.openRepo(wd)
+    assert 2 == len(rw.repo.listall_stashes())
+
+    mainWindow.fillStashMenu()
+    menu = toolbar.stashMenu
+    texts = [stripAccelerators(a.text()) for a in menu.actions() if not a.isSeparator()]
+    assert texts == ["Stash Changes…", "second one", "helloworld"]
+
+    # Filling it again doesn't pile up submenus
+    mainWindow.fillStashMenu()
+    QTest.qWait(0)
+    assert 2 == len([a for a in menu.actions() if a.menu()])
+
+    triggerMenuAction(menu, "helloworld/apply")
+    qmb = findQMessageBox(rw, "apply.*stash")
+    qmb.checkBox().setChecked(True)  # and delete it
+    qmb.accept()
+    assert 1 == len(rw.repo.listall_stashes())
+    assert qlvGetRowData(rw.dirtyFiles) == ["a/a1.txt"]
+
+    mainWindow.fillStashMenu()
+    triggerMenuAction(menu, "second one/delete")
+    acceptQMessageBox(rw, "really delete.+stash")
+    assert 0 == len(rw.repo.listall_stashes())
+
+    mainWindow.fillStashMenu()
+    assert ["Stash Changes…"] == [stripAccelerators(a.text()) for a in menu.actions()]
+
+
+def testNeutralBranchMenuSwitchesBranch(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    menu = toolbar.branchAction.menu()
+    menu.aboutToShow.emit()
+    assert findMenuAction(menu, "master").isChecked()
+    triggerMenuAction(menu, "no-parent")
+    acceptQMessageBox(rw, "switch to")
+    assert "no-parent" == rw.repoModel.homeBranch
