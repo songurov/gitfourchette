@@ -1,0 +1,98 @@
+# -----------------------------------------------------------------------------
+# Copyright (C) 2026 Iliyas Jorio.
+# This file is part of GitFourchette, distributed under the GNU GPL v3.
+# -----------------------------------------------------------------------------
+
+from gitfourchette.diffview.diffdocument import DiffDocument, DiffTextFormats, LineData
+from gitfourchette.qt import *
+
+
+class SideBySideDiffView(QWidget):
+    """Aligned old/new presentation of a unified DiffDocument."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.oldView = self._makeView()
+        self.newView = self._makeView()
+
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        splitter.setObjectName("Split_SideBySideDiff")
+        splitter.setChildrenCollapsible(False)
+        splitter.addWidget(self.oldView)
+        splitter.addWidget(self.newView)
+        splitter.setSizes([1, 1])
+
+        self.oldView.verticalScrollBar().valueChanged.connect(self.newView.verticalScrollBar().setValue)
+        self.newView.verticalScrollBar().valueChanged.connect(self.oldView.verticalScrollBar().setValue)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(QMargins())
+        layout.setSpacing(0)
+        layout.addWidget(splitter)
+
+    def _makeView(self):
+        view = QPlainTextEdit(self)
+        view.setReadOnly(True)
+        view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        return view
+
+    @staticmethod
+    def _row(text: str, lineNo: int, origin: str, fmt: QTextBlockFormat | None = None):
+        prefix = "" if lineNo < 0 else str(lineNo)
+        return f"{prefix:>6} {origin or ' '} {text.removesuffix(chr(10))}", fmt
+
+    @classmethod
+    def _alignedRows(cls, lines: list[LineData]):
+        oldRows = []
+        newRows = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.hunkPos.isHunkHeaderLine():
+                row = cls._row(line.text, -1, "", DiffTextFormats.hunkBF)
+                oldRows.append(row)
+                newRows.append(row)
+                i += 1
+                continue
+            if line.origin not in "+-":
+                oldRows.append(cls._row(line.text, line.oldLineNo, " "))
+                newRows.append(cls._row(line.text, line.newLineNo, " "))
+                i += 1
+                continue
+
+            deletions = []
+            additions = []
+            clumpID = line.clumpID
+            while i < len(lines) and lines[i].clumpID == clumpID:
+                item = lines[i]
+                (additions if item.origin == "+" else deletions).append(item)
+                i += 1
+            for n in range(max(len(deletions), len(additions))):
+                if n < len(deletions):
+                    item = deletions[n]
+                    oldRows.append(cls._row(item.text, item.oldLineNo, "-", DiffTextFormats.delBF))
+                else:
+                    oldRows.append(("", None))
+                if n < len(additions):
+                    item = additions[n]
+                    newRows.append(cls._row(item.text, item.newLineNo, "+", DiffTextFormats.addBF))
+                else:
+                    newRows.append(("", None))
+        return oldRows, newRows
+
+    @staticmethod
+    def _fill(view: QPlainTextEdit, rows):
+        view.clear()
+        cursor = view.textCursor()
+        for index, (text, blockFormat) in enumerate(rows):
+            if index:
+                cursor.insertBlock()
+            cursor.setBlockFormat(blockFormat or QTextBlockFormat())
+            cursor.insertText(text)
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        view.setTextCursor(cursor)
+
+    def replaceDocument(self, document: DiffDocument):
+        oldRows, newRows = self._alignedRows(document.lineData)
+        self._fill(self.oldView, oldRows)
+        self._fill(self.newView, newRows)

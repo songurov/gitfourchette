@@ -16,6 +16,7 @@ from gitfourchette.exttools.toolprocess import ToolProcess
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.filelists.filebatchtask import FileBatchTask
 from gitfourchette.filelists.filelistmodel import FileListModel
+from gitfourchette.filelists.filetreemodel import FileTreeModel
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.gitdriver import *
 from gitfourchette.gitdriver.gitdeltafile import HexHashFFFF
@@ -32,7 +33,7 @@ from gitfourchette.toolbox import *
 
 class FileListDelegate(QStyledItemDelegate):
     """
-    Item delegate for QListView that supports highlighting search terms from a SearchBar
+    Item delegate for FileList that supports highlighting search terms from a SearchBar
     """
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
@@ -49,6 +50,10 @@ class FileListDelegate(QStyledItemDelegate):
         font: QFont = index.data(Qt.ItemDataRole.FontRole)
         fullText: str = index.data(Qt.ItemDataRole.DisplayRole)
         searchTerm: str = widget.searchBar.provider.term()
+
+        if index.data(FileListModel.Role.Delta) is None:
+            super().paint(painter, option, index)
+            return
 
         # Prepare icon and text rects
         rect = QRect(option.rect)
@@ -125,7 +130,30 @@ class FileListDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class FileList(QListView):
+class FileListSearchProvider(ItemViewSearchProvider):
+    @property
+    def buddyModel(self):
+        view = self._buddy
+        return view.flModel
+
+    def _currentRow(self):
+        view = self._buddy
+        path = view.currentIndex().data(FileListModel.Role.FilePath)
+        return view.flModel.fileRows.get(path, -1)
+
+    def _jumpToIndex(self, index: QModelIndex):
+        view = self._buddy
+        if view.treeMode:
+            path = index.data(FileListModel.Role.FilePath)
+            index = view.treeModel.indexForPath(path)
+            ancestor = index.parent()
+            while ancestor.isValid():
+                view.expand(ancestor)
+                ancestor = ancestor.parent()
+        view.selectionModel().setCurrentIndex(index, QItemSelectionModel.SelectionFlag.SelectCurrent)
+
+
+class FileList(QTreeView):
     nothingClicked = Signal()
     """ Only emitted if the widget has focus. """
     selectedCountChanged = Signal(int)
@@ -147,8 +175,14 @@ class FileList(QListView):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onContextMenuRequested)
 
-        flModel = FileListModel(self, self.repoModel.repo, navContext)
-        self.setModel(flModel)
+        self._flModel = FileListModel(self, self.repoModel.repo, navContext)
+        self.treeModel = FileTreeModel(self._flModel, self)
+        self.treeMode = False
+        self.setModel(self._flModel)
+        self.setHeaderHidden(True)
+        self.setRootIsDecorated(True)
+        self.setItemsExpandable(True)
+        self.setExpandsOnDoubleClick(False)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         self._selectionBackup = []
@@ -158,16 +192,16 @@ class FileList(QListView):
         self.setIconSize(QSize(iconSize, iconSize))
         self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)  # prevent editing text after double-clicking
-        self.setUniformItemSizes(True)  # potential perf boost with many files
+        self.setUniformRowHeights(True)  # potential perf boost with many files
 
-        searchProvider = ItemViewSearchProvider(self)
+        searchProvider = FileListSearchProvider(self)
         searchProvider.dataRole = FileListModel.Role.FilePath
 
         self.searchBar = SearchBar(self, searchProvider)
         self.searchBar.ui.forwardButton.hide()
         self.searchBar.ui.backwardButton.hide()
         self.searchBar.hide()
-        flModel.modelAboutToBeReset.connect(self.searchBar.reevaluateSearchTerm)
+        self._flModel.modelAboutToBeReset.connect(self.searchBar.reevaluateSearchTerm)
 
         # Search result highlighter
         self.setItemDelegate(FileListDelegate(self))
@@ -179,6 +213,7 @@ class FileList(QListView):
         makeWidgetShortcut(self, self.copyPaths, QKeySequence.StandardKey.Copy)
 
     def refreshPrefs(self):
+        self.setTreeMode(settings.prefs.fileTreeView)
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         nameFirst = settings.prefs.pathDisplayStyle == PathDisplayStyle.FileNameFirst
         self.setTextElideMode(Qt.TextElideMode.ElideRight if nameFirst else Qt.TextElideMode.ElideMiddle)
@@ -193,15 +228,43 @@ class FileList(QListView):
 
     @property
     def flModel(self) -> FileListModel:
-        model = self.model()
-        assert isinstance(model, FileListModel)
-        return model
+        return self._flModel
+
+    def fileCount(self) -> int:
+        return self.flModel.rowCount()
+
+    def setTreeMode(self, enabled: bool):
+        if self.treeMode == enabled:
+            return
+        selectedPaths = list(self.selectedPaths())
+        currentPath = self.currentIndex().data(FileListModel.Role.FilePath)
+        with QSignalBlockerContext(self):
+            self.treeMode = enabled
+            self.setModel(self.treeModel if enabled else self.flModel)
+            if enabled:
+                self.expandAll()
+            selection = QItemSelection()
+            for path in selectedPaths:
+                index = self.indexForPath(path)
+                selection.select(index, index)
+            self.selectionModel().select(selection, QItemSelectionModel.SelectionFlag.Select)
+            if currentPath in self.flModel.fileRows:
+                self.selectionModel().setCurrentIndex(
+                    self.indexForPath(currentPath), QItemSelectionModel.SelectionFlag.NoUpdate)
+        self.selectedCountChanged.emit(len(selectedPaths))
+        self.searchBar.reevaluateSearchTerm()
+
+    def indexForPath(self, path: str) -> QModelIndex:
+        return (self.treeModel.indexForPath(path) if self.treeMode
+                else self.flModel.index(self.flModel.getRowForFile(path)))
 
     def isEmpty(self):
-        return self.model().rowCount() == 0
+        return self.fileCount() == 0
 
     def setContents(self, deltas: Iterable[GitDelta]):
         self.flModel.setContents(deltas)
+        if self.treeMode:
+            self.expandAll()
         self.updateFocusPolicy()
         self.searchBar.reevaluateSearchTerm()
 
@@ -223,11 +286,19 @@ class FileList(QListView):
             return None
 
         actions = self.contextMenuActions(deltas)
+        actions.extend([
+            ActionDef.SEPARATOR,
+            ActionDef(_("Tree view"), lambda: GFApplication.applyPrefs(fileTreeView=True), checkState=self.treeMode),
+            ActionDef(_("List view"), lambda: GFApplication.applyPrefs(fileTreeView=False), checkState=not self.treeMode),
+        ])
         menu = ActionDef.makeQMenu(self, actions)
         menu.setObjectName("FileListContextMenu")
         return menu
 
     def onContextMenuRequested(self, point: QPoint):
+        index = self.indexAt(point)
+        if self.treeMode and index.isValid() and index.data(FileListModel.Role.Delta) is None:
+            return
         menu = self.makeContextMenu()
         if menu is not None:
             menu.aboutToHide.connect(menu.deleteLater)
@@ -415,11 +486,16 @@ class FileList(QListView):
         self.statusMessage.emit(clipboardStatusMessage(text))
 
     def selectRow(self, rowNumber=0):
-        if self.model().rowCount() == 0:
+        if self.isEmpty():
             self.emitNothingClicked()
             self.clearSelection()
         else:
-            self.setCurrentIndex(self.model().index(rowNumber or 0, 0))
+            row = rowNumber or 0
+            if self.treeMode:
+                path = self.flModel.getFileAtRow(row)
+                self.setCurrentIndex(self.treeModel.indexForPath(path))
+            else:
+                self.setCurrentIndex(self.flModel.index(row, 0))
 
     def emitNothingClicked(self):
         if self.hasFocus():
@@ -458,7 +534,9 @@ class FileList(QListView):
             self.emitNothingClicked()
             return
 
-        locator: NavLocator = self.flModel.data(current, FileListModel.Role.Locator)
+        locator: NavLocator = current.data(FileListModel.Role.Locator)
+        if locator is None:
+            return
         locator = locator.withExtraFlags(NavFlags.BypassFileSelect)
         Jump.invoke(self, locator)
 
@@ -479,11 +557,13 @@ class FileList(QListView):
         model.highlightedCounterpartRow = newRow
 
         if oldRow >= 0:
-            oldIndex = model.index(oldRow, 0)
+            oldIndex = (self.treeModel.indexForPath(model.getFileAtRow(oldRow)) if self.treeMode
+                        else model.index(oldRow, 0))
             self.update(oldIndex)
 
         if newRow >= 0:
-            newIndex = model.index(newRow, 0)
+            newIndex = (self.treeModel.indexForPath(model.getFileAtRow(newRow)) if self.treeMode
+                        else model.index(newRow, 0))
             self.selectionModel().setCurrentIndex(newIndex, QItemSelectionModel.SelectionFlag.NoUpdate)
             self.update(newIndex)
 
@@ -504,12 +584,17 @@ class FileList(QListView):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        super().mouseReleaseEvent(event)  # Let standard QListView selection occur first
-        if event.button() == Qt.MouseButton.MiddleButton:
+        super().mouseReleaseEvent(event)  # Let standard item selection occur first
+        index = self.indexAt(event.pos())
+        if event.button() == Qt.MouseButton.MiddleButton and index.data(FileListModel.Role.Delta) is not None:
             self.onSpecialClick("middle")
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
-        super().mouseDoubleClickEvent(event)  # Let standard QListView selection occur first
+        super().mouseDoubleClickEvent(event)  # Let standard item selection occur first
+        index = self.indexAt(event.pos())
+        if self.treeMode and index.isValid() and index.data(FileListModel.Role.Delta) is None:
+            self.setExpanded(index, not self.isExpanded(index))
+            return
         if event.button() == Qt.MouseButton.LeftButton:
             self.onSpecialClick("double")
 
@@ -538,16 +623,21 @@ class FileList(QListView):
 
     def selectedDeltas(self) -> Iterator[GitDelta]:
         for index in self.selectedIndexes():
-            yield index.data(FileListModel.Role.Delta)
+            delta = index.data(FileListModel.Role.Delta)
+            if delta is not None:
+                yield delta
 
     def selectedPaths(self) -> Iterator[str]:
         for index in self.selectedIndexes():
-            yield index.data(FileListModel.Role.FilePath)
+            path = index.data(FileListModel.Role.FilePath)
+            if path is not None:
+                yield path
 
     def earliestSelectedRow(self) -> int:
         try:
             i = iter(self.selectedIndexes())
-            return next(i).row()
+            path = next(i).data(FileListModel.Role.FilePath)
+            return self.flModel.getRowForFile(path)
         except StopIteration:
             return -1
 
@@ -582,11 +672,16 @@ class FileList(QListView):
         except KeyError:
             return False
 
-        if self.selectionModel().isRowSelected(row):
+        index = self.treeModel.indexForPath(file) if self.treeMode else self.flModel.index(row)
+        if self.treeMode:
+            parent = index.parent()
+            while parent.isValid():
+                self.expand(parent)
+                parent = parent.parent()
+        if self.selectionModel().isSelected(index):
             # Re-selecting an already selected row may deselect it??
             return True
-
-        self.selectRow(row)
+        self.setCurrentIndex(index)
         return True
 
     def deltaForFile(self, file: str) -> GitDelta:
@@ -659,8 +754,8 @@ class FileList(QListView):
             newItemSelection = QItemSelection()
             for path in paths:
                 with suppress(KeyError):
-                    row = flModel.fileRows[path]
-                    index = flModel.index(row, 0)
+                    flModel.fileRows[path]
+                    index = self.treeModel.indexForPath(path) if self.treeMode else flModel.index(flModel.fileRows[path])
                     newItemSelection.select(index, index)
             selectionModel.clearSelection()
             selectionModel.select(newItemSelection, SF.Rows | SF.Select)

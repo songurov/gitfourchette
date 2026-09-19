@@ -94,6 +94,11 @@ class FileListClick(enum.StrEnum):
     Folder = "folder"
 
 
+class CommitFormPlacement(enum.StrEnum):
+    FilesPanel = "files-panel"
+    BottomBar = "bottom-bar"
+
+
 class TabBarClick(enum.StrEnum):
     Nothing = ""
     Close = "close"
@@ -126,6 +131,9 @@ class Prefs(PrefsFile):
     language                    : str                   = ""
     qtStyle                     : str                   = ""
     pathDisplayStyle            : PathDisplayStyle      = PathDisplayStyle.FullPaths
+    fileTreeView                : bool                  = True
+    commitFormPlacement         : CommitFormPlacement   = CommitFormPlacement.FilesPanel
+    recentCommitMessages        : int                   = 10
     refSort                     : RefSort               = RefSort.TimeDesc
     showToolBar                 : bool                  = True
     showStatusBar               : bool                  = True
@@ -142,6 +150,7 @@ class Prefs(PrefsFile):
     colorblind                  : bool                  = False
     contextLines                : int                   = 3
     wholeFileDiff               : bool                  = False
+    sideBySideDiff              : bool                  = False
     tabSpaces                   : int                   = 4
     largeFileThresholdKB        : int                   = 500
     wordWrap                    : bool                  = False
@@ -338,6 +347,7 @@ class History(PrefsFile):
     aiProvider: str = "codex"
     aiModels: dict[str, str] = dataclasses.field(default_factory=dict)
     aiLanguage: str = "Română"
+    aiCommitDetail: str = "detailed"
     _filename = "history.json"
 
     class JsonRepo(TypedDict, total=False):

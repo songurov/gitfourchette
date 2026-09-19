@@ -305,8 +305,8 @@ class Jump(RepoTask):
                 rw.conflictView.invalidate()
 
             # Update file counts in captions
-            nDirty = rw.dirtyFiles.model().rowCount()
-            nStaged = rw.stagedFiles.model().rowCount()
+            nDirty = rw.dirtyFiles.fileCount()
+            nStaged = rw.stagedFiles.fileCount()
             rw.diffArea.dirtyHeader.setText(_n("Unstaged ({n})", "Unstaged ({n})", nDirty))
             rw.diffArea.stagedHeader.setText(_n("Staged ({n})", "Staged ({n})", nStaged))
             rw.diffArea.commitButton.setText(_n("Commit {n} file", "Commit {n} files", nStaged))
@@ -491,7 +491,7 @@ class Jump(RepoTask):
                 flv.clear()
                 flv.setCommitLocator(locator)
                 flv.setContents(deltas)
-                numChanges = flv.model().rowCount()
+                numChanges = flv.fileCount()
 
             # Set header text
             headerText = toLengthVariants(_n("{n} change:|{n} ch.:", "{n} changes:|{n} ch.:", numChanges))

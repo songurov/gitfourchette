@@ -104,7 +104,7 @@ class GraphView(QListView):
         # Shortcut keys
         makeWidgetShortcut(self, self.searchBar.hideOrBeep, "Escape")
         self.checkoutShortcut = makeWidgetShortcut(self, self.onReturnKey, "Return", "Enter")
-        self.copyHashShortcut = makeWidgetShortcut(self, self.copyCommitHashToClipboard, QKeySequence.StandardKey.Copy)
+        self.copyHashShortcut = makeWidgetShortcut(self, self.copyCommitHashAndSubjectToClipboard, QKeySequence.StandardKey.Copy)
         self.copyMessageShortcut = makeWidgetShortcut(self, self.copyCommitMessageToClipboard, "Ctrl+Shift+C")
         self.getInfoShortcut = makeWidgetShortcut(self, self.getInfoOnCurrentCommit, "Space")
 
@@ -194,6 +194,44 @@ class GraphView(QListView):
         text = commit.message.rstrip()
         QApplication.clipboard().setText(text)
         self.statusMessage.emit(clipboardStatusMessage(text))
+
+    def _currentCommit(self) -> Commit | None:
+        oid = self.currentCommitId
+        return self.repoModel.repo[oid].peel(Commit) if oid else None
+
+    def _copyText(self, text: str):
+        QApplication.clipboard().setText(text)
+        self.statusMessage.emit(clipboardStatusMessage(text))
+
+    def copyCommitHashAndSubjectToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(f"{commit.id} {commit.message.splitlines()[0]}")
+
+    def copyCommitSubjectToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(commit.message.splitlines()[0])
+
+    def copyCommitAuthorToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(f"{commit.author.name} <{commit.author.email}>")
+
+    def copyCommitCommitterToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(f"{commit.committer.name} <{commit.committer.email}>")
+
+    def copyCommitAuthorTimeToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(signatureDateFormat(commit.author, QLocale.FormatType.LongFormat, localTime=True))
+
+    def copyCommitCommitterTimeToClipboard(self):
+        commit = self._currentCommit()
+        if commit:
+            self._copyText(signatureDateFormat(commit.committer, QLocale.FormatType.LongFormat, localTime=True))
 
     def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection):
         # do standard callback, such as scrolling the viewport if reaching the edges, etc.
@@ -494,8 +532,18 @@ class GraphView(QListView):
             TaskBook.action(self, RevertCommit, _("Re&vert…"), taskArgs=oid),
             TaskBook.action(self, ExportCommitAsPatch, _("E&xport As Patch…"), taskArgs=oid),
             ActionDef.SEPARATOR,
-            ActionDef(_("Copy Commit &Hash"), self.copyCommitHashToClipboard, shortcuts=self.copyHashShortcut.key()),
-            ActionDef(_("Copy Commit M&essage"), self.copyCommitMessageToClipboard, shortcuts=self.copyMessageShortcut.key()),
+            ActionDef(_("&Copy"), submenu=[
+                ActionDef(_("SHA – Subject"), self.copyCommitHashAndSubjectToClipboard,
+                          shortcuts=self.copyHashShortcut.key()),
+                ActionDef(_("SHA"), self.copyCommitHashToClipboard),
+                ActionDef(_("Subject"), self.copyCommitSubjectToClipboard),
+                ActionDef(_("Message"), self.copyCommitMessageToClipboard,
+                          shortcuts=self.copyMessageShortcut.key()),
+                ActionDef(_("Author"), self.copyCommitAuthorToClipboard),
+                ActionDef(_("Committer"), self.copyCommitCommitterToClipboard),
+                ActionDef(_("Author Time"), self.copyCommitAuthorTimeToClipboard),
+                ActionDef(_("Committer Time"), self.copyCommitCommitterTimeToClipboard),
+            ]),
             TaskBook.action(self, VerifyGpgSignature, taskArgs=oid, enabled=gpgStatus != GpgStatus.Unsigned, icon=gpgIcon, accel="G"),
             *mountActions,
             ActionDef(_("Get &Info…"), self.getInfoOnCurrentCommit, "SP_MessageBoxInformation", shortcuts=self.getInfoShortcut.key()),

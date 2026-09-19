@@ -84,6 +84,9 @@ class StagedFiles(FileList):
         deltas = list(self.selectedDeltas())
         UnstageFiles.invoke(self, deltas)
 
+    def unstageAll(self):
+        UnstageFiles.invoke(self, list(self.flModel.deltas))
+
     def unstageModeChange(self):
         deltas = list(self.selectedDeltas())
         UnstageModeChanges.invoke(self, deltas)

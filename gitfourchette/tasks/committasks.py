@@ -6,10 +6,12 @@
 
 import logging
 from contextlib import suppress
+from itertools import islice
 from pathlib import Path
 
 import pygit2
 
+from gitfourchette import settings
 from gitfourchette.forms.brandeddialog import convertToBrandedDialog
 from gitfourchette.forms.checkoutcommitdialog import CheckoutCommitDialog
 from gitfourchette.forms.commitdialog import CommitDialog
@@ -30,11 +32,32 @@ from gitfourchette.toolbox import *
 logger = logging.getLogger(__name__)
 
 
+def recentCommitSummaries(repo: Repo, limit: int) -> list[str]:
+    """Recent distinct first lines reachable from HEAD, newest first."""
+    if limit <= 0 or repo.head_is_unborn:
+        return []
+    summaries = []
+    seen = set()
+    for commit in islice(repo.walk(repo.head_commit_id, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_TIME), 200):
+        summary = commit.message.splitlines()[0].strip() if commit.message.strip() else ""
+        if summary and summary not in seen:
+            summaries.append(summary)
+            seen.add(summary)
+            if len(summaries) >= limit:
+                break
+    return summaries
+
+
 class NewCommit(RepoTask):
     def prereqs(self):
         return TaskPrereqs.NoConflicts
 
-    def flow(self):
+    def flow(
+            self,
+            initialText: str | None = None,
+            signoff: bool = False,
+            noVerify: bool = False,
+            pushAfter: bool = False):
         from gitfourchette.tasks import Jump
 
         uiPrefs = self.repoModel.prefs
@@ -63,8 +86,29 @@ class NewCommit(RepoTask):
 
         repositoryState = self.repo.state()
         fallbackSignature = self.repo.default_signature
-        initialMessage = uiPrefs.draftCommitMessage
+        initialMessage = uiPrefs.draftCommitMessage if initialText is None else initialText
         gpgFlag, gpgKey = NewCommit.getGpgConfig(self.repo)
+
+        if initialText is not None:
+            self.epilog.effects |= TaskEffects.Workdir | TaskEffects.Refs | TaskEffects.Head
+            args, env = NewCommit.prepareGitCommand(
+                initialText, fallbackSignature, fallbackSignature,
+                repositoryState=repositoryState,
+                explicitGpgSign=gpgFlag,
+                explicitNoGpgSign=False,
+                explicitNoVerify=noVerify,
+                signoff=signoff)
+            driver = yield from self.flowCallGit(*args, env=env)
+            branchName, newHash = driver.readPostCommitInfo()
+            newOid = Oid(hex=newHash)
+            if gpgFlag:
+                self.repoModel.cacheGpgStatus(newOid, GpgStatus.GoodTrusted, gpgKey)
+            uiPrefs.clearDraftCommit()
+            self.epilog.status = _("Commit {0} created on {1}.", tquo(shortHash(newHash)), branchName)
+            if pushAfter:
+                from gitfourchette.tasks import PushBranch
+                yield from self.flowSubtask(PushBranch)
+            return
 
         cd = CommitDialog(
             initialText=initialMessage,
@@ -77,6 +121,7 @@ class NewCommit(RepoTask):
             gpgFlag=gpgFlag,
             gpgKey=gpgKey,
             hooks=self.preCommitHookNames(self.repo),
+            recentSummaries=recentCommitSummaries(self.repo, settings.prefs.recentCommitMessages),
             parent=self.parentWidget())
 
         if uiPrefs.draftCommitSignatureOverride == SignatureOverride.Nothing:
@@ -209,7 +254,12 @@ class AmendCommit(RepoTask):
         self.repoModel.prefs.draftAmendMessage = newMessage
         self.repoModel.prefs.setDirty()
 
-    def flow(self):
+    def flow(
+            self,
+            initialText: str | None = None,
+            signoff: bool = False,
+            noVerify: bool = False,
+            pushAfter: bool = False):
         from gitfourchette.tasks import Jump
 
         # Jump to workdir
@@ -223,9 +273,32 @@ class AmendCommit(RepoTask):
         gpgFlag, gpgKey = NewCommit.getGpgConfig(self.repo)
         emptyCommit = not self.repo.any_staged_changes
 
+        if initialText is not None:
+            self.epilog.effects |= TaskEffects.Workdir | TaskEffects.Refs | TaskEffects.Head
+            args, env = NewCommit.prepareGitCommand(
+                initialText, None, fallbackSignature,
+                repositoryState=repositoryState,
+                amend=True,
+                explicitGpgSign=gpgFlag,
+                explicitNoGpgSign=False,
+                explicitNoVerify=noVerify,
+                signoff=signoff)
+            driver = yield from self.flowCallGit(*args, env=env)
+            _branchName, newHash = driver.readPostCommitInfo()
+            newOid = Oid(hex=newHash)
+            if gpgFlag:
+                self.repoModel.cacheGpgStatus(newOid, GpgStatus.GoodTrusted, gpgKey)
+            self.repoModel.prefs.clearDraftAmend()
+            self.epilog.status = _("Commit {0} amended. New hash: {1}.",
+                                   tquo(shortHash(headCommit.id)), tquo(shortHash(newHash)))
+            if pushAfter:
+                from gitfourchette.tasks import PushBranch
+                yield from self.flowSubtask(PushBranch)
+            return
+
         # TODO: Retrieve draft message
         cd = CommitDialog(
-            initialText=headCommit.message,
+            initialText=headCommit.message if initialText is None else initialText,
             authorSignature=headCommit.author,
             committerSignature=fallbackSignature,
             amendingCommitHash=shortHash(headCommit.id),
@@ -235,6 +308,7 @@ class AmendCommit(RepoTask):
             gpgFlag=gpgFlag,
             gpgKey=gpgKey,
             hooks=NewCommit.preCommitHookNames(self.repo),
+            recentSummaries=recentCommitSummaries(self.repo, settings.prefs.recentCommitMessages),
             parent=self.parentWidget())
 
         cd.setWindowModality(Qt.WindowModality.WindowModal)

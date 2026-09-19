@@ -353,6 +353,16 @@ def testLanguageAndGuidanceInPrompt():
     assert "selected response language take precedence" in prompt
 
 
+def testWorktreePrompt():
+    prompt = aichat.makeWorktreePrompt(
+        ["src/one.py", "src/two.py"], "diff --git", [{"role": "user", "content": "Ce s-a schimbat?"}],
+        "Română", "Check errors.")
+    assert "selected uncommitted changes" in prompt
+    assert "src/one.py\nsrc/two.py" in prompt
+    assert "Response language: Română" in prompt
+    assert "Ce s-a schimbat?" in prompt
+
+
 def testBranchReviewWithoutNewCommits(aiDialog):
     repo = aiDialog.repo
     repo.references.create("refs/heads/same-tip", repo.head.target)

@@ -22,6 +22,8 @@ class DiffButtons(QWidget):
         self.contextButton = self._makeContextLinesButton()
         self.wholeFileButton = self._makeToggle("diff-whole-file", "wholeFileDiff")
         self.wholeFileButton.setToolTip(_("Show the whole file, with the changes marked in place"))
+        self.sideBySideButton = self._makeToggle("view-exclusive", "sideBySideDiff")
+        self.sideBySideButton.setToolTip(_("Side-by-side diff"))
         self.wordWrapButton = self._makeToggle("diff-wrap", "wordWrap")
         self.showWhitespaceButton = self._makeToggle("diff-show-whitespace", "showWhitespace")
         self.whitespaceModeButton = self._makeWhitespaceDiffButton()
@@ -32,6 +34,7 @@ class DiffButtons(QWidget):
             self.svgButton,
             self.contextButton,
             self.wholeFileButton,
+            self.sideBySideButton,
             self.wordWrapButton,
             self.showWhitespaceButton,
             self.whitespaceModeButton,
@@ -39,8 +42,11 @@ class DiffButtons(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 2, 0)
-        layout.setSpacing(2)
+        layout.setSpacing(0)
         for button in self.buttons:
+            button.setAutoRaise(True)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            button.setFixedSize(24, 24)
             layout.addWidget(button)
 
     # -------------------------------------------------------------------------
@@ -122,7 +128,7 @@ class DiffButtons(QWidget):
         button.setMenu(menu)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setText(_("Context"))
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
         return button
 
@@ -145,6 +151,7 @@ class DiffButtons(QWidget):
             self.wordWrapButton.setChecked(settings.prefs.wordWrap)
             self.showWhitespaceButton.setChecked(settings.prefs.showWhitespace)
             self.wholeFileButton.setChecked(settings.prefs.wholeFileDiff)
+            self.sideBySideButton.setChecked(settings.prefs.sideBySideDiff)
             # A count of context lines means nothing while every line is shown
             self.contextButton.setEnabled(not settings.prefs.wholeFileDiff)
             label = "\u221e" if settings.prefs.wholeFileDiff else str(settings.prefs.contextLines)

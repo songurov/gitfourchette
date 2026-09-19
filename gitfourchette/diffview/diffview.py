@@ -35,6 +35,7 @@ class DiffView(CodeView):
     contextualHelp = Signal(str)
     selectionActionable = Signal(bool)
     visibilityChanged = Signal(bool)
+    documentReplaced = Signal(object)
 
     lineData: list[LineData]
     currentLocator: NavLocator
@@ -50,6 +51,8 @@ class DiffView(CodeView):
         self.currentDelta = _emptyDelta
         self.currentDiffDocument = None
         self.repo = None
+        self._hoverSelectionActive = False
+        self.viewport().setMouseTracking(True)
 
         # Emit contextual help with non-empty selection
         self.cursorPositionChanged.connect(self.emitSelectionHelp)
@@ -114,6 +117,56 @@ class DiffView(CodeView):
         if event.button() == Qt.MouseButton.MiddleButton:
             self.onMiddleClick()
 
+    def mousePressEvent(self, event: QMouseEvent):
+        self._hoverSelectionActive = False
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        # Never replace a selection the user made by dragging. A selection
+        # created by hover, however, follows the actionable clump beneath
+        # the pointer so its Stage/Discard controls need no preliminary click.
+        if (event.buttons() == Qt.MouseButton.NoButton
+                and (self._hoverSelectionActive or not self.textCursor().hasSelection())):
+            self._selectActionableClumpOnHover(event.position().toPoint())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: QEvent):
+        if self._hoverSelectionActive:
+            cursor = self.textCursor()
+            cursor.clearSelection()
+            self.replaceCursor(cursor)
+            self._hoverSelectionActive = False
+        super().leaveEvent(event)
+
+    def _selectActionableClumpOnHover(self, point: QPoint):
+        blockNumber = self.document().findBlock(self.getStartOfLineAt(point)).blockNumber()
+        if blockNumber < 0 or blockNumber >= len(self.lineData):
+            return
+
+        line = self.lineData[blockNumber]
+        if line.clumpID < 0:
+            if self._hoverSelectionActive:
+                cursor = self.textCursor()
+                cursor.clearSelection()
+                self.replaceCursor(cursor)
+                self._hoverSelectionActive = False
+            return
+
+        start = blockNumber
+        end = blockNumber
+        while start > 0 and self.lineData[start - 1].clumpID == line.clumpID:
+            start -= 1
+        while end < len(self.lineData) - 1 and self.lineData[end + 1].clumpID == line.clumpID:
+            end += 1
+
+        cursor = self.textCursor()
+        cursor.setPosition(self.lineData[start].cursorStart)
+        cursor.setPosition(
+            min(self.getMaxPosition(), self.lineData[end].cursorEnd),
+            QTextCursor.MoveMode.KeepAnchor)
+        self._hoverSelectionActive = True
+        self.replaceCursor(cursor)
+
     # ---------------------------------------------
     # Document replacement
 
@@ -167,6 +220,7 @@ class DiffView(CodeView):
 
         # Now restore cursor/scrollbar positions
         self.restorePosition(locator)
+        self.documentReplaced.emit(newDoc)
 
     # ---------------------------------------------
     # Context menu

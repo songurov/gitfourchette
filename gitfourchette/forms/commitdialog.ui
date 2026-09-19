@@ -58,7 +58,13 @@
    <item>
     <layout class="QHBoxLayout" name="summaryRowLayout">
      <item>
-      <widget class="QLineEdit" name="summaryEditor">
+      <widget class="QComboBox" name="summaryComboBox">
+       <property name="editable">
+        <bool>true</bool>
+       </property>
+       <property name="insertPolicy">
+        <enum>QComboBox::NoInsert</enum>
+       </property>
        <property name="placeholderText">
         <string>Enter commit summary</string>
        </property>
@@ -215,7 +221,7 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>summaryEditor</tabstop>
+  <tabstop>summaryComboBox</tabstop>
   <tabstop>descriptionEditor</tabstop>
  </tabstops>
  <resources/>

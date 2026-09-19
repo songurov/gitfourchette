@@ -8,6 +8,8 @@ import os.path
 
 import pytest
 
+from gitfourchette import settings
+from gitfourchette.application import GFApplication
 from gitfourchette.forms.checkoutcommitdialog import CheckoutCommitDialog
 from gitfourchette.forms.commitdialog import CommitDialog
 from gitfourchette.forms.identitydialog import IdentityDialog
@@ -16,10 +18,64 @@ from gitfourchette.forms.signatureform import SignatureOverride
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
 from gitfourchette.nav import NavLocator
 from gitfourchette.sidebar.sidebarmodel import SidebarItem
+from gitfourchette.tasks.committasks import recentCommitSummaries
 from . import reposcenario
 from .util import *
 
 QDateTime19991231 = QDateTime.fromString("1999-12-31 23:59:00", "yyyy-MM-dd HH:mm:ss")
+
+
+def testCommitFormPlacementPreservesMessage(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    form = rw.diffArea.commitForm
+    editor = rw.diffArea.commitMessageEditor
+    editor.setPlainText("Keep this message")
+
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    assert form.parentWidget() is rw.diffArea.bottomCommitFormHost
+    assert editor.toPlainText() == "Keep this message"
+
+
+def testCommitAiButtonRequiresCliAndStagedChanges(tempDir, mainWindow, monkeypatch):
+    from gitfourchette import diffarea
+
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    monkeypatch.setattr(diffarea, "availableProviders", lambda: {"codex": "/usr/bin/codex"})
+    rw = mainWindow.openRepo(wd)
+    button = rw.diffArea.commitAiButton
+
+    assert button.isEnabled()
+    assert "Codex" in button.toolTip()
+
+
+def testCommitAiButtonDisabledWithoutCli(tempDir, mainWindow, monkeypatch):
+    from gitfourchette import diffarea
+
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    monkeypatch.setattr(diffarea, "availableProviders", dict)
+    rw = mainWindow.openRepo(wd)
+
+    assert not rw.diffArea.commitAiButton.isEnabled()
+    assert "Install" in rw.diffArea.commitAiButton.toolTip()
+
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.FilesPanel)
+    assert form.parentWidget() is rw.diffArea.stageCommitFormHost
+    assert editor.toPlainText() == "Keep this message"
+
+
+def testInlineCommitSkipsDialog(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    rw = mainWindow.openRepo(wd)
+    rw.diffArea.commitMessageEditor.setPlainText("Inline summary\n\nInline description")
+
+    rw.diffArea.commitButton.click()
+
+    assert not [dialog for dialog in rw.findChildren(CommitDialog) if dialog.isVisible()]
+    assert rw.repo.head_commit.message == "Inline summary\n\nInline description\n"
 
 
 def testCommit(tempDir, mainWindow):
@@ -65,6 +121,27 @@ def testCommit(tempDir, mainWindow):
     assert patches[0].delta.new_file.path == "a/a1.txt"
 
     assert findTextInWidget(mainWindow.statusBar2, rf"commit.+{id7(headCommit)}.+created")
+
+
+def testRecentCommitSummariesAreEditable(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    rw = mainWindow.openRepo(wd)
+    summaries = recentCommitSummaries(rw.repo, 10)
+    assert summaries[0] == rw.repo.head_commit.message.splitlines()[0]
+    assert len(summaries) <= 10
+    assert len(summaries) == len(set(summaries))
+
+    rw.diffArea.commitButton.click()
+    dialog: CommitDialog = findQDialog(rw, "commit")
+    combo = dialog.ui.summaryComboBox
+    assert [combo.itemText(i) for i in range(combo.count())] == summaries
+    assert dialog.ui.summaryEditor.text() == ""
+    combo.setCurrentIndex(0)
+    assert dialog.ui.summaryEditor.text() == summaries[0]
+    dialog.ui.summaryEditor.setText("A new summary")
+    assert dialog.getFullMessage() == "A new summary\n"
+    dialog.reject()
 
 
 def testCommitUntrackedFileInEmptyRepo(tempDir, mainWindow):

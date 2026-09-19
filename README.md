@@ -10,6 +10,22 @@ Learn more on GitFourchette’s homepage at [gitfourchette.org](https://gitfourc
 
 ![Screenshot of GitFourchette running under KDE Plasma 6](https://gitfourchette.org/_static/appstream/packshot-shadow-light.png)
 
+## File tree
+
+The file panels show paths as a collapsible directory tree by default. Choose
+**File display** in Settings to switch between tree and flat list view; the
+choice applies to Unstaged, Staged, and commit changes. Selecting a file in
+either view still opens its diff. Folder rows only expand or collapse; file
+actions apply to files.
+
+## Reuse a commit summary
+
+The commit and amend dialogs offer an editable drop-down of recent commit
+summaries from the current repository. Pick an earlier summary and edit it, or
+type a new one. The list contains up to 10 distinct summaries by default;
+change **Recent commit messages** in preferences to adjust the limit (0 hides
+the suggestions).
+
 ## Ask AI about commits
 
 Select one or more commits and right-click **Ask AI…** (the first menu item).

@@ -5,9 +5,10 @@ import os
 import signal
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from gitfourchette import settings
-from gitfourchette.exttools.aichat import availableProviders, configuredModel, modelChoices, cliArguments, ResponseStream, makePrompt
+from gitfourchette.exttools.aichat import availableProviders, configuredModel, modelChoices, cliArguments, ResponseStream, makePrompt, makeWorktreePrompt
 from gitfourchette.exttools.aichat import PRESETS
 from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.localization import _, _n
@@ -18,7 +19,7 @@ from gitfourchette.toolbox import makeWidgetShortcut
 class AiChatDialog(QDialog):
     ContextLimit = 180_000
 
-    def __init__(self, repo, commits, parent=None, branch=""):
+    def __init__(self, repo, commits, parent=None, branch="", worktreePaths=None):
         super().__init__(parent)
         self.setWindowTitle(_("Ask AI"))
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -27,6 +28,7 @@ class AiChatDialog(QDialog):
         self.repoPath = repo.workdir or repo.path
         self.repo = repo
         self.branch = branch
+        self.worktreePaths = list(dict.fromkeys(worktreePaths or []))
         self.branchRange = None
         self.guidance = ""
         self.guidanceSources = []
@@ -97,13 +99,20 @@ class AiChatDialog(QDialog):
         self.scopeHint = QLabel(_("Changing scope starts a new chat."))
         self.scopeHint.setWordWrap(True)
         layout.addWidget(self.scopeHint)
-        title = self.selectionLabel = QLabel(_n("{n} selected commit", "{n} selected commits", len(commits)))
-        title.setToolTip("\n".join(self.commits))
+        if self.worktreePaths:
+            self.scopeCombo.hide()
+            self.scopeHint.setText(_("Discussing selected staged and unstaged changes."))
+            self.branchControls.hide()
+            self.activityControls.hide()
+        title = self.selectionLabel = QLabel(
+            _n("{n} selected file", "{n} selected files", len(self.worktreePaths)) if self.worktreePaths
+            else _n("{n} selected commit", "{n} selected commits", len(commits)))
+        title.setToolTip("\n".join(self.worktreePaths or self.commits))
         layout.addWidget(title)
         self.commitList = QPlainTextEdit()
         self.commitList.setReadOnly(True)
         self.commitList.setMaximumHeight(85)
-        self.commitList.setPlainText("\n".join(
+        self.commitList.setPlainText("\n".join(self.worktreePaths) if self.worktreePaths else "\n".join(
             f"{str(oid)[:10]}  " + (repo[oid].message or "").partition("\n")[0] for oid in commits))
         layout.addWidget(self.commitList)
 
@@ -155,7 +164,9 @@ class AiChatDialog(QDialog):
         layout.addLayout(presets)
         self.input = QPlainTextEdit()
         self.input.setMaximumHeight(110)
-        self.input.setPlaceholderText(_("Ask about these commits…  /model to choose a model. Ctrl+Enter to send."))
+        self.input.setPlaceholderText(
+            _("Ask about these changes…  /model to choose a model. Ctrl+Enter to send.") if self.worktreePaths
+            else _("Ask about these commits…  /model to choose a model. Ctrl+Enter to send."))
         layout.addWidget(self.input)
         buttons = QHBoxLayout()
         self.status = QLabel(_("Ready"))
@@ -259,8 +270,10 @@ class AiChatDialog(QDialog):
 
     def prepareGuidance(self):
         paths = set()
-        revision = self.branchRange[1] if self.branchRange else self.commits[0]
-        if self.branchRange:
+        revision = self.branchRange[1] if self.branchRange else self.commits[0] if self.commits else "HEAD"
+        if self.worktreePaths:
+            paths.update(self.worktreePaths)
+        elif self.branchRange:
             diffs = [self.repo[self.branchRange[0]].tree.diff_to_tree(self.repo[revision].tree)]
         else:
             diffs = []
@@ -380,7 +393,7 @@ class AiChatDialog(QDialog):
         self.chat.verticalScrollBar().setValue(self.chat.verticalScrollBar().maximum())
 
     def setBusy(self, busy):
-        self.sendButton.setEnabled(not busy and bool(self.providers) and bool(self.commits))
+        self.sendButton.setEnabled(not busy and bool(self.providers) and bool(self.commits or self.worktreePaths))
         self.stopButton.setEnabled(busy)
         self.providerCombo.setEnabled(not busy)
         self.modelCombo.setEnabled(not busy)
@@ -389,7 +402,7 @@ class AiChatDialog(QDialog):
         self.branchControls.setEnabled(not busy)
         self.languageCombo.setEnabled(not busy)
         self.rulesCheck.setEnabled(not busy)
-        self.rulesButton.setEnabled(not busy and bool(self.commits))
+        self.rulesButton.setEnabled(not busy and bool(self.commits or self.worktreePaths))
         for button in self.presetButtons:
             button.setEnabled(not busy)
 
@@ -414,7 +427,7 @@ class AiChatDialog(QDialog):
         if question.startswith("/") and command in PRESETS:
             extra = question.partition(" ")[2]
             question = _(PRESETS[command][1]) + ("\n\n" + extra if extra else "")
-        if not self.commits:
+        if not self.commits and not self.worktreePaths:
             self.status.setText(_("Load commits before sending a question."))
             return
         settings.history.aiProvider = self.provider()
@@ -433,7 +446,10 @@ class AiChatDialog(QDialog):
             self.status.setText(_("Reading selected commits…"))
             self.contextBytes = b""
             self.contextTruncated = False
-            if self.branchRange:
+            if self.worktreePaths:
+                self.startProcess("git", ["--no-pager", "diff", "HEAD", "--no-ext-diff", "--no-textconv",
+                                          "--stat", "--patch", "--", *self.worktreePaths], "context")
+            elif self.branchRange:
                 self.startProcess("git", ["--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch",
                                           *self.branchRange, "--"], "context")
             else:
@@ -454,7 +470,12 @@ class AiChatDialog(QDialog):
         guidance = self.guidance if self.rulesCheck.isChecked() else "Project guidance disabled by user."
         if self.rulesCheck.isChecked() and self.guidanceOmitted:
             guidance += "\n\nGuidance omitted due to limits; do not claim full rule compliance:\n" + "\n".join(self.guidanceOmitted)
-        prompt = makePrompt(self.commits, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
+        if self.worktreePaths:
+            prompt = makeWorktreePrompt(
+                self.worktreePaths, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
+        else:
+            prompt = makePrompt(
+                self.commits, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
         self.startProcess(self.providers[self.provider()], cliArguments(self.provider(), self.model()), "assistant", prompt)
 
     def startProcess(self, program, args, phase, prompt=""):
@@ -541,6 +562,21 @@ class AiChatDialog(QDialog):
                 self.prepareGuidance()
         elif phase == "context":
             self.context = self.contextBytes.decode("utf-8", errors="replace")
+            if self.worktreePaths and self.repo.workdir:
+                root = Path(self.repo.workdir).resolve()
+                for path in self.worktreePaths:
+                    # Plain `git diff HEAD` does not include untracked files.
+                    if f"a/{path}" in self.context or f"b/{path}" in self.context:
+                        continue
+                    candidate = root / path
+                    try:
+                        if candidate.is_file() and candidate.resolve().is_relative_to(root):
+                            remaining = self.ContextLimit - len(self.context.encode("utf-8"))
+                            data = candidate.read_bytes()[:max(0, remaining)]
+                            self.context += f"\n\n--- Untracked file: {path} ---\n" + data.decode("utf-8", errors="replace")
+                            self.contextTruncated |= candidate.stat().st_size > len(data)
+                    except OSError:
+                        self.context += f"\n\n[Could not read selected file: {path}]"
             if self.contextTruncated:
                 self.context += "\n[Diff context truncated. Inspect the listed revisions for omitted changes.]"
             self.startAssistant()

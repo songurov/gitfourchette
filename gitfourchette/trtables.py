@@ -111,6 +111,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
     from gitfourchette.sidebar.sidebarmodel import SidebarItem
     from gitfourchette.settings import (
         WhitespaceMode,
+        CommitFormPlacement,
         FileListClick,
         GraphRefBoxWidth,
         GraphRowHeight,
@@ -195,6 +196,11 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         GraphRefBoxWidth.IconsOnly: _("Icons Only"),
         GraphRefBoxWidth.Standard: _("Truncate long ref names"),
         GraphRefBoxWidth.Wide: _("Show full ref names"),
+    }
+
+    table[CommitFormPlacement] = {
+        CommitFormPlacement.FilesPanel: _("Files panel"),
+        CommitFormPlacement.BottomBar: _("Bottom bar"),
     }
 
     table[GraphRowLayout] = {
@@ -368,6 +374,11 @@ def _prefKeyTable() -> dict[str, str]:
         "shortTimeFormat": _("Date/time format"),
         "shortTimeFormat_help": _timeFormatGuide(),
         "pathDisplayStyle": _("Path display style"),
+        "fileTreeView": _("File display"),
+        "fileTreeView_true": _("Tree"),
+        "fileTreeView_false": _("List"),
+        "commitFormPlacement": _("Commit form position"),
+        "recentCommitMessages": _("Recent commit messages"),
         "authorDisplayStyle": _("Author display style"),
         "maxRecentRepos": _("Remember up to # recent repositories"),
         "showStatusBar": _("Show status bar"),
@@ -390,6 +401,7 @@ def _prefKeyTable() -> dict[str, str]:
               "in the sidebar. (Note that changing the default setting here will clear per-repo tweaks.)")),
 
         "font": _("Font"),
+        "sideBySideDiff": _("Side-by-side diff"),
         "tabSpaces": _("One tab is # spaces"),
         "contextLines": _("Show up to # context lines"),
         "wholeFileDiff": _("Show whole file"),

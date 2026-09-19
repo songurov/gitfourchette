@@ -111,6 +111,38 @@ def testDiffViewStageLines(tempDir, mainWindow, method):
     assert stagedBlob.data == b"line C\nline D\n"
 
 
+def testDiffActionsAppearOnHover(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(F"{wd}/Hover.txt", "line A\nline B\n")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("Hover.txt"), check=True)
+
+    view = rw.diffView
+    cursor = QTextCursor(view.document().findBlockByNumber(1))
+    QTest.mouseMove(view.viewport(), view.cursorRect(cursor).center())
+
+    assert view.textCursor().hasSelection()
+    assert view.rubberBandButtonGroup.isVisible()
+    assert view.stageButton.isVisible()
+    assert view.discardButton.isVisible()
+
+
+def testSideBySideDiff(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(F"{wd}/SideBySide.txt", "new line A\nnew line B\n")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("SideBySide.txt"), check=True)
+
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    side = rw.diffArea.sideBySideDiffView
+    assert rw.diffArea.diffPresentationStack.currentWidget() is side
+    assert "new line A" not in side.oldView.toPlainText()
+    assert "new line A" in side.newView.toPlainText()
+
+    GFApplication.applyPrefs(sideBySideDiff=False)
+    assert rw.diffArea.diffPresentationStack.currentWidget() is not side
+
+
 @pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with this test, but Qt 6 is fine")
 def testDiffViewStageAllLinesThenJumpToNextFile(tempDir, mainWindow):
     wd = unpackRepo(tempDir)

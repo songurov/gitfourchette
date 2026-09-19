@@ -442,12 +442,15 @@ def testCopyCommitHash(tempDir, mainWindow, method):
         rw.graphView.setFocus()
         QTest.keySequence(rw.graphView, "Ctrl+C")
     elif method == "contextmenu":
-        triggerContextMenuAction(rw.graphView.viewport(), "copy.+hash")
+        triggerContextMenuAction(rw.graphView.viewport(), "copy/sha$")
     else:
         raise NotImplementedError(f"unknown method {method}")
 
     QTest.qWait(1)
-    assert QApplication.clipboard().text() == str(oid1)
+    expected = str(oid1)
+    if method == "hotkey":
+        expected += " Merge branch 'a' into c"
+    assert QApplication.clipboard().text() == expected
 
 
 @pytest.mark.parametrize("method", ["hotkey", "contextmenu"])
@@ -461,7 +464,7 @@ def testCopyCommitMessage(tempDir, mainWindow, method):
         rw.graphView.setFocus()
         QTest.keySequence(rw.graphView, "Ctrl+Shift+C")
     elif method == "contextmenu":
-        triggerContextMenuAction(rw.graphView.viewport(), "copy.+message")
+        triggerContextMenuAction(rw.graphView.viewport(), "copy/message")
     else:
         raise NotImplementedError(f"unknown method {method}")
 

@@ -9,6 +9,7 @@ import os.path
 from gitfourchette.blameview.blamewindow import BlameWindow
 from gitfourchette.forms.ignorepatterndialog import IgnorePatternDialog
 from gitfourchette.forms.searchbar import SearchBar
+from gitfourchette.filelists.filelistmodel import FileListModel
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.nav import NavLocator, NavContext
 from gitfourchette import settings
@@ -25,6 +26,74 @@ def testParentlessCommitFileList(tempDir, mainWindow):
     oid = Oid(hex="42e4e7c5e507e113ebbb7801b16b52cf867b7ce1")
     rw.jump(NavLocator.inCommit(oid, "c/c1.txt"), check=True)
     assert qlvGetRowData(rw.committedFiles) == ["c/c1.txt"]
+
+
+def testTreeViewGroupsFilesAndKeepsNavigation(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    oid = Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664")
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+
+    files = rw.committedFiles
+    count = files.fileCount()
+    files.setTreeMode(True)
+    model = files.treeModel
+    folder = model.index(0, 0)
+    assert folder.data(Qt.ItemDataRole.DisplayRole) == "a"
+    assert not folder.data(FileListModel.Role.Delta)
+    assert model.index(0, 0, folder).data(FileListModel.Role.FilePath) == "a/a1.txt"
+    assert files.fileCount() == count
+    assert files.currentIndex().data(FileListModel.Role.FilePath) == "a/a1.txt"
+    files.searchBar.show()
+    files.searchBar.lineEdit.setText("a1.txt")
+    QTest.qWait(0)
+    assert not files.searchBar.isRed()
+
+    files.collapse(folder)
+    assert files.selectFile("a/a1.txt")
+    assert files.isExpanded(folder)
+    assert files.currentIndex().data(FileListModel.Role.FilePath) == "a/a1.txt"
+    files.setTreeMode(False)
+    assert files.currentIndex().data(FileListModel.Role.FilePath) == "a/a1.txt"
+
+
+def testTreeViewShowsWorkingDirectoryFiles(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/new.txt", "new")
+    writeFile(f"{wd}/a/other.txt", "other")
+    writeFile(f"{wd}/a/deep/nested/file.txt", "nested")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("a/new.txt"), check=True)
+
+    files = rw.dirtyFiles
+    files.setTreeMode(False)
+    second = files.flModel.index(files.flModel.getRowForFile("a/other.txt"))
+    files.selectionModel().select(second, QItemSelectionModel.SelectionFlag.Select)
+    files.setTreeMode(True)
+    assert files.treeModel.indexForPath("a/new.txt").isValid()
+    nested = files.treeModel.indexForPath("a/deep/nested/file.txt")
+    assert nested.parent().data(Qt.ItemDataRole.DisplayRole) == "deep/nested"
+    assert files.currentIndex().data(FileListModel.Role.FilePath) == "a/new.txt"
+    assert files.deltaForFile("a/new.txt") is not None
+    assert {delta.new.path for delta in files.selectedDeltas()} == {"a/new.txt", "a/other.txt"}
+
+
+def testStageAllAndQuickFileViewMenu(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/one.txt", "one")
+    writeFile(f"{wd}/dir/two.txt", "two")
+    rw = mainWindow.openRepo(wd)
+
+    assert rw.dirtyFiles.fileCount() == 2
+    rw.diffArea.stageAllButton.click()
+    assert rw.dirtyFiles.fileCount() == 0
+    assert rw.stagedFiles.fileCount() == 2
+
+    listAction, treeAction = rw.diffArea.fileViewActions[0]
+    listAction.trigger()
+    assert not settings.prefs.fileTreeView
+    treeAction.trigger()
+    assert settings.prefs.fileTreeView
 
 
 @pytest.mark.parametrize(

@@ -182,6 +182,11 @@ def mainWindow(request, qtbot: QtBot) -> Iterator[MainWindow]:
     app = GFApplication.instance()
     app.beginSession(bootUi=False)
 
+    # Most legacy list-view tests address top-level rows directly. Keep their
+    # baseline stable; tree-specific tests enable the new default explicitly.
+    from gitfourchette import settings
+    settings.prefs.fileTreeView = False
+
     # Prepare test git config
     maskedGitConfigPath = os.path.join(app.tempDir.path(), "MaskedGitConfig")
     setUpTestGitConfig(maskedGitConfigPath)

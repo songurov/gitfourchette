@@ -129,6 +129,9 @@ class DirtyFiles(FileList):
         deltas = list(self.selectedDeltas())
         StageFiles.invoke(self, deltas)
 
+    def stageAll(self):
+        StageFiles.invoke(self, list(self.flModel.deltas))
+
     def discard(self):
         deltas = list(self.selectedDeltas())
         DiscardFiles.invoke(self, deltas)

@@ -4,20 +4,24 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import json
 import logging
 import typing
 from typing import Literal
 
+from gitfourchette import settings
 from gitfourchette.application import GFApplication
 from gitfourchette.diffbuttons import DiffButtons
 from gitfourchette.diffview.diffdocument import DiffDocument
 from gitfourchette.diffview.diffview import DiffView
 from gitfourchette.diffview.specialdiff import ImageDelta, SpecialDiffError
 from gitfourchette.diffview.specialdiffview import SpecialDiffView
+from gitfourchette.diffview.sidebysidediffview import SideBySideDiffView
 from gitfourchette.filelists.committedfiles import CommittedFiles
 from gitfourchette.filelists.dirtyfiles import DirtyFiles
 from gitfourchette.filelists.filelist import FileList
 from gitfourchette.filelists.stagedfiles import StagedFiles
+from gitfourchette.exttools.aichat import availableProviders, cliArguments, configuredModel, ResponseStream
 from gitfourchette.forms.banner import Banner
 from gitfourchette.forms.conflictview import ConflictView
 from gitfourchette.forms.commitdetailview import CommitDetailView
@@ -48,6 +52,10 @@ class DiffArea(QWidget):
     def __init__(self, repoModel, parent):
         super().__init__(parent)
         self.setObjectName("CommitExplorer")
+        self.repoModel = repoModel
+        self.commitAiProcess = None
+        self.commitAiProviders = availableProviders()
+        self.fileViewActions = []
 
         fileStack = self._makeFileStack(repoModel)
         diffContainer = self._makeDiffContainer(repoModel)
@@ -123,7 +131,13 @@ class DiffArea(QWidget):
             passiveWidget.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
 
         GFApplication.instance().prefsChanged.connect(self.diffButtons.refreshPrefs)
+        GFApplication.instance().prefsChanged.connect(self.refreshDiffPresentation)
+        GFApplication.instance().prefsChanged.connect(self.refreshCommitFormPlacement)
+        GFApplication.instance().prefsChanged.connect(self.refreshFileViewActions)
         self.diffButtons.refreshPrefs()
+        self.refreshDiffPresentation()
+        self.refreshCommitFormPlacement()
+        self.refreshFileViewActions()
 
         # Ignore height in size policy to keep DiffArea from jumping around when we're showing a banner.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Ignored)
@@ -131,6 +145,47 @@ class DiffArea(QWidget):
 
     # -------------------------------------------------------------------------
     # Constructor helpers
+
+    def refreshFileViewActions(self):
+        for listAction, treeAction in self.fileViewActions:
+            listAction.setChecked(not settings.prefs.fileTreeView)
+            treeAction.setChecked(settings.prefs.fileTreeView)
+
+    def refreshDiffPresentation(self):
+        self.diffPresentationStack.setCurrentIndex(int(settings.prefs.sideBySideDiff))
+
+    def _makeFileViewButton(self):
+        button = QToolButton(self)
+        button.setObjectName("fileViewButton")
+        button.setText("☰")
+        button.setToolTip(_("File display"))
+        button.setAutoRaise(True)
+        button.setFixedSize(FILEHEADER_HEIGHT, FILEHEADER_HEIGHT)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+
+        menu = QMenu(button)
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+        listAction = menu.addAction(_("Show as Path List"))
+        treeAction = menu.addAction(_("Show as Filesystem Tree"))
+        for action in (listAction, treeAction):
+            action.setCheckable(True)
+            group.addAction(action)
+        listAction.triggered.connect(lambda: GFApplication.applyPrefs(fileTreeView=False))
+        treeAction.triggered.connect(lambda: GFApplication.applyPrefs(fileTreeView=True))
+        button.setMenu(menu)
+        self.fileViewActions.append((listAction, treeAction))
+        return button
+
+    def refreshCommitFormPlacement(self):
+        bottom = settings.prefs.commitFormPlacement == settings.CommitFormPlacement.BottomBar
+        oldLayout = self.commitForm.parentWidget().layout()
+        if oldLayout is not None:
+            oldLayout.removeWidget(self.commitForm)
+        targetLayout = self.bottomCommitFormLayout if bottom else self.stageCommitFormLayout
+        targetLayout.addWidget(self.commitForm)
+        self.stageCommitFormHost.setVisible(not bottom)
+        self.bottomCommitFormHost.setVisible(bottom)
 
     def _makeFileStack(self, repoModel):
         dirtyContainer = self._makeDirtyContainer(repoModel)
@@ -157,7 +212,16 @@ class DiffArea(QWidget):
         header.setEnabled(False)
 
         dirtyFiles = DirtyFiles(repoModel, self)
-
+        fileViewButton = self._makeFileViewButton()
+        stageAllButton = QToolButton(self)
+        stageAllButton.setObjectName("stageAllButton")
+        stageAllButton.setText(_("Stage All"))
+        stageAllButton.setIcon(stockIcon("git-stage"))
+        stageAllButton.setToolTip(_("Stage all files"))
+        worktreeAiButton = QToolButton(self)
+        worktreeAiButton.setObjectName("worktreeAiButton")
+        worktreeAiButton.setText(_("AI"))
+        worktreeAiButton.setAutoRaise(True)
         stageButton = QToolButton(self)
         stageButton.setObjectName("stageButton")
         stageButton.setText(_("Stage"))
@@ -179,25 +243,35 @@ class DiffArea(QWidget):
         # Row 0
         layout.addItem(gridPadding(),           0, 0)
         layout.addWidget(header,                0, 1)
-        layout.addWidget(stageButton,           0, 2)
-        layout.addWidget(discardButton,         0, 3)
+        layout.addWidget(stageAllButton,        0, 2)
+        layout.addWidget(stageButton,           0, 3)
+        layout.addWidget(discardButton,         0, 4)
+        layout.addWidget(worktreeAiButton,      0, 5)
+        layout.addWidget(fileViewButton,        0, 6)
         # Row 1
-        layout.addItem(QSpacerItem(1, 1),       1, 0, 1, 4)
+        layout.addItem(QSpacerItem(1, 1),       1, 0, 1, 7)
         # Row 2
-        layout.addWidget(dirtyFiles.searchBar,  2, 0, 1, 4)
+        layout.addWidget(dirtyFiles.searchBar,  2, 0, 1, 7)
         # Row 3
-        layout.addWidget(dirtyFiles,            3, 0, 1, 4)
+        layout.addWidget(dirtyFiles,            3, 0, 1, 7)
         layout.setRowStretch(3, 100)
 
+        stageAllButton.clicked.connect(dirtyFiles.stageAll)
         stageButton.clicked.connect(dirtyFiles.stage)
         discardButton.clicked.connect(dirtyFiles.discard)
         dirtyFiles.selectedCountChanged.connect(lambda n: stageButton.setEnabled(n > 0))
         dirtyFiles.selectedCountChanged.connect(lambda n: discardButton.setEnabled(n > 0))
+        dirtyFiles.selectedCountChanged.connect(self.refreshWorktreeAiButton)
+        dirtyFiles.flModel.modelReset.connect(
+            lambda: stageAllButton.setEnabled(not dirtyFiles.isEmpty()))
 
         self.dirtyFiles = dirtyFiles
         self.dirtyHeader = header
         self.stageButton = stageButton
+        self.stageAllButton = stageAllButton
         self.discardButton = discardButton
+        self.worktreeAiButton = worktreeAiButton
+        worktreeAiButton.clicked.connect(self.askAiAboutSelectedChanges)
 
         return container
 
@@ -210,6 +284,13 @@ class DiffArea(QWidget):
         header.setEnabled(False)
 
         stagedFiles = StagedFiles(repoModel, self)
+        fileViewButton = self._makeFileViewButton()
+
+        unstageAllButton = QToolButton(self)
+        unstageAllButton.setObjectName("unstageAllButton")
+        unstageAllButton.setText(_("Unstage All"))
+        unstageAllButton.setIcon(stockIcon("git-unstage"))
+        unstageAllButton.setToolTip(_("Unstage all files"))
 
         unstageButton = QToolButton(self)
         unstageButton.setObjectName("unstageButton")
@@ -217,6 +298,54 @@ class DiffArea(QWidget):
         unstageButton.setIcon(stockIcon("git-unstage"))
         unstageButton.setToolTip(_("Unstage selected files"))
         appendShortcutToToolTip(unstageButton, GlobalShortcuts.discardHotkeys[0])
+
+        messageEditor = QPlainTextEdit(self)
+        messageEditor.setObjectName("commitMessageEditor")
+        messageEditor.setPlaceholderText(
+            _("Enter commit message. Use an empty line to separate subject and description."))
+        messageEditor.setTabChangesFocus(True)
+        messageEditor.setFixedHeight(140)
+
+        subjectCounter = QLabel(self)
+        subjectCounter.setObjectName("commitSubjectCounter")
+        subjectCounter.setEnabled(False)
+        subjectCounter.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        signoffCheckBox = QCheckBox(_("Sign Off"), self)
+        signoffCheckBox.setObjectName("signoffCommitCheckBox")
+        noVerifyCheckBox = QCheckBox(_("No-Verify"), self)
+        noVerifyCheckBox.setObjectName("noVerifyCommitCheckBox")
+
+        amendCheckBox = QCheckBox(_("Amend"), self)
+        amendCheckBox.setObjectName("amendCommitCheckBox")
+        amendCheckBox.setToolTip(TaskBook.tips[AmendCommit])
+
+        stashButton = QToolButton(self)
+        stashButton.setObjectName("stashButton")
+        stashButton.setText(_("Stash…"))
+        stashButton.setToolTip(TaskBook.tips[NewStash])
+
+        aiButton = QToolButton(self)
+        aiButton.setObjectName("commitAiButton")
+        aiButton.setText(_("AI"))
+        aiButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        aiButton.setAutoRaise(True)
+
+        aiLanguageCombo = QComboBox(self)
+        aiLanguageCombo.setObjectName("commitAiLanguageCombo")
+        aiLanguageCombo.addItems([
+            "Română", "English", "Русский", "Українська", "Deutsch", "Français", "Español"])
+        aiLanguageCombo.setCurrentText(settings.history.aiLanguage)
+        aiLanguageCombo.setToolTip(_("Language for the AI-generated commit message"))
+
+        aiDetailCombo = QComboBox(self)
+        aiDetailCombo.setObjectName("commitAiDetailCombo")
+        aiDetailCombo.addItem(_("Concise"), "concise")
+        aiDetailCombo.addItem(_("Detailed"), "detailed")
+        aiDetailCombo.addItem(_("Deep"), "deep")
+        detailIndex = aiDetailCombo.findData(settings.history.aiCommitDetail)
+        aiDetailCombo.setCurrentIndex(max(0, detailIndex))
+        aiDetailCombo.setToolTip(_("Level of detail and structure for the AI-generated commit message"))
 
         commitButton = QToolButton(self)
         commitButton.setObjectName("commitButton")
@@ -226,26 +355,81 @@ class DiffArea(QWidget):
         commitButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         commitButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         commitButton.setAutoRaise(True)
-        commitButton.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        commitButton.setMaximumHeight(FILEHEADER_HEIGHT)
-        commitButton.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        commitPushButton = QPushButton(_("Commit && Push"), self)
+        commitPushButton.setObjectName("commitPushButton")
 
         # Connect signals
         unstageButton.clicked.connect(stagedFiles.unstage)
+        unstageAllButton.clicked.connect(stagedFiles.unstageAll)
         stagedFiles.selectedCountChanged.connect(lambda n: unstageButton.setEnabled(n > 0))
+        stagedFiles.selectedCountChanged.connect(self.refreshWorktreeAiButton)
+        stagedFiles.flModel.modelReset.connect(
+            lambda: unstageAllButton.setEnabled(not stagedFiles.isEmpty()))
+        stagedFiles.flModel.modelReset.connect(self.refreshCommitAiButton)
 
-        commitButton.clicked.connect(lambda: NewCommit.invoke(self))
-        commitButtonMenu = ActionDef.makeQMenu(
-            commitButton,
-            [
-                TaskBook.action(self, NewCommit),
-                TaskBook.action(self, AmendCommit),
-                TaskBook.action(self, NewStash),
-            ])
-        # Prevent shortcuts from taking over
-        for action in commitButtonMenu.actions():
-            action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
-        commitButton.setMenu(commitButtonMenu)
+        def fullMessage():
+            return messageEditor.toPlainText().strip()
+
+        def beginCommit(pushAfter=False):
+            message = fullMessage()
+            task = AmendCommit if amendCheckBox.isChecked() else NewCommit
+            if message:
+                task.invoke(
+                    self,
+                    message,
+                    signoffCheckBox.isChecked(),
+                    noVerifyCheckBox.isChecked(),
+                    pushAfter)
+            else:
+                # Preserve the keyboard shortcut/button workflow: an empty
+                # inline form opens the full commit dialog as before.
+                task.invoke(self)
+
+        def updateSubjectCounter():
+            text = messageEditor.toPlainText()
+            subjectLength = len(text.split("\n", 1)[0])
+            subjectCounter.setText(_("SUBJECT {0}/50").format(subjectLength))
+            commitPushButton.setEnabled(bool(text.strip()))
+
+        commitButton.clicked.connect(lambda: beginCommit(False))
+        commitPushButton.clicked.connect(lambda: beginCommit(True))
+        stashButton.clicked.connect(lambda: NewStash.invoke(self))
+        aiButton.clicked.connect(self.generateCommitMessage)
+        def saveAiCommitOptions():
+            settings.history.aiLanguage = aiLanguageCombo.currentText()
+            settings.history.aiCommitDetail = aiDetailCombo.currentData()
+            settings.history.setDirty()
+        aiLanguageCombo.currentTextChanged.connect(saveAiCommitOptions)
+        aiDetailCombo.currentIndexChanged.connect(saveAiCommitOptions)
+        messageEditor.textChanged.connect(updateSubjectCounter)
+        updateSubjectCounter()
+
+        commitForm = QWidget(self)
+        commitForm.setObjectName("commitForm")
+        commitFormLayout = QGridLayout(commitForm)
+        commitFormLayout.setContentsMargins(QMargins())
+        commitFormLayout.setSpacing(4)
+        commitFormLayout.addWidget(messageEditor,       0, 0, 1, 9)
+        commitFormLayout.addWidget(stashButton,         1, 0)
+        commitFormLayout.addWidget(aiButton,            1, 1)
+        commitFormLayout.addWidget(aiLanguageCombo,     1, 2)
+        commitFormLayout.addWidget(aiDetailCombo,       1, 3)
+        commitFormLayout.addWidget(subjectCounter,      1, 4, 1, 5)
+        commitFormLayout.addWidget(signoffCheckBox,     2, 0)
+        commitFormLayout.addWidget(noVerifyCheckBox,    2, 1)
+        commitFormLayout.addWidget(amendCheckBox,       2, 2)
+        commitFormLayout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Expanding), 2, 3)
+        commitFormLayout.addWidget(commitButton,        2, 4)
+        commitFormLayout.addWidget(commitPushButton,    2, 5, 1, 2)
+        commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+
+        stageCommitFormHost = QWidget(self)
+        stageCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        stageCommitFormLayout = QVBoxLayout(stageCommitFormHost)
+        stageCommitFormLayout.setContentsMargins(QMargins())
+        stageCommitFormLayout.setSpacing(0)
+        stageCommitFormLayout.addWidget(commitForm)
 
         # Lay out container
         container = QWidget(self)
@@ -255,26 +439,211 @@ class DiffArea(QWidget):
         # Row 0
         layout.addItem(gridPadding(),           0, 0)
         layout.addWidget(header,                0, 1)
-        layout.addWidget(unstageButton,         0, 2)
+        layout.addWidget(unstageAllButton,      0, 2)
+        layout.addWidget(unstageButton,         0, 3)
+        layout.addWidget(fileViewButton,        0, 4)
         # Row 1
         layout.addItem(QSpacerItem(1, 1),       1, 0)
         # Row 2
-        layout.addWidget(stagedFiles.searchBar, 2, 0, 1, 3)  # row col rowspan colspan
-        layout.addWidget(stagedFiles,           3, 0, 1, 3)
-        layout.addWidget(commitButton,          4, 0, 1, 3)
+        layout.addWidget(stagedFiles.searchBar, 2, 0, 1, 5)  # row col rowspan colspan
+        layout.addWidget(stagedFiles,           3, 0, 1, 5)
+        layout.addWidget(stageCommitFormHost,   4, 0, 1, 5)
         layout.setRowStretch(3, 100)
 
         # Save references
         self.stagedHeader = header
         self.stagedFiles = stagedFiles
         self.unstageButton = unstageButton
+        self.unstageAllButton = unstageAllButton
         self.commitButton = commitButton
+        self.commitPushButton = commitPushButton
+        self.commitAiButton = aiButton
+        self.commitAiLanguageCombo = aiLanguageCombo
+        self.commitAiDetailCombo = aiDetailCombo
+        self.commitMessageEditor = messageEditor
+        self.commitSubjectCounter = subjectCounter
+        self.signoffCommitCheckBox = signoffCheckBox
+        self.noVerifyCommitCheckBox = noVerifyCheckBox
+        self.amendCommitCheckBox = amendCheckBox
+        self.commitForm = commitForm
+        self.stageCommitFormHost = stageCommitFormHost
+        self.stageCommitFormLayout = stageCommitFormLayout
+        self.refreshCommitAiButton()
+        self.refreshWorktreeAiButton()
 
         return container
 
+    def selectedWorktreePaths(self):
+        paths = []
+        for fileList in (self.dirtyFiles, self.stagedFiles):
+            for delta in fileList.selectedDeltas():
+                path = delta.new.path or delta.old.path
+                if path and path not in paths:
+                    paths.append(path)
+        return paths
+
+    def refreshWorktreeAiButton(self):
+        if not hasattr(self, "worktreeAiButton") or not hasattr(self, "stagedFiles"):
+            return
+        paths = self.selectedWorktreePaths()
+        hasProvider = bool(self.commitAiProviders)
+        self.worktreeAiButton.setEnabled(hasProvider and bool(paths))
+        if not hasProvider:
+            tip = _("Install and configure Codex CLI or Claude Code to discuss changes with AI.")
+        elif not paths:
+            tip = _("Select one or more staged or unstaged files to ask AI about them.")
+        else:
+            tip = _n("Ask AI about the selected file…", "Ask AI about {n} selected files…", len(paths))
+        self.worktreeAiButton.setToolTip(tip)
+
+    def askAiAboutSelectedChanges(self):
+        paths = self.selectedWorktreePaths()
+        if not paths or not self.commitAiProviders:
+            self.refreshWorktreeAiButton()
+            return
+        from gitfourchette.forms.aichatdialog import AiChatDialog
+        dialog = AiChatDialog(self.repoModel.repo, [], self, worktreePaths=paths)
+        dialog.open()
+
+    def refreshCommitAiButton(self):
+        """Enable commit-message generation only when it can do useful work."""
+        hasProvider = bool(self.commitAiProviders)
+        hasStagedChanges = hasattr(self, "stagedFiles") and not self.stagedFiles.isEmpty()
+        busy = self.commitAiProcess is not None
+        self.commitAiButton.setEnabled(hasProvider and hasStagedChanges and not busy)
+        if busy:
+            tip = _("Generating a commit message…")
+        elif not hasProvider:
+            tip = _("Install and configure Codex CLI or Claude Code to generate a commit message.")
+        elif not hasStagedChanges:
+            tip = _("Stage files to generate a commit message with AI.")
+        else:
+            provider = settings.history.aiProvider
+            if provider not in self.commitAiProviders:
+                provider = next(iter(self.commitAiProviders))
+            tip = _("Generate a commit message from staged changes with {0}.", provider.capitalize())
+        self.commitAiButton.setToolTip(tip)
+
+    def generateCommitMessage(self):
+        if self.commitAiProcess is not None or self.stagedFiles.isEmpty():
+            return
+        provider = settings.history.aiProvider
+        if provider not in self.commitAiProviders:
+            provider = next(iter(self.commitAiProviders), "")
+        if not provider:
+            self.refreshCommitAiButton()
+            return
+        self.commitAiProvider = provider
+        self.commitAiPhase = "diff"
+        self.commitAiOutput = b""
+        self.commitAiError = b""
+        self.commitAiButton.setText(_("AI…"))
+        self._startCommitAiProcess(
+            "git",
+            ["--no-pager", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--stat", "--patch", "--"],
+        )
+
+    def _startCommitAiProcess(self, program, arguments, prompt=""):
+        process = QProcess(self)
+        self.commitAiProcess = process
+        process.setWorkingDirectory(self.repoModel.repo.workdir or self.repoModel.repo.path)
+        process.readyReadStandardOutput.connect(
+            lambda: self._readCommitAiOutput(bytes(process.readAllStandardOutput())))
+        process.readyReadStandardError.connect(
+            lambda: setattr(self, "commitAiError", (self.commitAiError + bytes(process.readAllStandardError()))[-16000:]))
+        process.finished.connect(self._commitAiFinished)
+        process.errorOccurred.connect(self._commitAiProcessError)
+        if prompt:
+            process.started.connect(lambda: (process.write(prompt.encode("utf-8")), process.closeWriteChannel()))
+        process.start(program, arguments)
+        self.refreshCommitAiButton()
+
+    def _readCommitAiOutput(self, data):
+        self.commitAiOutput += data
+
+    def _commitAiProcessError(self, error):
+        if error == QProcess.ProcessError.FailedToStart and self.commitAiProcess:
+            self._finishCommitAiWithError(self.commitAiProcess.errorString())
+
+    def _commitAiFinished(self, code, exitStatus):
+        process = self.commitAiProcess
+        if process is None:
+            return
+        self._readCommitAiOutput(bytes(process.readAllStandardOutput()))
+        self.commitAiError = (self.commitAiError + bytes(process.readAllStandardError()))[-16000:]
+        process.deleteLater()
+        self.commitAiProcess = None
+        if code != 0 or exitStatus == QProcess.ExitStatus.CrashExit:
+            self._finishCommitAiWithError(
+                self.commitAiError.decode("utf-8", errors="replace") or _("CLI exited with code {0}.", code))
+            return
+        if self.commitAiPhase == "diff":
+            diff = self.commitAiOutput.decode("utf-8", errors="replace")
+            if not diff.strip():
+                self._finishCommitAiWithError(_("There are no staged changes to describe."))
+                return
+            provider = self.commitAiProvider
+            model = settings.history.aiModels.get(provider, "") or configuredModel(provider)
+            language = self.commitAiLanguageCombo.currentText() or "the user's language"
+            detail = self.commitAiDetailCombo.currentData()
+            if detail == "concise":
+                formatInstructions = (
+                    "After the subject, add a blank line and a compact body of 3-6 informative lines. "
+                    "Group related changes when more than one application area is affected.")
+            elif detail == "deep":
+                formatInstructions = (
+                    "After the subject, add a blank line and a thorough, structured body. Group changes under "
+                    "relevant component headings such as Backend, Frontend, Mobile, Tests, Infrastructure, or "
+                    "Documentation. Include only areas evidenced by the diff. Under each heading use clear bullets "
+                    "covering behavior, important implementation decisions, compatibility or risk, and tests. "
+                    "Aim for 12-24 useful lines; do not claim tests were run unless the diff proves it.")
+            else:
+                formatInstructions = (
+                    "After the subject, add a blank line and a structured body of 6-12 useful lines. Group changes "
+                    "under relevant component headings such as Backend, Frontend, Mobile, Tests, Infrastructure, "
+                    "or Documentation. Include only areas evidenced by the diff and use concise bullets.")
+            prompt = (
+                "Write a Git commit message for the staged changes below. Return only the commit message as plain "
+                "text, starting with an imperative subject of at most 50 characters. " + formatInstructions +
+                " Do not use Markdown fences, surrounding quotes, or meta-commentary. Use this language: "
+                + language + ".\n\nStaged diff:\n" + diff[:180_000]
+            )
+            self.commitAiPhase = "assistant"
+            self.commitAiOutput = b""
+            self.commitAiError = b""
+            self.commitAiStream = ResponseStream(provider)
+            self._startCommitAiProcess(
+                self.commitAiProviders[provider], cliArguments(provider, model), prompt)
+            return
+
+        for line in self.commitAiOutput.splitlines():
+            try:
+                event = json.loads(line)
+                if isinstance(event, dict):
+                    self.commitAiStream.consume(event)
+            except (ValueError, TypeError, AttributeError):
+                continue
+        message = self.commitAiStream.text.strip()
+        if self.commitAiStream.error or not message:
+            self._finishCommitAiWithError(
+                self.commitAiStream.error or _("The CLI returned no commit message."))
+            return
+        self.commitMessageEditor.setPlainText(message)
+        self.commitMessageEditor.setFocus()
+        self.commitAiButton.setText(_("AI"))
+        self.refreshCommitAiButton()
+
+    def _finishCommitAiWithError(self, message):
+        if self.commitAiProcess:
+            self.commitAiProcess.deleteLater()
+            self.commitAiProcess = None
+        self.commitAiButton.setText(_("AI"))
+        self.refreshCommitAiButton()
+        showWarning(self, _("AI commit message"), message)
+
     def _makeCommittedFilesContainer(self, repoModel):
         committedFiles = CommittedFiles(repoModel, self)
-
+        fileViewButton = self._makeFileViewButton()
         header = QElidedLabel(" ")
         header.setObjectName("committedHeader")
         header.setProperty("class", "panelTitle")
@@ -287,7 +656,7 @@ class DiffArea(QWidget):
         layout.setSpacing(0)  # automatic frameless list views on KDE Plasma 6 Breeze
         layout.addItem(gridPadding(),               0, 0)
         layout.addWidget(header,                    0, 1)
-        layout.addItem(gridPadding(),               0, 2)
+        layout.addWidget(fileViewButton,            0, 2)
         layout.addWidget(committedFiles.searchBar,  1, 0, 1, 3)
         layout.addItem(QSpacerItem(1, 1),           2, 0, 1, 3)
         layout.addWidget(committedFiles,            3, 0, 1, 3)
@@ -346,6 +715,13 @@ class DiffArea(QWidget):
 
         specialDiff = SpecialDiffView(self)
 
+        sideBySideDiff = SideBySideDiffView(self)
+        diff.documentReplaced.connect(sideBySideDiff.replaceDocument)
+
+        diffPresentationStack = QStackedWidget(self)
+        diffPresentationStack.addWidget(diffViewContainer)
+        diffPresentationStack.addWidget(sideBySideDiff)
+
         conflict = ConflictView(repoModel, self)
         conflictScroll = QScrollArea()
         conflictScroll.setWidget(conflict)
@@ -353,7 +729,7 @@ class DiffArea(QWidget):
 
         stack = QStackedWidget(self)
         # Add widgets in same order as DiffStackPage
-        stack.addWidget(diffViewContainer)
+        stack.addWidget(diffPresentationStack)
         stack.addWidget(specialDiff)
         stack.addWidget(conflictScroll)
         stack.setCurrentIndex(0)
@@ -365,18 +741,32 @@ class DiffArea(QWidget):
         layout.addWidget(topContainer)
         layout.addWidget(stack)
 
+        bottomCommitFormHost = QWidget(self)
+        bottomCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        bottomCommitFormLayout = QVBoxLayout(bottomCommitFormHost)
+        bottomCommitFormLayout.setContentsMargins(QMargins())
+        bottomCommitFormLayout.setSpacing(0)
+        layout.addWidget(bottomCommitFormHost)
+
         self.diffHeader = header
         self.diffStack = stack
         self.conflictView = conflict
         self.specialDiffView = specialDiff
         self.diffView = diff
+        self.sideBySideDiffView = sideBySideDiff
+        self.diffPresentationStack = diffPresentationStack
         self.diffButtons = diffTools
+        self.bottomCommitFormHost = bottomCommitFormHost
+        self.bottomCommitFormLayout = bottomCommitFormLayout
 
         return stackContainer
 
     def applyCustomStyling(self):
         for smallButton in (
+                self.stageAllButton,
+                self.worktreeAiButton,
                 self.discardButton,
+                self.unstageAllButton,
                 self.unstageButton,
                 self.stageButton,
                 *self.diffButtons.buttons,
@@ -389,9 +779,6 @@ class DiffArea(QWidget):
         for button in self.stageButton, self.unstageButton, self.discardButton:
             button.setEnabled(False)
 
-        for button in self.stageButton, self.unstageButton:
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-
         # Smaller font for header text
         for smallWidget in (
                 self.contextHeader,
@@ -400,7 +787,10 @@ class DiffArea(QWidget):
                 self.dirtyHeader,
                 self.stagedHeader,
                 self.stageButton,
+                self.stageAllButton,
+                self.worktreeAiButton,
                 self.unstageButton,
+                self.unstageAllButton,
                 self.discardButton,
                 *self.diffButtons.buttons,
         ):
@@ -421,7 +811,7 @@ class DiffArea(QWidget):
 
         numWidgets = len(widgets)
         selections = [w.selectedIndexes() for w in widgets]
-        lengths = [w.model().rowCount() for w in widgets]
+        lengths = [w.fileCount() for w in widgets]
 
         # find widget to start from: topmost widget that has any selection
         leader = -1
@@ -438,7 +828,7 @@ class DiffArea(QWidget):
                 leader += 1
         else:
             # get selected row in leader widget - TODO: this may not be accurate when multiple rows are selected
-            row = selections[leader][-1].row()
+            row = widgets[leader].earliestSelectedRow()
 
             if down:
                 row += 1
@@ -521,6 +911,7 @@ class DiffArea(QWidget):
             # Set correct card in fileStack (after selecting the file to avoid flashing)
             self.setFileStackPageByContext(locator.context)
 
+        self.refreshWorktreeAiButton()
         return locator
 
     # -------------------------------------------------------------------------

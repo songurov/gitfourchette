@@ -31,6 +31,7 @@ class CommitDialog(QDialog):
             gpgFlag: bool,
             gpgKey: str,
             hooks: list[str],
+            recentSummaries: list[str],
             parent: QWidget):
         super().__init__(parent)
 
@@ -39,6 +40,12 @@ class CommitDialog(QDialog):
 
         self.ui = Ui_CommitDialog()
         self.ui.setupUi(self)
+        # Keep the editable line edit API used by validation, drafts and paste handling.
+        self.ui.summaryEditor = self.ui.summaryComboBox.lineEdit()
+        self.ui.summaryComboBox.addItems(recentSummaries)
+        self.ui.summaryComboBox.setCurrentIndex(-1)
+        self.ui.summaryComboBox.setMaxVisibleItems(10)
+        self.ui.summaryComboBox.setToolTip(_("Choose a recent commit summary or type a new one."))
         self.ui.gpg.setup(gpgFlag, gpgKey)
         self.ui.hookButton.setup(hooks)
 
