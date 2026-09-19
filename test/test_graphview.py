@@ -1965,7 +1965,22 @@ def testCheckedOutBranchChipHasACheck(tempDir, mainWindow, monkeypatch):
 # Graph layout: where the metadata goes, how wide it is, who gives way
 
 
+def testAuthorHashAndDateSitAtTheRightEdgeByDefault(tempDir, mainWindow, monkeypatch):
+    # Like Fork: the message takes the width and the date ends at the right edge,
+    # with no empty band past it
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1920, 800)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    delegate = graphView.clDelegate
+    commit = rw.repo.revparse_single("master~1").peel(Commit)
+    parts = rowParts(drawnRuns(graphView, monkeypatch, commit.id), commit)
+    dateRight = parts["date"][0].rect.right()
+    assert graphView.viewport().width() - dateRight < 2 * XMARGIN + delegate.hashCharWidth
+
+
 def testAuthorAndDateStayNearTheMessages(tempDir, mainWindow, monkeypatch):
+    GFApplication.applyPrefs(metadataNearMessage=True)  # the option; the default follows Fork
     wd = unpackRepo(tempDir)
     mainWindow.resize(1920, 800)
     rw = mainWindow.openRepo(wd)
@@ -1995,6 +2010,7 @@ def testAuthorAndDateStayNearTheMessages(tempDir, mainWindow, monkeypatch):
 
 
 def testAuthorAndDateStartPastTheWidestRowAtTheTop(tempDir, mainWindow, monkeypatch):
+    GFApplication.applyPrefs(metadataNearMessage=True)  # the option; the default follows Fork
     wd = unpackRepo(tempDir)
     shell("git commit --allow-empty -m 'A subject of middling length, longer than the ones below it'", wd)
     mainWindow.resize(1920, 800)

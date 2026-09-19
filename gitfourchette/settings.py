@@ -175,7 +175,7 @@ class Prefs(PrefsFile):
     graphRowLayout              : GraphRowLayout        = GraphRowLayout.GraphFirst
     """Messages that all start at the same x stay readable however busy the
     graph gets, and nothing is reserved for refs that most rows don't have."""
-    metadataNearMessage         : bool                  = True
+    metadataNearMessage         : bool                  = False
     """In a wide window, author, hash and date sit a set distance past the
     commit messages instead of at the far right, 900 px away from them."""
     graphRowHeight              : GraphRowHeight        = GraphRowHeight.Relaxed
