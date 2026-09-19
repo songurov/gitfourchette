@@ -210,6 +210,19 @@ class ThemeColors:
     tabPillEdge: str = ""
     tabActiveText: str = ""
 
+    # Code and diffs, with the automatic syntax scheme only: a Pygments preset
+    # picked in Settings keeps its own colors. "" keeps the preset's background
+    # and mixes added/deleted lines from it.
+    codeBg: str = ""
+    diffAdd: str = ""
+    diffDel: str = ""
+    diffFiller: str = ""
+    "Rows of a side-by-side diff that have no counterpart on the other side."
+    diffHunkFg: str = ""
+    "Hunk headers (@@ -1,3 +1,5 @@); \"\" draws them in blue italics."
+    gutterText: str = ""
+    "Line numbers next to the code, which then sit on its background; \"\" dims the text color."
+
     # All tokens below are inferred automatically. Do not define manually!
     onAccent: str = "white"
     defaultButton: str = "#f0f"
@@ -480,6 +493,12 @@ NEUTRAL_DARK = ThemeColors(
     tabPill            = "#3e3e3e",
     tabPillEdge        = "#646464",
     tabActiveText      = "#ebebeb",
+    codeBg             = "#242424",
+    diffAdd            = "#2f5138",
+    diffDel            = "#5b3737",
+    diffFiller         = "#3a3a3a",
+    diffHunkFg         = "#8a8a8a",
+    gutterText         = "#8b8b8b",
 )
 
 NEUTRAL_LIGHT = ThemeColors(
@@ -516,6 +535,12 @@ NEUTRAL_LIGHT = ThemeColors(
     tabPill            = "#ffffff",
     tabPillEdge        = "#c8c8c8",
     tabActiveText      = "#1f1f1f",
+    codeBg             = "#f5f5f5",
+    diffAdd            = "#dcf2e0",
+    diffDel            = "#fbe1e1",
+    diffFiller         = "#eeeeee",
+    diffHunkFg         = "#8a8a8a",
+    gutterText         = "#9a9a9a",
 )
 
 BUILTIN_THEMES: dict[str, tuple[ThemeColors, ThemeColors]] = {
@@ -523,3 +548,16 @@ BUILTIN_THEMES: dict[str, tuple[ThemeColors, ThemeColors]] = {
     ThemeVariant.Neutral: (NEUTRAL_LIGHT, NEUTRAL_DARK),
 }
 "(light, dark) for each variant of the built-in theme"
+
+
+_activeTheme: ThemeColors | None = None
+
+
+def activeTheme() -> ThemeColors | None:
+    """The built-in theme's tokens as the app last applied them; None under a native Qt style."""
+    return _activeTheme
+
+
+def setActiveTheme(theme: ThemeColors | None):
+    global _activeTheme
+    _activeTheme = theme

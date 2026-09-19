@@ -71,17 +71,20 @@ class SideBySideDiffView(QWidget):
                 item = lines[i]
                 (additions if item.origin == "+" else deletions).append(item)
                 i += 1
+            # Rows with nothing across from them are filler, drawn as such if the theme says how
+            hasFillerColor = DiffTextFormats.fillerBF.background().style() != Qt.BrushStyle.NoBrush
+            filler = ("", DiffTextFormats.fillerBF if hasFillerColor else None)
             for n in range(max(len(deletions), len(additions))):
                 if n < len(deletions):
                     item = deletions[n]
                     oldRows.append(cls._row(item.text, item.oldLineNo, "-", DiffTextFormats.delBF))
                 else:
-                    oldRows.append(("", None))
+                    oldRows.append(filler)
                 if n < len(additions):
                     item = additions[n]
                     newRows.append(cls._row(item.text, item.newLineNo, "+", DiffTextFormats.addBF))
                 else:
-                    newRows.append(("", None))
+                    newRows.append(filler)
         return oldRows, newRows
 
     @staticmethod

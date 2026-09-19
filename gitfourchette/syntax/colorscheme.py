@@ -36,10 +36,20 @@ class ColorScheme:
     scheme: dict
     highContrastScheme: dict
 
+    themed: bool
+    "The automatic scheme, dressed in the built-in theme's code colors (see ThemeColors.codeBg)."
+    diffAdd: QColor | None
+    diffDel: QColor | None
+    diffFiller: QColor | None
+    diffHunkFg: QColor | None
+    gutterText: QColor | None
+
     def __init__(self):
         self.name = ""
         self.scheme = {}
         self.highContrastScheme = {}
+        self.themed = False
+        self.diffAdd = self.diffDel = self.diffFiller = self.diffHunkFg = self.gutterText = None
 
         palette = QApplication.palette()
         self.backgroundColor = palette.color(QPalette.ColorRole.Base)
@@ -85,13 +95,20 @@ class ColorScheme:
 
     @classmethod
     def resolve(cls, name: str) -> ColorScheme:
-        # Resolve style alias
+        from gitfourchette.themes import activeTheme
+
+        # Resolve style alias. The automatic scheme wears the built-in theme's
+        # code colors if it has any; a preset picked by name keeps its own.
+        theme = None
         if name == PygmentsPresets.Automatic:
             name = PygmentsPresets.Dark if isDarkTheme() else PygmentsPresets.Light
+            theme = activeTheme()
+            if theme is not None and not theme.codeBg:
+                theme = None
         if name == PygmentsPresets.Off:
             return cls.fallbackScheme
 
-        if cls._cachedScheme.name == name:
+        if cls._cachedScheme.name == name and cls._cachedScheme.themed == (theme is not None):
             return cls._cachedScheme
 
         style = pygments.styles.get_style_by_name(name)
@@ -125,6 +142,17 @@ class ColorScheme:
         wsFormat = QTextCharFormat()
         wsFormat.setForeground(wsColor)
         scheme.scheme[Token.Whitespace] = wsFormat
+
+        if theme is not None:
+            def color(token: str) -> QColor | None:
+                return QColor(token) if token else None
+            scheme.themed = True
+            scheme.backgroundColor = QColor(theme.codeBg)
+            scheme.diffAdd = color(theme.diffAdd)
+            scheme.diffDel = color(theme.diffDel)
+            scheme.diffFiller = color(theme.diffFiller)
+            scheme.diffHunkFg = color(theme.diffHunkFg)
+            scheme.gutterText = color(theme.gutterText)
 
         cls._cachedScheme = scheme
         return scheme

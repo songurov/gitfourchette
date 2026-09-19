@@ -43,7 +43,7 @@ class DiffGutter(CodeGutter):
         palette = self.palette()
         themeFG = palette.color(QPalette.ColorRole.Text)  # standard theme foreground color
         lineColor = QColor(themeFG.red(), themeFG.green(), themeFG.blue(), 80)
-        textColor = QColor(themeFG.red(), themeFG.green(), themeFG.blue(), 80)
+        textColor = diffView.highlighter.scheme.gutterText or QColor(themeFG.red(), themeFG.green(), themeFG.blue(), 80)
 
         # Gather some metrics
         rightEdge = self.rect().width() - 1

@@ -9,6 +9,9 @@ from __future__ import annotations
 from gitfourchette.qt import *
 from gitfourchette.toolbox import *
 
+if TYPE_CHECKING:
+    from gitfourchette.codeview.codeview import CodeView
+
 
 class CodeGutter(QWidget):
     """
@@ -86,10 +89,18 @@ class CodeGutter(QWidget):
             self.lineShiftClicked.emit(pos)
 
     def paintBlocks(self, event: QPaintEvent, painter: QPainter, lineColor: QColor):
+        codeView = self.codeView
+        if TYPE_CHECKING:
+            assert isinstance(codeView, CodeView)
+
         # Set up colors
         palette = self.palette()
         themeBG = palette.color(QPalette.ColorRole.Base)  # standard theme background color
-        if isDarkTheme(palette):
+        scheme = codeView.highlighter.scheme
+        if scheme.gutterText:
+            # The theme's own code colors (see ColorScheme.themed) run under the numbers too
+            gutterColor = scheme.backgroundColor
+        elif isDarkTheme(palette):
             gutterColor = themeBG.darker(105)
         else:
             gutterColor = themeBG.lighter(140)

@@ -608,7 +608,7 @@ class GFApplication(QApplication):
         from gitfourchette.syntax.colorscheme import ColorScheme
         from gitfourchette.toolbox import mixColors, iconbank
         from gitfourchette.toolbox.appstyle import AppStyle
-        from gitfourchette.themes import ThemeColors, pinnedColorScheme
+        from gitfourchette.themes import ThemeColors, pinnedColorScheme, setActiveTheme
 
         effectiveStyle = settings.prefs.qtStyle
 
@@ -628,6 +628,7 @@ class GFApplication(QApplication):
         # See if it's a custom theme
         accent = self.platformStandardAccent
         customTheme = ThemeColors.resolveTheme(effectiveStyle, accent)
+        setActiveTheme(customTheme)
         if customTheme:
             effectiveStyle = ThemeColors.bestStyleEngine()
             palette = customTheme.buildPalette()

@@ -120,6 +120,7 @@ class LineData:
 class DiffTextFormats:
     addBF = QTextBlockFormat()
     delBF = QTextBlockFormat()
+    fillerBF = QTextBlockFormat()
     doppelgangerAddCF = QTextCharFormat()
     doppelgangerDelCF = QTextCharFormat()
     hunkBF = QTextBlockFormat()
@@ -136,6 +137,10 @@ class DiffTextFormats:
         if colorblind:
             delColor1 = mixColors(bgColor, colors.orange, .35)
             addColor1 = mixColors(bgColor, colors.teal, .35)
+        elif scheme.diffAdd and scheme.diffDel:
+            # The built-in theme's own, with the automatic scheme
+            delColor1 = scheme.diffDel
+            addColor1 = scheme.diffAdd
         else:
             delColor1 = mixColors(bgColor, QColor(0xff5555), .35)
             addColor1 = mixColors(bgColor, QColor(0x55ff55), .35)
@@ -161,11 +166,22 @@ class DiffTextFormats:
         cls.addBF.setBackground(addColor1)
         cls.delBF.setBackground(delColor1)
 
+        # A side-by-side row with nothing across from it
+        if scheme.diffFiller:
+            cls.fillerBF.setBackground(scheme.diffFiller)
+        else:
+            cls.fillerBF.clearBackground()
+
         cls.doppelgangerAddCF.setBackground(addColor2)
         cls.doppelgangerDelCF.setBackground(delColor2)
 
-        cls.hunkCF.setFontItalic(True)
-        cls.hunkCF.setForeground(hunkColor)
+        if scheme.diffHunkFg:
+            # The built-in theme's own: a quiet, upright header
+            cls.hunkCF.setFontItalic(False)
+            cls.hunkCF.setForeground(scheme.diffHunkFg)
+        else:
+            cls.hunkCF.setFontItalic(True)
+            cls.hunkCF.setForeground(hunkColor)
 
         cls.warningCF.setFontUnderline(True)
         cls.warningCF.setFontWeight(QFont.Weight.Bold)

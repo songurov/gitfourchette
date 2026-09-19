@@ -13,6 +13,7 @@ import re
 import pytest
 
 from gitfourchette import settings
+from gitfourchette.nav import NavLocator
 from gitfourchette.themes import (
     MODERN_DARK, MODERN_LIGHT, NEUTRAL_DARK, NEUTRAL_LIGHT,
     ThemeColors, ThemeName, ThemeVariant, formatStyle, parseStyle, withThemeMode,
@@ -141,3 +142,93 @@ def testToolbarThemeSwitchKeepsNeutral(mainWindow):
         assert QApplication.palette().color(QPalette.ColorRole.Window).name() == NEUTRAL_DARK.bg
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+def _openDiff(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/master.txt", "On master\nOn master\nnew line\n")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("master.txt"), check=True)
+    return rw
+
+
+def _diffColors(rw):
+    from gitfourchette.diffview.diffdocument import DiffTextFormats
+    document = rw.diffView.document()
+    added = document.find("new line").block()
+    hunk = document.firstBlock()
+    assert hunk.text().startswith("@@")
+    gutter = rw.diffView.gutter.grab().toImage()
+    return {
+        "bg": rw.diffView.palette().color(QPalette.ColorRole.Base).name(),
+        "add": added.blockFormat().background().color().name(),
+        "hunk": DiffTextFormats.hunkCF.foreground().color().name(),
+        "hunkItalic": DiffTextFormats.hunkCF.fontItalic(),
+        "gutterBg": gutter.pixelColor(2, 2).name(),
+    }
+
+
+def testNeutralDiffColorsWithTheAutomaticScheme(tempDir, mainWindow):
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral", syntaxHighlighting="")
+    try:
+        rw = _openDiff(tempDir, mainWindow)
+        assert _diffColors(rw) == {
+            "bg": NEUTRAL_DARK.codeBg,
+            "add": NEUTRAL_DARK.diffAdd,
+            "hunk": NEUTRAL_DARK.diffHunkFg,
+            "hunkItalic": False,
+            "gutterBg": NEUTRAL_DARK.codeBg,  # the line numbers sit on the code's background
+        }
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+
+@pytest.mark.parametrize("prefs", [
+    {"qtStyle": f"{BUILTIN},dark,neutral", "syntaxHighlighting": "stata-dark"},  # a preset, picked by name
+    {"qtStyle": f"{BUILTIN},dark"},  # Modern
+], ids=["preset", "modern"])
+def testDiffColorsThatNeutralLeavesAlone(tempDir, mainWindow, prefs):
+    import pygments.styles
+    from gitfourchette.toolbox import mixColors
+    GFApplication.applyPrefs(**prefs)
+    try:
+        rw = _openDiff(tempDir, mainWindow)
+        presetBg = pygments.styles.get_style_by_name("stata-dark").background_color
+        assert _diffColors(rw) == {
+            "bg": presetBg,
+            "add": mixColors(QColor(presetBg), QColor(0x55ff55), .35).name(),
+            "hunk": QColor(0x1090ff).name(),  # colors.blue.lighter(125)
+            "hunkItalic": True,
+            "gutterBg": QApplication.palette().color(QPalette.ColorRole.Base).darker(105).name(),
+        }
+    finally:
+        GFApplication.applyPrefs(qtStyle="", syntaxHighlighting="")
+
+
+def testColorblindDiffColorsWinOverNeutral(tempDir, mainWindow):
+    from gitfourchette import colors
+    from gitfourchette.toolbox import mixColors
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral", colorblind=True)
+    try:
+        rw = _openDiff(tempDir, mainWindow)
+        assert _diffColors(rw)["add"] == mixColors(QColor(NEUTRAL_DARK.codeBg), colors.teal, .35).name()
+    finally:
+        GFApplication.applyPrefs(qtStyle="", colorblind=False)
+
+
+def testNeutralSideBySideFillerRows(tempDir, mainWindow):
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral")
+    try:
+        rw = _openDiff(tempDir, mainWindow)
+        GFApplication.applyPrefs(sideBySideDiff=True)
+        oldView = rw.diffArea.sideBySideDiffView.oldView
+        # "new line" has nothing across from it: the old side shows a filler row
+        backgrounds = set()
+        block = oldView.document().firstBlock()
+        while block.isValid():
+            if not block.text():
+                backgrounds.add(block.blockFormat().background().color().name())
+            block = block.next()
+        assert NEUTRAL_DARK.diffFiller in backgrounds
+    finally:
+        GFApplication.applyPrefs(qtStyle="", sideBySideDiff=False)
