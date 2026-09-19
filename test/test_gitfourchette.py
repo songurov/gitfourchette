@@ -526,6 +526,34 @@ def testAutoHideMenuBar(mainWindow):
     assert menuBar.height() != 0
 
 
+def testAppNameInMacMenuBarWhenRunFromSource(qapp):
+    # Like "python -m gitfourchette", the unit tests boot the app with argv[0] = ".../gitfourchette/__main__.py".
+    argv0 = qapp.arguments()[0]
+
+    if not MACOS:
+        # Nothing changes on other platforms
+        assert argv0.endswith("__main__.py")
+        return
+
+    # Qt names About/Hide/Quit after the main bundle's CFBundleName, or argv[0] if there's none
+    assert argv0 == APP_DISPLAY_NAME
+
+    # AppKit titles the application menu after CFBundleName. Read it like Qt does.
+    import ctypes
+    import ctypes.util
+    cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
+    cf.CFBundleGetMainBundle.restype = ctypes.c_void_p
+    cf.CFBundleGetValueForInfoDictionaryKey.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    cf.CFBundleGetValueForInfoDictionaryKey.restype = ctypes.c_void_p
+    cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+    nameKey = ctypes.c_void_p.in_dll(cf, "kCFBundleNameKey").value
+    bundleName = cf.CFBundleGetValueForInfoDictionaryKey(cf.CFBundleGetMainBundle(), nameKey)
+    assert bundleName
+    buffer = ctypes.create_string_buffer(256)
+    assert cf.CFStringGetCString(bundleName, buffer, len(buffer), 0x08000100)  # kCFStringEncodingUTF8
+    assert buffer.value.decode("utf-8") == APP_DISPLAY_NAME
+
+
 def testAboutDialog(mainWindow):
     app = QApplication.instance()
 

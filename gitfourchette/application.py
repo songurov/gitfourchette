@@ -64,6 +64,10 @@ class GFApplication(QApplication):
         sys.exit(returnCode)
 
     def __init__(self, argv: list[str], barebones=False):
+        if MACOS and not PYINSTALLER_MEIPASS:
+            # Running from source: no app bundle gives our name to the menu bar
+            argv = GFApplication.nameMacAppFromSource(argv)
+
         super().__init__(argv)
         self.setObjectName("GFApplication")
 
@@ -160,6 +164,52 @@ class GFApplication(QApplication):
         self.commandLinePaths = commandLinePaths
 
     # -------------------------------------------------------------------------
+
+    @staticmethod
+    def nameMacAppFromSource(argv: list[str]) -> list[str]:
+        """
+        Make the macOS menu bar call us by our name when running from source.
+        Must be called before the QApplication is constructed.
+
+        Without an app bundle of our own, the menu bar would read "python" or
+        "Python" and the application menu would say "Quit __main__.py", because:
+        - AppKit titles the application menu after the main bundle's CFBundleName,
+          or the process name if there's none ("python");
+        - Qt names About/Hide/Quit after the same CFBundleName, or argv[0] if
+          there's none (".../gitfourchette/__main__.py" with "python -m").
+        A framework build of Python (python.org, Homebrew) runs from Python.app,
+        whose CFBundleName is "Python", so argv[0] alone wouldn't cut it.
+
+        So, write our name into the main bundle's info dictionary before Qt
+        boots up NSApplication. Also put our name in argv[0], in case
+        CoreFoundation is out of reach.
+        """
+        try:
+            import ctypes
+            import ctypes.util
+            cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
+            cf.CFBundleGetMainBundle.restype = ctypes.c_void_p
+            cf.CFBundleGetInfoDictionary.argtypes = [ctypes.c_void_p]
+            cf.CFBundleGetInfoDictionary.restype = ctypes.c_void_p
+            cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+            cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+            cf.CFDictionarySetValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+            cf.CFRelease.argtypes = [ctypes.c_void_p]
+            nameKey = ctypes.c_void_p.in_dll(cf, "kCFBundleNameKey").value
+            utf8 = 0x08000100  # kCFStringEncodingUTF8
+
+            bundle = cf.CFBundleGetMainBundle()
+            info = cf.CFBundleGetInfoDictionary(bundle) if bundle else None
+            name = cf.CFStringCreateWithCString(None, APP_DISPLAY_NAME.encode("utf-8"), utf8)
+            if info and name:
+                # This dictionary is mutable: CoreFoundation adds keys to it itself
+                cf.CFDictionarySetValue(info, nameKey, name)
+            if name:
+                cf.CFRelease(name)
+        except (ImportError, OSError, AttributeError, ValueError) as exc:  # pragma: no cover
+            logger.warning(f"Couldn't set app name for macOS menu bar: {exc}")
+
+        return [APP_DISPLAY_NAME, *argv[1:]]
 
     def createTempDir(self):
         path: str | Path = os.environ.get("GITFOURCHETTE_TEMPDIR", "")
