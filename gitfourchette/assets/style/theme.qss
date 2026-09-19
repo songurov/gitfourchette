@@ -866,6 +866,20 @@ ${neutralOnly}QToolBar#GFToolbar[compact="true"]::separator {
     background: transparent;
 }
 
+#GFRepoBox QToolButton#GFRepoBoxActivity {
+    padding: 0px;
+    border-radius: ${innerRadius};
+}
+
+#GFRepoBox QToolButton#GFRepoBoxActivity:hover {
+    background: ${hover};
+}
+
+#GFRepoBox QToolButton#GFRepoBoxActivity::menu-indicator {
+    image: none;
+    width: 0px;
+}
+
 #GFRepoBox QToolButton#GFRepoBoxBranch::menu-indicator {
     image: url(assets:icons/qss-chevron-down.svg);
     subcontrol-origin: padding;

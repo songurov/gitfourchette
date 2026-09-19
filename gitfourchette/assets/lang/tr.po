@@ -2072,6 +2072,10 @@ msgstr "Kenar çubuğu"
 msgid "Show or hide the sidebar"
 msgstr "Kenar çubuğunu göster veya gizle"
 
+#: forms/maintoolbar.py:50
+msgid "Recent activity"
+msgstr "Son etkinlik"
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr "Herhangi bir komutun, deponun veya çalışma alanının birkaç harfini yazıp Enter'a basın"
@@ -3928,6 +3932,10 @@ msgstr "Durum çubuğunu göster"
 #: mainwindow.py:362
 msgid "Show sidebar"
 msgstr "Kenar çubuğunu göster"
+
+#: mainwindow.py:714
+msgid "No recent activity"
+msgstr "Son etkinlik yok"
 
 #: mainwindow.py:361 trtables.py:375
 msgid "Show menu bar"

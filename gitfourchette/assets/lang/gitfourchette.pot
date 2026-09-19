@@ -2098,6 +2098,10 @@ msgstr ""
 msgid "Show or hide the sidebar"
 msgstr ""
 
+#: forms/maintoolbar.py:50
+msgid "Recent activity"
+msgstr ""
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr ""
@@ -3945,6 +3949,10 @@ msgstr ""
 
 #: mainwindow.py:362
 msgid "Show sidebar"
+msgstr ""
+
+#: mainwindow.py:714
+msgid "No recent activity"
 msgstr ""
 
 #: mainwindow.py:361 trtables.py:375
