@@ -1108,6 +1108,42 @@ def testAnExplicitCodeFontSizeWinsOverCompact(tempDir, mainWindow):
     settings.prefs.fontSize = 0
 
 
+def testCompactShrinksTheInterfaceFromLaunch(tempDir, mainWindow):
+    app = GFApplication.instance()
+    GFApplication.applyPrefs(compactUi=False)
+    normalUiFont = app.font().pointSizeF()
+
+    # A previous run saved compact mode; this one starts from the desktop's font
+    settings.prefs.compactUi = True
+    settings.prefs.write(force=True)
+
+    originalWindow = mainWindow
+    originalWindow.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)  # Let fixture delete original MainWindow
+    originalWindow.close()
+    app.endSession(clearTempDir=False)
+    app.mainWindow = None
+
+    app.beginSession()
+    QTest.qWait(1)
+    relaunchedWindow = app.mainWindow
+    assert relaunchedWindow is not originalWindow
+
+    # The type is as small as when compact mode is picked from the menu, not just the code
+    assert settings.prefs.compactUi
+    assert app.font().pointSizeF() == normalUiFont - settings.COMPACT_POINT_DROP
+    assert relaunchedWindow.mainToolBar.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+
+    # Back to the desktop's font for the tests that follow
+    GFApplication.applyPrefs(compactUi=False)
+    assert app.font().pointSizeF() == normalUiFont
+    relaunchedWindow.close()
+    relaunchedWindow.deleteLater()
+    waitUntilTrue(lambda: not app.mainWindow)
+
+    # Let fixture delete original window
+    app.mainWindow = originalWindow
+
+
 def testSelectingARepoShowsItsReadme(tempDir, mainWindow):
     root = tempDir.name
     a = makeRepoAt(root, "g/withreadme")

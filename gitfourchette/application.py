@@ -337,6 +337,7 @@ class GFApplication(QApplication):
             self.tempDir.remove()
 
     def bootUi(self):
+        from gitfourchette import settings
         from gitfourchette.mainwindow import MainWindow
         from gitfourchette.toolbox import bquo
         from gitfourchette.settings import QtApiNames
@@ -354,6 +355,9 @@ class GFApplication(QApplication):
         self.avatarCache = AvatarCache(self)
 
         self.applyQtStylePref()
+        if settings.prefs.compactUi:
+            # Size the type before any widget exists, as picking compact mode does later on
+            self.applyCompactPref()
         self.mainWindow = MainWindow()
 
         # Bind window signals
