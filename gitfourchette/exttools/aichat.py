@@ -8,6 +8,11 @@ from pathlib import Path
 
 
 PRESETS = {
+    "change_request": ("PR/MR summary", ("Write a deep pull-request or merge-request summary for this branch. "
+                       "Start with a concise title on the first line. Then add a blank line and a structured "
+                       "description grouped by relevant areas such as Backend, Frontend, Mobile, Tests, "
+                       "Infrastructure, and Documentation. Include only evidenced areas, explain behavior and "
+                       "risks, and do not claim tests were run unless verified.")),
     "review": ("Code review", ("Review these commits for correctness, maintainability and missing tests. "
                "List actionable findings by severity, with commit/file/line evidence and suggested fixes. "
                "If there are no supported findings, say so. Finish with a short verdict.")),

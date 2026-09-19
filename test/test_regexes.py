@@ -296,3 +296,19 @@ def testIdentifyHostingService(exampleUrl):
     # Anything else stays unidentified rather than being guessed at
     assert identifyHost(exampleUrl) is None
     assert identifyHost("") is None
+
+
+def testChangeRequestLinks():
+    github, host = WebHost.makeChangeRequestLink(
+        "git@github.com:acme/app.git", "feature/ui", "Improve UI", "Deep summary")
+    assert host == "GitHub"
+    assert "/pull/new/feature/ui?" in github
+    assert "title=Improve+UI" in github and "body=Deep+summary" in github
+
+    gitlab, host = WebHost.makeChangeRequestLink(
+        "https://gitlab.com/acme/app.git", "feature/api", "Improve API", "Details")
+    assert host == "GitLab"
+    assert "/-/merge_requests/new?" in gitlab
+    assert "merge_request%5Bsource_branch%5D=feature%2Fapi" in gitlab
+
+    assert WebHost.makeChangeRequestLink("https://example.com/acme/app", "feature") == ("", "")

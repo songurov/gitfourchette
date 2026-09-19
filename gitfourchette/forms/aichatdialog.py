@@ -14,12 +14,13 @@ from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.localization import _, _n
 from gitfourchette.qt import *
 from gitfourchette.toolbox import makeWidgetShortcut
+from gitfourchette.webhost import WebHost
 
 
 class AiChatDialog(QDialog):
     ContextLimit = 180_000
 
-    def __init__(self, repo, commits, parent=None, branch="", worktreePaths=None):
+    def __init__(self, repo, commits, parent=None, branch="", worktreePaths=None, changeRequest=None):
         super().__init__(parent)
         self.setWindowTitle(_("Ask AI"))
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -29,6 +30,7 @@ class AiChatDialog(QDialog):
         self.repo = repo
         self.branch = branch
         self.worktreePaths = list(dict.fromkeys(worktreePaths or []))
+        self.changeRequest = changeRequest
         self.branchRange = None
         self.guidance = ""
         self.guidanceSources = []
@@ -175,6 +177,14 @@ class AiChatDialog(QDialog):
         self.stopButton.setEnabled(False)
         self.stopButton.clicked.connect(self.stop)
         buttons.addWidget(self.stopButton)
+        if self.changeRequest:
+            remoteUrl, sourceBranch = self.changeRequest
+            _url, hostName = WebHost.makeChangeRequestLink(remoteUrl, sourceBranch)
+            self.changeRequestButton = QPushButton(
+                _("Open Pull Request") if hostName == "GitHub" else _("Open Merge Request"))
+            self.changeRequestButton.setAutoDefault(False)
+            self.changeRequestButton.clicked.connect(self.openChangeRequest)
+            buttons.addWidget(self.changeRequestButton)
         self.sendButton = QPushButton(_("Send"))
         self.sendButton.setAutoDefault(False)
         self.sendButton.clicked.connect(self.send)
@@ -194,6 +204,17 @@ class AiChatDialog(QDialog):
         self.baseCombo.currentIndexChanged.connect(self.invalidateBranch)
         if branch:
             self.scopeCombo.setCurrentIndex(2)
+
+    def openChangeRequest(self):
+        remoteUrl, sourceBranch = self.changeRequest
+        answer = next((m["content"].strip() for m in reversed(self.messages)
+                       if m["role"] == "assistant" and m["content"].strip()), "")
+        title, separator, body = answer.partition("\n")
+        if not separator:
+            body = ""
+        url, _hostName = WebHost.makeChangeRequestLink(remoteUrl, sourceBranch, title, body.strip())
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
 
     def usePreset(self, command):
         self.input.setPlainText(_(PRESETS[command][1]))

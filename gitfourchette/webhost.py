@@ -45,6 +45,31 @@ class WebHost:
 
         return f"https://{host}{port}/{path}{suffix}", hostName
 
+    @staticmethod
+    def makeChangeRequestLink(remoteUrl: str, branch: str, title="", body=""):
+        host, path = splitRemoteUrl(remoteUrl)
+        hostInfo = identifyHost(remoteUrl)
+        if not host or not hostInfo or hostInfo.name not in ("GitHub", "GitLab"):
+            return "", ""
+        path = path.removesuffix(".git")
+        port = "" if hostInfo.port == HTTPS_PORT else f":{hostInfo.port}"
+        root = f"https://{host}{port}/{path}"
+        if hostInfo.name == "GitHub":
+            url = root + "/pull/new/" + urllib.parse.quote(branch, safe="/")
+            query = {"expand": "1"}
+            if title:
+                query["title"] = title
+            if body:
+                query["body"] = body
+        else:
+            url = root + "/-/merge_requests/new"
+            query = {"merge_request[source_branch]": branch}
+            if title:
+                query["merge_request[title]"] = title
+            if body:
+                query["merge_request[description]"] = body
+        return url + "?" + urllib.parse.urlencode(query), hostInfo.name
+
 
 WEB_HOSTS = {
     "github.com": WebHost("GitHub", "/tree/", icon="host-github"),

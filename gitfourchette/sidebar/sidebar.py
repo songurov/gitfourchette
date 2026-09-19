@@ -26,7 +26,7 @@ from gitfourchette.sidebar.sidebarmodel import SidebarModel, SidebarNode, Sideba
 from gitfourchette.sidebar.sidebarsearch import SidebarSearch
 from gitfourchette.tasks import *
 from gitfourchette.toolbox import *
-from gitfourchette.webhost import WebHost
+from gitfourchette.webhost import WebHost, identifyHost
 
 INVALID_MOUSEPRESS = (-1, SidebarClickZone.Invalid)
 BRANCH_MIME_TYPE = "application/x-gitfourchette-branch"
@@ -532,7 +532,14 @@ class Sidebar(QTreeView):
             aiActions = [ActionDef(_("Ask AI about branch…"), lambda: self.askAiBranch(data), enabled=enabled)]
             aiActions.extend(ActionDef(_(caption) + "…", lambda key=command: self.askAiBranch(data, key), enabled=enabled)
                              for command, (caption, _prompt) in PRESETS.items())
-            actions = [*aiActions, ActionDef.SEPARATOR, *actions]
+            changeRequest = self.changeRequestInfo(data)
+            changeRequestActions = []
+            if changeRequest:
+                _remoteUrl, _sourceBranch, hostName = changeRequest
+                caption = _("Create or Open Pull Request…") if hostName == "GitHub" else _("Create or Open Merge Request…")
+                changeRequestActions = [ActionDef(caption, lambda: self.openChangeRequest(data),
+                                                  icon="host-github" if hostName == "GitHub" else "host-gitlab")]
+            actions = [*changeRequestActions, *aiActions, ActionDef.SEPARATOR, *actions]
 
         if not actions:
             return None
@@ -547,6 +554,47 @@ class Sidebar(QTreeView):
         if preset:
             dialog.usePreset(preset)
         dialog.open()
+
+    def changeRequestInfo(self, ref):
+        prefix, shorthand = RefPrefix.split(ref)
+        repo = self.sidebarModel.repo
+        if prefix == RefPrefix.REMOTES:
+            remoteName, sourceBranch = porcelain.split_remote_branch_shorthand(shorthand)
+        elif prefix == RefPrefix.HEADS:
+            sourceBranch = shorthand
+            remoteName = ""
+            branch = repo.branches.local[shorthand]
+            with suppress(KeyError):
+                if branch.upstream:
+                    remoteName, sourceBranch = porcelain.split_remote_branch_shorthand(branch.upstream.shorthand)
+            if not remoteName:
+                remoteName = "origin" if "origin" in repo.remotes else next(iter(repo.remotes.names()), "")
+        else:
+            return None
+        if not remoteName:
+            return None
+        remoteUrl = repo.remotes[remoteName].url
+        host = identifyHost(remoteUrl)
+        if host is None or host.name not in ("GitHub", "GitLab"):
+            return None
+        return remoteUrl, sourceBranch, host.name
+
+    def openChangeRequest(self, ref):
+        info = self.changeRequestInfo(ref)
+        if not info:
+            return
+        remoteUrl, sourceBranch, _hostName = info
+        from gitfourchette.exttools.aichat import availableProviders
+        if availableProviders():
+            from gitfourchette.forms.aichatdialog import AiChatDialog
+            dialog = AiChatDialog(
+                self.sidebarModel.repo, [], self, branch=ref,
+                changeRequest=(remoteUrl, sourceBranch))
+            dialog.usePreset("change_request")
+            dialog.open()
+            return
+        url, _host = WebHost.makeChangeRequestLink(remoteUrl, sourceBranch)
+        QDesktopServices.openUrl(QUrl(url))
 
     def onCustomContextMenuRequested(self, point: QPoint):
         if APP_TESTMODE and point == QPoint_zero:

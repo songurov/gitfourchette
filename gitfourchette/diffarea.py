@@ -327,13 +327,16 @@ class DiffArea(QWidget):
         stashButton = QToolButton(self)
         stashButton.setObjectName("stashButton")
         stashButton.setText(_("Stash…"))
+        stashButton.setIcon(stockIcon("git-stash"))
         stashButton.setToolTip(TaskBook.tips[NewStash])
         stashButton.setAutoRaise(True)
+        stashButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
         aiButton = QToolButton(self)
         aiButton.setObjectName("commitAiButton")
         aiButton.setText(_("AI"))
-        aiButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        aiButton.setIcon(stockIcon("hint"))
+        aiButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         aiButton.setAutoRaise(True)
 
         aiLanguageCombo = QComboBox(self)
