@@ -755,6 +755,7 @@ ${neutralOnly}ContextHeader {
    middle aren't a label, so they keep the normal text color. */
 ${neutralOnly}#GFToolbar QToolButton {
     color: ${textDim};
+    padding: 2px 2px;
 }
 
 ${neutralOnly}#GFToolbar QToolButton:disabled {
@@ -831,4 +832,19 @@ ${sourceListOnly}Sidebar::item:hover,
 ${sourceListOnly}Sidebar::item:selected,
 ${sourceListOnly}Sidebar::item:selected:active {
     background: transparent;
+/* Short dividers between fetch, pull and push, level with the icons */
+${neutralOnly}QToolBar#GFToolbar::separator {
+    background: ${toolbarDivider};
+    width: 1px;
+    margin: 4px 2px 24px 2px;
+}
+
+${neutralOnly}QToolBar#GFToolbar[compact="true"]::separator {
+    margin: 5px 2px;
+}
+
+/* No drop-down marks under Open In, Theme and Workspace: a click opens their menu */
+${neutralOnly}#GFToolbar QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
 }

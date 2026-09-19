@@ -165,6 +165,7 @@ class MainWindow(QMainWindow):
         self.mainToolBar.cloneRepoAction.triggered.connect(lambda: self.cloneDialog())  # not triggered(checked) as the URL
         self.mainToolBar.newRepoAction.triggered.connect(self.newRepo)
         self.mainToolBar.quickLaunchAction.triggered.connect(self.openQuickLaunch)
+        self.mainToolBar.sidebarAction.triggered.connect(self.toggleSidebar)
 
         self.fillGlobalMenuBar()
 

@@ -42,6 +42,24 @@ class ThemeVariant(enum.StrEnum):
     Neutral = "neutral"
 
 
+class ToolbarLayout(enum.StrEnum):
+    """How a look arranges the main toolbar's buttons."""
+
+    Classic = "classic"
+    """
+    Back and forward, the jumps to the working directory and HEAD, stash and
+    branch, then fetch, pull and push; the repo and branch in the middle;
+    Open In, Theme, Workspace and Settings on the right.
+    """
+
+    Centered = "centered"
+    """
+    The sidebar toggle and Quick Launch, then fetch, pull and push, and stash;
+    the repo and branch in the middle, Branch right after them; Open In, Theme
+    and Workspace on the right. Back, forward and Settings stay in the menus.
+    """
+
+
 DEFAULT_VARIANT = ThemeVariant.Neutral
 """
 The look this build starts in. Prefs written before it had variants move to it
@@ -203,6 +221,8 @@ class ThemeColors:
     "Main toolbar icons when the labels show (compact mode has its own size)."
     toolbarLabelDrop: float = 0
     "How many points smaller than the rest of the text the main toolbar's labels are."
+    toolbarLayout: str = ToolbarLayout.Classic
+    "Which buttons the main toolbar shows, and in what order."
     pillRadius: int = 7
     "Roundness of the tabs' pills (Neutral only)."
     pillTabs: bool = False
@@ -273,6 +293,8 @@ class ThemeColors:
     "Filled folders in the file trees; \"\" keeps the style's folder outline."
     fileGlyphColor: str = ""
     "The page that Neutral draws after a file's status tile."
+    toolbarDivider: str = ""
+    "The short lines between the main toolbar's fetch, pull and push (Centered layout)."
 
     # Code and diffs, with the automatic syntax scheme only: a Pygments preset
     # picked in Settings keeps its own colors. "" keeps the preset's background
@@ -379,6 +401,7 @@ class ThemeColors:
         self.newTabButtonEdge   = self.newTabButtonEdge or self.tabPillEdge
         self.newTabButtonShade  = self.newTabButtonShade or self.newTabButtonEdge
         self.pillDisabled       = mix(self.button, self.panelHeader, .5)
+        self.toolbarDivider     = self.toolbarDivider or self.border
 
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
         self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
@@ -556,10 +579,11 @@ NEUTRAL_DARK = ThemeColors(
     toolButtonPadding  = "2px 6px",
     fieldPadding       = "2px 6px",
     tabPadding         = "4px 12px",
-    toolbarPadding     = "2px 8px",
+    toolbarPadding     = "2px 4px",
     toolbarBorderWidth = 0,
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
+    toolbarLayout      = ToolbarLayout.Centered,
     sidebarRowHeight   = "1.5em",
     sidebarWidth       = 296,
     sidebarSourceList  = True,
@@ -589,6 +613,7 @@ NEUTRAL_DARK = ThemeColors(
     toolbarIconColor   = "#e9e9e9",
     folderColor        = "#3bb7e6",
     fileGlyphColor     = "#dcdcdc",
+    toolbarDivider     = "#646464",
     codeBg             = "#242424",
     diffAdd            = "#2f5138",
     diffDel            = "#5b3737",
@@ -621,10 +646,11 @@ NEUTRAL_LIGHT = ThemeColors(
     toolButtonPadding  = "2px 6px",
     fieldPadding       = "2px 6px",
     tabPadding         = "4px 12px",
-    toolbarPadding     = "2px 8px",
+    toolbarPadding     = "2px 4px",
     toolbarBorderWidth = 0,
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
+    toolbarLayout      = ToolbarLayout.Centered,
     sidebarRowHeight   = "1.5em",
     sidebarWidth       = 296,
     sidebarSourceList  = True,
@@ -648,6 +674,7 @@ NEUTRAL_LIGHT = ThemeColors(
     toolbarIconColor   = "#3a3a3a",
     folderColor        = "#1f9fd6",
     fileGlyphColor     = "#b4b4b4",
+    toolbarDivider     = "#c0c0c0",
     codeBg             = "#f5f5f5",
     diffAdd            = "#dcf2e0",
     diffDel            = "#fbe1e1",

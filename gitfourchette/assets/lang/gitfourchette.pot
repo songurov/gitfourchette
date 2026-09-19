@@ -2089,6 +2089,15 @@ msgctxt "toolbar"
 msgid "Quick Launch"
 msgstr ""
 
+#: forms/maintoolbar.py:82
+msgctxt "toolbar"
+msgid "Sidebar"
+msgstr ""
+
+#: forms/maintoolbar.py:83
+msgid "Show or hide the sidebar"
+msgstr ""
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr ""

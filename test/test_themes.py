@@ -464,7 +464,7 @@ def testThemeSwitchRedrawsTheImageDiff(tempDir, mainWindow):
         GFApplication.applyPrefs(qtStyle="")
 
 
-def _toolbarLooks(mainWindow, iconId="git-settings"):
+def _toolbarLooks(mainWindow, iconId="git-workspace"):
     from gitfourchette.toolbox import ActionDef
     toolbar = mainWindow.mainToolBar
     action = next(a for a in toolbar.actions() if a.property(ActionDef.IconProperty) == iconId)

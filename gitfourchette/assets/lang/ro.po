@@ -2095,6 +2095,15 @@ msgctxt "toolbar"
 msgid "Quick Launch"
 msgstr "Lansare rapidă"
 
+#: forms/maintoolbar.py:82
+msgctxt "toolbar"
+msgid "Sidebar"
+msgstr "Bară laterală"
+
+#: forms/maintoolbar.py:83
+msgid "Show or hide the sidebar"
+msgstr "Afișează sau ascunde bara laterală"
+
 #: forms/maintoolbar.py:63 mainwindow.py:356
 msgid "Type a few letters of any command, repo or workspace, and press Enter"
 msgstr "Tastează câteva litere din orice comandă, depozit sau spațiu de lucru și apasă Enter"
