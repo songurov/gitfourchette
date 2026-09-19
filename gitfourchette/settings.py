@@ -183,7 +183,8 @@ class Prefs(PrefsFile):
     maxCommits                  : int                   = 10000
     authorDiffAsterisk          : bool                  = True
     verifyGpgOnTheFly           : bool                  = False
-    alternatingRowColors        : bool                  = False
+    alternatingRowColors        : bool                  = True
+    """Bands carry the eye from a commit message to its author and date across the row."""
 
     gitPath                     : str                   = ToolPresets.defaultGit()
     ownSshAgent                 : bool                  = False

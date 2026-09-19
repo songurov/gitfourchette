@@ -4,6 +4,8 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import dataclasses
+
 import pytest
 
 from gitfourchette.forms.commitinfodialog import CommitInfoDialog
@@ -16,10 +18,11 @@ from gitfourchette.repomodel import UC_FAKEID, findUnpushedCommits
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import avatarColor, avatarInitials
-from gitfourchette.settings import GraphRefBoxWidth, GraphRowLayout
+from gitfourchette.settings import GraphRefBoxWidth, GraphRowLayout, Prefs
 from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.themes import ThemeName, formatStyle
 from gitfourchette.tasks import QueryCommitsTouchingPath
+from gitfourchette.toolbox import contrastRatio
 from .util import *
 from .test_prefs import assertTranslatedInForkLanguages
 
@@ -1520,3 +1523,251 @@ def testBranchChipCountToolTip(tempDir, mainWindow, monkeypatch):
     assert "refs/heads/never-pushed" in toolTip
     assert "1 commit not pushed to any remote" in toolTip
     assertTranslatedInForkLanguages("{n} commit not pushed to any remote", plural="{n} commits not pushed to any remote")
+
+
+# -----------------------------------------------------------------------------
+# One bright column: the message leads, author, hash and date recede
+
+
+@dataclasses.dataclass
+class DrawnRun:
+    rect: QRectF
+    text: str
+    color: QColor
+    bold: bool
+
+
+def pointerAway(graphView: GraphView):
+    """Take the pointer off the graph (the row under it shows its details at full strength)."""
+    leave = QHoverEvent(QEvent.Type.HoverLeave, QPointF(-1, -1), QPointF(-1, -1), QPointF(-1, -1))
+    QApplication.sendEvent(graphView.viewport(), leave)
+
+
+def drawnRuns(graphView: GraphView, monkeypatch, oid: Oid, keepHover=False) -> list[DrawnRun]:
+    """Repaint the graph, and return the text drawn on a commit's row, where, in which color and weight."""
+    if not keepHover:
+        pointerAway(graphView)
+    rowRect = QRectF(graphView.visualRect(graphView.getFilterIndexForCommit(oid)))
+    drawn = []
+    realDrawText = QPainter.drawText
+
+    def spy(painter, *args):
+        where = args[0]
+        if isinstance(where, QRect | QRectF) and painter.device() is graphView.viewport():
+            where = QRectF(where)
+            if rowRect.contains(where.center()):
+                text = next(a for a in reversed(args) if isinstance(a, str))
+                drawn.append(DrawnRun(where, text, QColor(painter.pen().color()), painter.font().bold()))
+        return realDrawText(painter, *args)
+
+    with monkeypatch.context() as m:
+        m.setattr(QPainter, "drawText", spy)
+        graphView.viewport().repaint()
+
+    return drawn
+
+
+def rowParts(runs: list[DrawnRun], commit: Commit) -> dict[str, list[DrawnRun]]:
+    """Sort a row's text into its message, author, hash and date."""
+    summary = commit.message.splitlines()[0]
+    hashText = str(commit.id)[:7]
+    parts = {"message": [], "author": [], "hash": [], "date": []}
+    for run in runs:
+        if not run.text.strip():
+            continue
+        if run.text.startswith(summary[:10]):
+            parts["message"].append(run)
+        elif run.text.startswith(commit.author.name):
+            parts["author"].append(run)
+        elif len(run.text) == 1 and run.text in hashText and not parts["date"]:
+            parts["hash"].append(run)
+        elif parts["hash"]:
+            parts["date"].append(run)
+    return parts
+
+
+def rowBackground(graphView: GraphView, row: int) -> QColor:
+    """Color of a row's background, sampled in the gap between its message and its author."""
+    image = grabAt1x(graphView.viewport())
+    rect = graphView.visualRect(graphView.model().index(row, 0))
+    return image.pixelColor(rect.left() + rect.width() * 2 // 3, rect.center().y())
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def testAuthorHashAndDateRecedeBehindTheMessage(tempDir, mainWindow, monkeypatch, theme):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, theme))
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    commit = rw.repo.revparse_single("master~1").peel(Commit)
+    assert commit.id != rw.repoModel.headCommitId
+
+    palette = graphView.palette()
+    grounds = [palette.color(QPalette.ColorRole.Base), palette.color(QPalette.ColorRole.AlternateBase)]
+
+    parts = rowParts(drawnRuns(graphView, monkeypatch, commit.id), commit)
+    assert all(parts.values()), f"expecting every column on the row: {parts}"
+    messageColor = parts["message"][0].color
+    metaColors = {run.color.name() for key in ("author", "hash", "date") for run in parts[key]}
+    assert len(metaColors) == 1, "author, hash and date share one secondary tone"
+    metaColor = QColor(metaColors.pop())
+    for ground in grounds:
+        assert contrastRatio(metaColor, ground) >= 4.5, "secondary, but readable (WCAG AA)"
+        assert contrastRatio(metaColor, ground) < contrastRatio(messageColor, ground) - 2, "dimmer than the message"
+
+    # On the selected row, everything takes the selection's text color
+    rw.jump(NavLocator.inCommit(commit.id))
+    graphView.setFocus()
+    parts = rowParts(drawnRuns(graphView, monkeypatch, commit.id), commit)
+    highlightedText = palette.color(QPalette.ColorRole.HighlightedText)
+    assert {run.color.name() for runs in parts.values() for run in runs} == {highlightedText.name()}
+
+
+def testOnlyTheMessageIsBoldOnTheCheckedOutCommit(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    commit = rw.repo.head_commit
+
+    parts = rowParts(drawnRuns(rw.graphView, monkeypatch, commit.id), commit)
+    assert all(parts.values()), f"expecting every column on the row: {parts}"
+    assert all(run.bold for run in parts["message"])
+    assert not any(run.bold for key in ("author", "hash", "date") for run in parts[key])
+
+
+def testSummaryIsNotFollowedByAnElisionMarker(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("git commit --allow-empty -m 'Summary line' -m 'The body mentions a needle.'", wd)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    oid = rw.repo.head_commit_id
+
+    messages = [run for run in drawnRuns(graphView, monkeypatch, oid) if run.text.startswith("Summary")]
+    assert [run.text for run in messages] == ["Summary line"], "no ' […]' on every commit that has a body"
+
+    # The body is still one hover away
+    row = graphView.getFilterIndexForCommit(oid).row()
+    x = int(messages[0].rect.center().x())
+    assert "The body mentions a needle." in qlvSummonToolTip(graphView, row, x=x)
+
+    # A search that only matches in the body still shows where the match went
+    QTest.keySequence(mainWindow, "Ctrl+F")
+    QTest.keyClicks(graphView.searchBar.lineEdit, "needle")
+    messages = [run.text for run in drawnRuns(graphView, monkeypatch, oid) if run.text.startswith("Summary")]
+    assert messages == ["Summary line […]"]
+
+
+@pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with tooltips, but Qt 6 is fine")
+def testDateAsteriskIsAnExplainedFootnote(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    rewritten = Signature(TEST_SIGNATURE.name, TEST_SIGNATURE.email, TEST_SIGNATURE.time + 3600, TEST_SIGNATURE.offset)
+    shell("git commit --allow-empty -m 'Rebased commit'", wd, committerSig=rewritten)
+    GFApplication.applyPrefs(authorDiffAsterisk=True)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    commit = rw.repo.head_commit
+    graphView.setCurrentIndex(graphView.model().index(0, 0))  # keep the commit's row unselected
+
+    parts = rowParts(drawnRuns(graphView, monkeypatch, commit.id), commit)
+    dateRuns = parts["date"]
+    assert [run.text for run in dateRuns][-1] == "*", "the asterisk is drawn on its own"
+    assert not dateRuns[0].text.endswith("*")
+    assert not any(run.bold for run in dateRuns), "regular weight, even on the checked-out commit"
+    assert dateRuns[-1].color == parts["hash"][0].color, "in the secondary tone"
+
+    # Hovering the date says what the asterisk means
+    row = graphView.getFilterIndexForCommit(commit.id).row()
+    toolTip = stripHtml(qlvSummonToolTip(graphView, row, x=int(dateRuns[0].rect.center().x())))
+    assert re.search(r"^\* Rebased or amended .+ \(first written .+\)", toolTip)
+    assert "Test Person" in toolTip, "followed by the author's details, as before"
+
+    # A date without an asterisk explains nothing
+    GFApplication.applyPrefs(authorDiffAsterisk=False)
+    QTest.qWait(0)
+    toolTip = stripHtml(qlvSummonToolTip(graphView, row, x=int(dateRuns[0].rect.center().x())))
+    assert "Rebased" not in toolTip
+    assert "Test Person" in toolTip
+
+    assertTranslatedInForkLanguages("Rebased or amended {0} (first written {1})",
+                                    "Mark rebased, amended or re-committed commits with *")
+
+
+def testRowsAreBandedAndFollowThePointer(tempDir, mainWindow, monkeypatch):
+    assert Prefs().alternatingRowColors, "banded rows by default"
+
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark"))
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    assert graphView.alternatingRowColors()
+    assert rowBackground(graphView, 3) != rowBackground(graphView, 4), "alternate rows"
+    assert rowBackground(graphView, 3) == rowBackground(graphView, 5)
+
+    # The row under the pointer is highlighted too (a plain mouse move, as the system sends it)
+    plain = rowBackground(graphView, 5)
+    pointAtRow(graphView, 5)
+    assert rowBackground(graphView, 5) != plain
+
+    # ...and brings its author, hash and date forward
+    oid = graphView.model().index(5, 0).data(CommitLogModel.Role.Oid)
+    parts = rowParts(drawnRuns(graphView, monkeypatch, oid, keepHover=True), rw.repo.peel_commit(oid))
+    text = graphView.palette().color(QPalette.ColorRole.Text)
+    assert parts["author"][0].color == text
+    assert parts["date"][0].color == text
+
+
+def pointAtRow(graphView: GraphView, row: int):
+    """Move the mouse onto a row, from the row above it, with plain mouse moves."""
+    viewport = graphView.viewport()
+    QTest.mouseMove(viewport, graphView.visualRect(graphView.model().index(row - 1, 0)).center())
+    QTest.qWait(0)
+    QTest.mouseMove(viewport, graphView.visualRect(graphView.model().index(row, 0)).center())
+    QTest.qWait(0)
+
+
+def testPointedRowComesForwardInANativeStyle(tempDir, mainWindow, monkeypatch):
+    # A native style, without the stylesheet that paints a hover band
+    GFApplication.applyPrefs(qtStyle="Fusion")
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    oid = graphView.model().index(5, 0).data(CommitLogModel.Role.Oid)
+    commit = rw.repo.peel_commit(oid)
+    text = graphView.palette().color(QPalette.ColorRole.Text)
+    assert rowParts(drawnRuns(graphView, monkeypatch, oid), commit)["author"][0].color != text
+
+    pointAtRow(graphView, 5)
+    parts = rowParts(drawnRuns(graphView, monkeypatch, oid, keepHover=True), commit)
+    assert parts["author"][0].color == text, "the row under the pointer still shows who and when at full strength"
+    assert parts["date"][0].color == text
+
+
+def testUnpushedCuesSurviveTheQuieterGraph(tempDir, mainWindow, monkeypatch):
+    """The owner's "not on any remote yet" cues: hollow rings, the ↑N chip, the ring's tooltip."""
+    wd = unpackRepo(tempDir)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    repoModel = rw.repoModel
+    oid = rw.repo.head_commit_id
+    assert oid in repoModel.unpushedCommits
+
+    painted = spyOnGraphFrames(graphView, monkeypatch)
+    graphView.viewport().repaint()
+    image = grabAt1x(graphView.viewport())
+    center, laneColor = bulletPoint(repoModel, oid, painted[oid])
+    hole = image.pixelColor(center.x(), center.y())
+    ring = image.pixelColor(center.x() - 5, center.y())
+    assert colorDistance(ring, laneColor) < 32, "a ring in the lane's color"
+    assert colorDistance(hole, laneColor) > 64, "around a hole"
+
+    assert aheadOnChip(graphView, monkeypatch, oid) == [f"{SYMBOL_AHEAD}2"]
+
+    row = graphView.getFilterIndexForCommit(oid).row()
+    assert qlvSummonToolTip(graphView, row, x=center.x()) == "This commit isn’t on any remote yet."

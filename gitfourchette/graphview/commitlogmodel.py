@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from gitfourchette import trtables
+from gitfourchette import settings, trtables
 from gitfourchette.graph.graph import CommitTraits
 from gitfourchette.localization import *
 from gitfourchette.porcelain import *
@@ -22,7 +22,7 @@ from gitfourchette.toolbox import *
 class CommitToolTipZone:
     left: int
     right: int
-    kind: Literal['ref', 'author', 'message', 'pathspec', 'unpushed']
+    kind: Literal['ref', 'author', 'date', 'message', 'pathspec', 'unpushed']
     data: str = ""
 
 
@@ -166,6 +166,8 @@ class CommitLogModel(QAbstractListModel):
                     tip = commitMessageTooltip(commit)
                 elif zone.kind == "author":
                     tip = commitAuthorTooltip(commit, *self.repoModel.getCachedGpgStatus(commit))
+                elif zone.kind == "date":
+                    tip = commitDateTooltip(commit) + commitAuthorTooltip(commit, *self.repoModel.getCachedGpgStatus(commit))
                 elif zone.kind == "pathspec":
                     tip = _("This commit touches a path that matches your search")
                 elif zone.kind == "unpushed":
@@ -236,6 +238,24 @@ def commitAuthorTooltip(commit: CommitTraits, gpgStatus: GpgStatus, gpgKeyInfo: 
         markup += f"<p>{gpgStatus.iconHtml()} {trtables.enum(gpgStatus)}</p>"
 
     return markup
+
+
+def commitDateTooltip(commit: CommitTraits) -> str:
+    """
+    What the asterisk after a date stands for, if there's one: the commit was
+    written again (rebased, amended, cherry-picked) after its content was.
+    """
+    author = commit.author
+    committer = commit.committer
+
+    if not settings.prefs.authorDiffAsterisk or author.time == committer.time:
+        return ""
+
+    def formatTime(sig: Signature):
+        return escape(signatureDateFormat(sig, settings.prefs.shortTimeFormat, localTime=True))
+
+    explanation = _("Rebased or amended {0} (first written {1})", formatTime(committer), formatTime(author))
+    return f"<p style='white-space: pre'>* {explanation}</p>"
 
 
 def commitMessageTooltip(commit: CommitTraits) -> str:

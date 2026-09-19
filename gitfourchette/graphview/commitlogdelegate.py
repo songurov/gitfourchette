@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import functools
 import math
 import traceback
 from contextlib import suppress
@@ -72,7 +73,12 @@ REFBOXES = [
 
 
 ELISION = " […]"
+"""Stands for the rest of a commit message, only when a search matches in there."""
 ELISION_LENGTH = len(ELISION)
+
+SECONDARY_CONTRAST = 4.5
+"""Author, hash and date recede behind the commit message, but still read at
+4.5:1 (WCAG AA) on plain and alternate rows."""
 
 
 MAX_AUTHOR_CHARS = {
@@ -96,6 +102,38 @@ NARROW_WIDTH = (500, 750)
 
 AHEAD_SPACING = 4
 """Room between a branch's name and its count of commits to push."""
+
+
+def secondaryTextColor(palette: QPalette, group: QPalette.ColorGroup) -> QColor:
+    """
+    The color for the metadata columns of a row: the palette's placeholder
+    color if it reads at SECONDARY_CONTRAST on plain and alternate rows,
+    otherwise the dimmest mix of the text into the rows that does.
+    """
+    Role = QPalette.ColorRole
+    roles = Role.Base, Role.AlternateBase, Role.PlaceholderText, Role.Text
+    return QColor.fromRgba(_secondaryTextRgba(*(palette.color(group, role).rgba() for role in roles)))
+
+
+@functools.cache
+def _secondaryTextRgba(base: int, alternateBase: int, placeholder: int, text: int) -> int:
+    grounds = [QColor.fromRgba(base), QColor.fromRgba(alternateBase)]
+
+    def readable(color: QColor) -> bool:
+        # A translucent color (Qt derives the placeholder as text at 50%) is judged as it lands
+        return all(contrastRatio(mixColors(ground, color, color.alphaF()), ground) >= SECONDARY_CONTRAST
+                   for ground in grounds)
+
+    if readable(QColor.fromRgba(placeholder)):
+        return placeholder
+
+    ratio = .4
+    while ratio > 0:
+        color = mixColors(QColor.fromRgba(text), grounds[0], ratio)
+        if readable(color):
+            return color.rgba()
+        ratio = round(ratio - .05, 2)
+    return text
 
 
 class CommitLogDelegate(QStyledItemDelegate):
@@ -167,7 +205,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         dateText = option.locale.toString(wideDate, settings.prefs.shortTimeFormat)
         if settings.prefs.authorDiffAsterisk:
             dateText += "*"
-        self.dateMaxWidth = QFontMetrics(self.activeCommitFont).horizontalAdvance(dateText + " ")
+        self.dateMaxWidth = QFontMetrics(option.font).horizontalAdvance(dateText + " ")
         self.dateMaxWidth = int(self.dateMaxWidth)  # make sure it's an int for pyqt5 compat
 
         self.authorMaxWidth = self.hashCharWidth * MAX_AUTHOR_CHARS.get(settings.prefs.authorDisplayStyle, 16)
@@ -207,6 +245,7 @@ class CommitLogDelegate(QStyledItemDelegate):
 
         isActive = bool(option.state & QStyle.StateFlag.State_Active)
         isSelected = bool(option.state & QStyle.StateFlag.State_Selected)
+        isHovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         colorGroup = QPalette.ColorGroup.Active if isActive else QPalette.ColorGroup.Inactive
         palette: QPalette = option.palette
 
@@ -217,6 +256,14 @@ class CommitLogDelegate(QStyledItemDelegate):
 
         if isSelected:
             painter.setPen(palette.color(colorGroup, QPalette.ColorRole.HighlightedText))
+
+        # The message is the one bright column. Author, hash and date recede,
+        # except on the row under the pointer, whose details come forward.
+        if isSelected:
+            metaColor = starColor = painter.pen().color()
+        else:
+            starColor = secondaryTextColor(palette, colorGroup)
+            metaColor = palette.color(colorGroup, QPalette.ColorRole.Text) if isHovered else starColor
 
         # Get metrics of '0' before setting a custom font,
         # so that alignments are consistent in all commits regardless of bold or italic.
@@ -256,19 +303,12 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Reserve rightmost column
         rect.setRight(leftBoundName - XMARGIN)
 
-        # Set font
-        if self.isBold(oid):
-            painter.setFont(self.activeCommitFont)
-        elif not oid:
-            painter.setFont(self.uncommittedFont)
-
         # ...Left-to-right zones...
 
         # Hash
         if not self.hashOnTheRight():
             painter.save()
-            if not isSelected:  # use muted color for hash if not selected
-                painter.setPen(palette.color(colorGroup, QPalette.ColorRole.PlaceholderText))
+            painter.setPen(metaColor)
             self._paintHash(painter, rect, oid)
             painter.restore()
 
@@ -278,6 +318,12 @@ class CommitLogDelegate(QStyledItemDelegate):
         # Use muted color from here on out for foreign commits (unless selected)
         if not isSelected and self.isDim(oid):
             painter.setPen(Qt.GlobalColor.gray)
+
+        # Only the message is bold on the checked-out commit
+        if self.isBold(oid):
+            painter.setFont(self.activeCommitFont)
+        elif not oid:
+            painter.setFont(self.uncommittedFont)
 
         # Message
         if commit is not None:
@@ -293,6 +339,8 @@ class CommitLogDelegate(QStyledItemDelegate):
             self._paintRefspecMatch(painter, rect, fullWidth // 8)
 
         # ...Jump to rightmost column...
+        painter.setFont(option.font)
+        painter.setPen(metaColor)
 
         # Author
         if authorWidth != 0 and commit:
@@ -304,21 +352,19 @@ class CommitLogDelegate(QStyledItemDelegate):
         if hashWidth != 0 and commit:
             rect.setLeft(leftBoundHash)
             rect.setRight(leftBoundDate - XMARGIN)
-            painter.save()
-            if not isSelected:
-                painter.setPen(palette.color(colorGroup, QPalette.ColorRole.PlaceholderText))
             self._paintHash(painter, rect, oid)
-            painter.restore()
 
         # Date
         if dateWidth != 0 and commit:
             rect.setLeft(leftBoundDate)
             rect.setRight(rightBound)
-            self._paintDate(painter, rect, commit)
+            self._paintDate(painter, rect, commit, starColor)
 
-        # Set author/date tooltip zone
+        # Set author/date tooltip zones: the date explains its asterisk
         if authorWidth != 0 or dateWidth != 0:
             self.newToolTipZone(CommitToolTipZone(leftBoundName, rightBound, "author"))
+        if dateWidth != 0:
+            self.newToolTipZone(CommitToolTipZone(leftBoundDate, rightBound, "date"))
 
         # Tooltip metrics
         # Block model signals to update it - otherwise QComboBox will constantly redraw itself
@@ -375,19 +421,24 @@ class CommitLogDelegate(QStyledItemDelegate):
 
     def _paintCommitMessage(self, painter: QPainter, rect: QRect, commit: Commit):
         fullText = commit.message
-        text, _contd = messageSummary(fullText, ELISION)
+        text, contd = messageSummary(fullText, "")
+
+        searchTerm = self.infoSearch.term() if self.infoSearch is not None else ""
+        searchHit = bool(searchTerm) and searchTerm in fullText.lower()
+
+        # Most messages go on past their summary line, so there's no marker
+        # for that on every row. It only appears when a search matches in there.
+        if contd and searchHit and searchTerm not in text.lower():
+            text += ELISION
 
         text = painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, rect.width())
         painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter, text)
 
-        if len(text) == 0 or text.endswith(("…", ELISION)):
+        if len(text) == 0 or contd or text.endswith("…"):
             self.newToolTipZone(CommitToolTipZone(rect.left(), rect.right(), "message"))
 
         # Highlight search term
-        if (text
-                and self.infoSearch is not None
-                and (searchTerm := self.infoSearch.term())
-                and searchTerm in fullText.lower()):
+        if text and searchHit:
             needlePos = text.lower().find(searchTerm)
             if needlePos < 0:
                 needlePos = len(text) - ELISION_LENGTH
@@ -454,15 +505,27 @@ class CommitLogDelegate(QStyledItemDelegate):
             if needlePos >= 0:
                 SearchBar.highlightNeedle(painter, rect, authorText, needlePos, len(searchTerm))
 
-    def _paintDate(self, painter: QPainter, rect: QRect, commit: Commit):
+    def _paintDate(self, painter: QPainter, rect: QRect, commit: Commit, starColor: QColor):
         author = commit.author
         dateText = signatureDateFormat(author, settings.prefs.shortTimeFormat, localTime=True)
+        metrics = painter.fontMetrics()
 
-        if settings.prefs.authorDiffAsterisk and author.time != commit.committer.time:
-            dateText += "*"
+        # The asterisk (rebased or amended: the commit is younger than its
+        # content) is a footnote to the date, not part of it: its own quiet
+        # color, and the date's tooltip spells it out.
+        star = "*" if settings.prefs.authorDiffAsterisk and author.time != commit.committer.time else ""
+        starWidth = metrics.horizontalAdvance(star)
 
-        displayText = painter.fontMetrics().elidedText(dateText, Qt.TextElideMode.ElideRight, rect.width())
+        displayText = metrics.elidedText(dateText, Qt.TextElideMode.ElideRight, rect.width() - starWidth)
         painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter, displayText)
+
+        if star:
+            starRect = QRect(rect)
+            starRect.setLeft(rect.left() + metrics.horizontalAdvance(displayText))
+            painter.save()
+            painter.setPen(starColor)
+            painter.drawText(starRect, Qt.AlignmentFlag.AlignVCenter, star)
+            painter.restore()
 
     # --------------------------------------------------------------------------
     # Refbox painting

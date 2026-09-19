@@ -8747,3 +8747,17 @@ msgstr "{0}: вкл."
 #, python-brace-format
 msgid "{0}: off"
 msgstr "{0}: выкл."
+
+#: forms/prefsdialog.py:100
+#, python-brace-format
+msgid "{app} Settings"
+msgstr "Настройки {app}"
+
+#: graphview/commitlogmodel.py:257
+#, python-brace-format
+msgid "Rebased or amended {0} (first written {1})"
+msgstr "Rebase или изменение: {0} (впервые написан {1})"
+
+#: trtables.py:468
+msgid "Mark rebased, amended or re-committed commits with *"
+msgstr "Отмечать * коммиты после rebase, изменения или повторного коммита"

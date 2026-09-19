@@ -72,6 +72,10 @@ class GraphView(QListView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)  # prevents double-clicking to edit row text
 
+        # Know which row is under the pointer (its details come forward) whatever
+        # the style: native styles without our stylesheet don't ask for hover events
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_Hover)
+
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.onContextMenuRequested)
 

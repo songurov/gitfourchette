@@ -505,7 +505,7 @@ def _prefKeyTable() -> dict[str, str]:
         "shortTimeFormat": _("Date format"),
         "shortTimeFormat_help": _timeFormatGuide(),
         "shortHashChars": _("Hash length # characters"),
-        "authorDiffAsterisk": _("Mark commits whose author and committer differ (*)"),
+        "authorDiffAsterisk": _("Mark rebased, amended or re-committed commits with *"),
         "authorDiffAsterisk_help": paragraphs(
             _("The commit history displays information about a commit’s <b>author</b>—"
               "their name and the date at which they made the commit. But in some cases, a commit "

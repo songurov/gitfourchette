@@ -8707,3 +8707,17 @@ msgstr "{0}: activat"
 #, python-brace-format
 msgid "{0}: off"
 msgstr "{0}: dezactivat"
+
+#: forms/prefsdialog.py:100
+#, python-brace-format
+msgid "{app} Settings"
+msgstr "Setări {app}"
+
+#: graphview/commitlogmodel.py:257
+#, python-brace-format
+msgid "Rebased or amended {0} (first written {1})"
+msgstr "Rebase sau modificare la {0} (scris inițial la {1})"
+
+#: trtables.py:468
+msgid "Mark rebased, amended or re-committed commits with *"
+msgstr "Marchează cu * commit-urile trecute prin rebase, modificate sau refăcute"

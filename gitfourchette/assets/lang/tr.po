@@ -8619,3 +8619,17 @@ msgstr "{0}: açık"
 #, python-brace-format
 msgid "{0}: off"
 msgstr "{0}: kapalı"
+
+#: forms/prefsdialog.py:100
+#, python-brace-format
+msgid "{app} Settings"
+msgstr "{app} Ayarları"
+
+#: graphview/commitlogmodel.py:257
+#, python-brace-format
+msgid "Rebased or amended {0} (first written {1})"
+msgstr "{0} tarihinde rebase edildi veya düzeltildi (ilk yazılışı {1})"
+
+#: trtables.py:468
+msgid "Mark rebased, amended or re-committed commits with *"
+msgstr "Rebase edilen, düzeltilen veya yeniden işlenen işlemeleri * ile işaretle"
