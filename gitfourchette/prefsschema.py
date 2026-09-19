@@ -201,6 +201,7 @@ PANES: list[Pane] = [
         _section(
             "fileLists",
             Row("fileTreeView", control="radio"),
+            Row("compactFolders"),
             Row("pathDisplayStyle"),
             Row("doubleClickFileList"),
             Row("middleClickFileList"),

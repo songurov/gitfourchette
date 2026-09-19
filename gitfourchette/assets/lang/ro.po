@@ -8742,3 +8742,13 @@ msgstr "Păstrează autorul și data lângă mesaj"
 #: trtables.py:458
 msgid "In a wide window, the author, hash and date line up a little way past the commit messages instead of at the far right, so that a row reads in one sweep."
 msgstr "Într-o fereastră lată, autorul, hash-ul și data se aliniază puțin după mesajele commit-urilor, nu la marginea din dreapta, ca un rând să se citească dintr-o privire."
+
+#: trtables.py:383
+msgid "Compact folders"
+msgstr "Compactează dosarele"
+
+#: trtables.py:384
+msgid ""
+"In the file tree, a folder that holds nothing but one other folder shares "
+"its line, as in “src/ui”."
+msgstr "În arborele de fișiere, un dosar care conține doar un alt dosar împarte rândul cu acesta, ca în „src/ui”."

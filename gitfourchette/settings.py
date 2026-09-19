@@ -141,6 +141,9 @@ class Prefs(PrefsFile):
     qtStyle                     : str                   = ""
     pathDisplayStyle            : PathDisplayStyle      = PathDisplayStyle.FullPaths
     fileTreeView                : bool                  = True
+    compactFolders              : bool                  = True
+    """In the file tree, a folder that holds nothing but one other folder
+    shares its line with it ("src/ui"): fewer rows to read past."""
     commitFormPlacement         : CommitFormPlacement   = CommitFormPlacement.FilesPanel
     recentCommitMessages        : int                   = 10
     refSort                     : RefSort               = RefSort.TimeDesc

@@ -8654,3 +8654,13 @@ msgstr "Yazarı ve tarihi iletinin yanında tut"
 #: trtables.py:458
 msgid "In a wide window, the author, hash and date line up a little way past the commit messages instead of at the far right, so that a row reads in one sweep."
 msgstr "Geniş bir pencerede yazar, hash ve tarih en sağda değil, işleme iletilerinin biraz ötesinde hizalanır; böylece bir satır tek bakışta okunur."
+
+#: trtables.py:383
+msgid "Compact folders"
+msgstr "Klasörleri birleştir"
+
+#: trtables.py:384
+msgid ""
+"In the file tree, a folder that holds nothing but one other folder shares "
+"its line, as in “src/ui”."
+msgstr "Dosya ağacında, içinde yalnızca başka bir klasör bulunan bir klasör onunla aynı satırda gösterilir; örneğin “src/ui”."

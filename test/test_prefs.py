@@ -61,6 +61,18 @@ def assertTranslatedInForkLanguages(*msgids: str, context="", plural=""):
                 assert text not in ("", _MissingTranslation.MISSING), f"{lang}: {msgid!r} isn't translated"
 
 
+def testCompactFoldersInSettings(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("compactFolders")
+    checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_compactFolders")
+    assert checkBox.isChecked()
+    checkBox.setChecked(False)
+    dlg.accept()
+    assert not settings.prefs.compactFolders
+    assertTranslatedInForkLanguages(
+        "Compact folders",
+        "In the file tree, a folder that holds nothing but one other folder shares its line, as in “src/ui”.")
+
+
 def testPrefsDialog(tempDir, mainWindow):
     def openPrefs() -> PrefsDialog:
         triggerMenuAction(mainWindow.menuBar(), "file/settings")

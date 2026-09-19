@@ -258,6 +258,7 @@ class FileList(QTreeView):
 
     def refreshPrefs(self):
         self.setTreeMode(settings.prefs.fileTreeView)
+        self.setCompactFolders(settings.prefs.compactFolders)
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         nameFirst = settings.prefs.pathDisplayStyle == PathDisplayStyle.FileNameFirst
         self.setTextElideMode(Qt.TextElideMode.ElideRight if nameFirst else Qt.TextElideMode.ElideMiddle)
@@ -365,16 +366,30 @@ class FileList(QTreeView):
             self.setModel(self.treeModel if enabled else self.flModel)
             if enabled:
                 self.expandAll()
-            selection = QItemSelection()
-            for path in selectedPaths:
-                index = self.indexForPath(path)
-                selection.select(index, index)
-            self.selectionModel().select(selection, QItemSelectionModel.SelectionFlag.Select)
-            if currentPath in self.flModel.fileRows:
-                self.selectionModel().setCurrentIndex(
-                    self.indexForPath(currentPath), QItemSelectionModel.SelectionFlag.NoUpdate)
+            self._reselect(selectedPaths, currentPath)
         self.selectedCountChanged.emit(len(selectedPaths))
         self.searchBar.reevaluateSearchTerm()
+
+    def setCompactFolders(self, compact: bool):
+        """Show single-folder chains on one row ("src/ui") or one row per folder."""
+        selectedPaths = list(self.selectedPaths())
+        currentPath = self.currentIndex().data(FileListModel.Role.FilePath)
+        with QSignalBlockerContext(self):
+            if not self.treeModel.setCompact(compact) or not self.treeMode:
+                return
+            self.expandAll()
+            self._reselect(selectedPaths, currentPath)
+
+    def _reselect(self, selectedPaths: list[str], currentPath: str | None):
+        """Select these files again after the model changed under the view."""
+        selection = QItemSelection()
+        for path in selectedPaths:
+            index = self.indexForPath(path)
+            selection.select(index, index)
+        self.selectionModel().select(selection, QItemSelectionModel.SelectionFlag.Select)
+        if currentPath in self.flModel.fileRows:
+            self.selectionModel().setCurrentIndex(
+                self.indexForPath(currentPath), QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def indexForPath(self, path: str) -> QModelIndex:
         return (self.treeModel.indexForPath(path) if self.treeMode

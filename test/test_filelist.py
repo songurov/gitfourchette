@@ -80,6 +80,39 @@ def testTreeViewShowsWorkingDirectoryFiles(tempDir, mainWindow):
     assert {delta.new.path for delta in files.selectedDeltas()} == {"a/new.txt", "a/other.txt"}
 
 
+def testCompactFoldersSetting(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/lib/ui/core/chips.dart", "chips")
+    writeFile(f"{wd}/lib/ui/view.dart", "view")
+    rw = mainWindow.openRepo(wd)
+    GFApplication.applyPrefs(fileTreeView=True)
+    files = rw.dirtyFiles
+    rw.jump(NavLocator.inUnstaged("lib/ui/core/chips.dart"), check=True)
+
+    def folders(path: str) -> list[str]:
+        names = []
+        index = files.treeModel.indexForPath(path).parent()
+        while index.isValid():
+            names.insert(0, index.data(Qt.ItemDataRole.DisplayRole))
+            index = index.parent()
+        return names
+
+    # By default, a folder that holds nothing but another folder shares its row
+    assert settings.prefs.compactFolders
+    assert folders("lib/ui/core/chips.dart") == ["lib/ui", "core"]
+
+    # One row per folder, and the selection stays put
+    GFApplication.applyPrefs(compactFolders=False)
+    assert folders("lib/ui/core/chips.dart") == ["lib", "ui", "core"]
+    assert list(files.selectedPaths()) == ["lib/ui/core/chips.dart"]
+    assert files.currentIndex().data(FileListModel.Role.FilePath) == "lib/ui/core/chips.dart"
+    assert files.isExpanded(files.treeModel.indexForPath("lib/ui/core/chips.dart").parent())
+
+    GFApplication.applyPrefs(compactFolders=True)
+    assert folders("lib/ui/core/chips.dart") == ["lib/ui", "core"]
+    assert list(files.selectedPaths()) == ["lib/ui/core/chips.dart"]
+
+
 def testStageAllAndQuickFileViewMenu(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     writeFile(f"{wd}/one.txt", "one")

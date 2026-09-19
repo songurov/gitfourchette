@@ -3,6 +3,7 @@
 # This file is part of GitFourchette, distributed under the GNU GPL v3.
 # -----------------------------------------------------------------------------
 
+from gitfourchette import settings
 from gitfourchette.filelists.filelistmodel import FileListModel
 from gitfourchette.qt import *
 from gitfourchette.themes import activeTheme
@@ -35,8 +36,18 @@ class FileTreeModel(QAbstractItemModel):
         self.source = source
         self.root = _Node("")
         self.paths: dict[str, _Node] = {}
+        self.compact = settings.prefs.compactFolders
+        "A folder that holds nothing but one other folder shares its row with it"
         source.modelReset.connect(self.rebuild)
         self.rebuild()
+
+    def setCompact(self, compact: bool) -> bool:
+        """Change how folders are shown. Return True if the tree had to be rebuilt."""
+        if compact == self.compact:
+            return False
+        self.compact = compact
+        self.rebuild()
+        return True
 
     def rebuild(self):
         self.beginResetModel()
@@ -59,7 +70,8 @@ class FileTreeModel(QAbstractItemModel):
             leaf = _Node(parts[-1], parent, row)
             parent.children.append(leaf)
             self.paths[path] = leaf
-        self._compactFolders(self.root)
+        if self.compact:
+            self._compactFolders(self.root)
         self.endResetModel()
 
     def _compactFolders(self, node: _Node):

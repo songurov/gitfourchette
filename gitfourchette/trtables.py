@@ -394,6 +394,9 @@ def _prefKeyTable() -> dict[str, str]:
 
         # General
         "qtStyle": _("Appearance"),
+        "compactFolders": _("Compact folders"),
+        "compactFolders_help": _("In the file tree, a folder that holds nothing but one other folder "
+                                 "shares its line, as in “src/ui”."),
         # Same words as the toolbar's menu, which offers the same choice
         "compactUi": _("Density"),
         "compactUi_false": stripAccelerators(_("&Normal")),
