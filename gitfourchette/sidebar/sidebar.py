@@ -26,6 +26,7 @@ from gitfourchette.sidebar.sidebarfilter import SidebarFilter
 from gitfourchette.sidebar.sidebarmodel import SidebarModel, SidebarNode, SidebarItem
 from gitfourchette.sidebar.sidebarsearch import SidebarSearch
 from gitfourchette.tasks import *
+from gitfourchette.tasks import gitflowtasks
 from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost, identifyHost
 
@@ -162,6 +163,17 @@ class Sidebar(QTreeView):
             submenu.append(action)
 
         return submenu
+
+    def gitFlowFolderActions(self, folderPrefix: str) -> list[ActionDef]:
+        """Start a Git Flow branch from the folder that holds that kind of branch."""
+        cfg = self.sidebarModel.repo.gitflow_config()
+        if cfg is None:
+            return []
+        actions = [TaskBook.action(self, task) for kind, task in gitflowtasks.START_TASKS.items()
+                   if cfg.prefix(kind) == folderPrefix]
+        if actions:
+            actions.append(ActionDef.SEPARATOR)
+        return actions
 
     def isWorktreeOpenElsewhere(self, worktree: WorktreeInfo) -> bool:
         """Removing a worktree open in another tab would pull the floor out from under it."""
@@ -439,6 +451,7 @@ class Sidebar(QTreeView):
 
         elif item == SidebarItem.RefFolder:
             if node.data.startswith(RefPrefix.HEADS):
+                actions += self.gitFlowFolderActions(node.data.removeprefix(RefPrefix.HEADS) + "/")
                 actions += [
                     ActionDef(_("Re&name Folder…"), lambda: self.wantRenameNode(node)),
                     ActionDef(_("&Delete Folder…"), lambda: self.wantDeleteNode(node)),

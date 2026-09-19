@@ -20,6 +20,21 @@ from gitfourchette.toolbox import *
 logger = logging.getLogger(__name__)
 
 
+def flowConfirmLeavingDetachedHead(task: RepoTask, targetName: str):
+    """
+    Ask before leaving a detached HEAD that no branch or tag points to: its
+    commit would be hard to find again.
+    This function is intended to be called by flow() with "yield from".
+    """
+    headId = task.repoModel.headCommitId
+    text = paragraphs(
+        _("You are in <b>Detached HEAD</b> mode at commit {0}.", btag(shortHash(headId))),
+        _("You might lose track of this commit if you switch to {0}.", hquo(targetName)))
+    yesText = _("Switch to {0}", lquoe(targetName))
+    noText = _("Don’t Switch")
+    yield from task.flowConfirm(text=text, icon='warning', verb=yesText, cancelText=noText)
+
+
 class SwitchBranch(RepoTask):
     def prereqs(self) -> TaskPrereqs:
         return TaskPrereqs.NoConflicts
@@ -57,12 +72,7 @@ class SwitchBranch(RepoTask):
                 from gitfourchette.tasks import RefreshRepo
                 yield from self.flowSubtask(RefreshRepo)
 
-            text = paragraphs(
-                _("You are in <b>Detached HEAD</b> mode at commit {0}.", btag(shortHash(headId))),
-                _("You might lose track of this commit if you switch to {0}.", hquo(newBranch)))
-            yesText = _("Switch to {0}", lquoe(newBranch))
-            noText = _("Don’t Switch")
-            yield from self.flowConfirm(text=text, icon='warning', verb=yesText, cancelText=noText)
+            yield from flowConfirmLeavingDetachedHead(self, newBranch)
 
         self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head
 

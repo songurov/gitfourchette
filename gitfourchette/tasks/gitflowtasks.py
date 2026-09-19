@@ -12,11 +12,16 @@ The settings live under the same config keys as git-flow's, so a repo set up
 here works with git-flow, Fork and SourceTree, and the other way around.
 """
 
+from typing import ClassVar
+
 from gitfourchette import trtables
 from gitfourchette.forms.gitflowinitdialog import GitFlowInitDialog
+from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.localization import *
+from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
+from gitfourchette.tasks.branchtasks import flowConfirmLeavingDetachedHead
 from gitfourchette.tasks.repotask import AbortTask, RepoTask, TaskPrereqs, TaskEffects
 from gitfourchette.toolbox import *
 
@@ -66,6 +71,24 @@ class GitFlowTask(RepoTask):
     def requireLocalBranch(self, branch: str):
         if branch not in self.repo.branches.local:
             raise AbortTask(_("There’s no local branch named {0}.", bquo(branch)))
+
+    def requireNotBehindRemote(self, branch: str):
+        """
+        Refuse to build on a branch that is behind its namesake on the remote,
+        as last fetched (this doesn't fetch). Being ahead is fine.
+        """
+        origin = self.repo.gitflow_origin()
+        comparison = self.repo.compare_branch_with_remote(branch, origin)
+        remoteBranch = f"{origin}/{branch}"
+
+        if comparison == BranchComparison.BEHIND:
+            raise AbortTask(paragraphs(
+                _("{0} is behind {1}.", bquo(branch), bquo(remoteBranch)),
+                _("Fast-forward it, then try again.")))
+        elif comparison == BranchComparison.DIVERGED:
+            raise AbortTask(paragraphs(
+                _("{0} and {1} have diverged.", bquo(branch), bquo(remoteBranch)),
+                _("Merge them, then try again.")))
 
     def flowRequireCleanTree(self, allowDirtyKey: str = ""):
         """
@@ -135,3 +158,121 @@ class GitFlowInit(GitFlowTask):
 
         self.epilog.status = _("Git Flow is set up: {0} for releases, {1} for development.",
                                tquo(cfg.master), tquo(cfg.develop))
+
+
+class GitFlowStart(GitFlowTask):
+    """Branch off a feature, release or hotfix, and remember where it started from."""
+
+    kind: ClassVar[GitFlowKind]
+
+    def prereqs(self) -> TaskPrereqs:
+        return TaskPrereqs.NoUnborn | TaskPrereqs.NoConflicts | TaskPrereqs.NoCherrypick
+
+    def flow(self, name: str = ""):
+        repo = self.repo
+        kind = self.kind
+        cfg = self.gitFlow()
+        prefix = cfg.prefix(kind)
+        if not prefix:
+            raise AbortTask(_("This repo’s Git Flow settings have no prefix for this kind of branch."))
+
+        base = cfg.master if kind == GitFlowKind.HOTFIX else cfg.develop
+
+        self.requireNoOperationInProgress()
+        self.requireLocalBranch(base)
+
+        localBranches = repo.listall_branches(BranchType.LOCAL)
+
+        # One release at a time, and one hotfix unless gitflow.multi-hotfix says otherwise
+        if kind == GitFlowKind.RELEASE or (kind == GitFlowKind.HOTFIX and not repo.gitflow_flag("gitflow.multi-hotfix")):
+            openBranch = next((b for b in localBranches if b.startswith(prefix)), "")
+            if openBranch and kind == GitFlowKind.RELEASE:
+                raise AbortTask(_("Release branch {0} is still open. Finish it before you start another release.",
+                                  bquo(openBranch)))
+            elif openBranch:
+                raise AbortTask(_("Hotfix branch {0} is still open. Finish it before you start another hotfix.",
+                                  bquo(openBranch)))
+
+        if kind != GitFlowKind.FEATURE:
+            yield from self.flowRequireCleanTree("gitflow.allowdirty")
+
+        self.requireNotBehindRemote(base)
+
+        # Ask for the name
+        origin = repo.gitflow_origin()
+        remoteBranches = set(repo.listall_remote_branches().get(origin, []))
+        tags = set(repo.listall_tags())
+        nameTaken = _("This name is already taken by another local branch.")
+
+        def validate(text: str) -> str:
+            if not text:
+                return nameValidationMessage(text, [])
+            branch = prefix + text
+            message = nameValidationMessage(branch, localBranches, nameTaken)
+            if message:
+                return message
+            if branch in remoteBranches:
+                return _("{0} already exists on {1}.", tquo(branch), tquo(origin))
+            if kind != GitFlowKind.FEATURE:
+                tag = cfg.tag_name(text)
+                message = nameValidationMessage(tag, [])
+                if message:
+                    return message
+                if tag in tags:
+                    return _("Tag {0} already exists.", tquo(tag))
+            return ""
+
+        if kind == GitFlowKind.FEATURE:
+            label = _("Feature name:")
+        elif kind == GitFlowKind.RELEASE:
+            label = _("Release version:")
+        else:
+            label = _("Hotfix version:")
+
+        dlg = TextInputDialog(
+            self.parentWidget(),
+            self.name(),
+            label,
+            subtitle=_("Starts from {0}. The branch name begins with {1}.", tquo(base), tquo(prefix)))
+        dlg.setText(name)
+        dlg.setValidator(validate)
+        dlg.validator.run(silenceEmptyWarnings=True)
+        dlg.lineEdit.setValidator(ReplaceSpacesWithDashes())
+        dlg.okButton.setText(_("Start"))
+
+        yield from self.flowDialog(dlg)
+        branch = prefix + dlg.lineEdit.text()
+        dlg.deleteLater()
+
+        if self.repoModel.dangerouslyDetachedHead():
+            yield from flowConfirmLeavingDetachedHead(self, branch)
+
+        # Create and check out in one go: if the checkout fails, there's no branch left behind.
+        # --no-track: with branch.autoSetupMerge=always, the new branch would track the base.
+        self.epilog.effects |= TaskEffects.Refs | TaskEffects.Head | TaskEffects.Workdir
+        yield from self.flowCallGit("checkout", "--progress", "--no-track", "-b", branch, base)
+
+        # Where to merge it back when it's finished (git-flow reads the same key)
+        repo.gitflow_set_branch_base(branch, base)
+
+        self.epilog.jumpTo = NavLocator.inRef(RefPrefix.HEADS + branch)
+        self.epilog.status = _("Branch {0} started from {1}.", tquo(branch), tquo(base))
+
+
+class GitFlowStartFeature(GitFlowStart):
+    kind = GitFlowKind.FEATURE
+
+
+class GitFlowStartRelease(GitFlowStart):
+    kind = GitFlowKind.RELEASE
+
+
+class GitFlowStartHotfix(GitFlowStart):
+    kind = GitFlowKind.HOTFIX
+
+
+START_TASKS: dict[GitFlowKind, type[GitFlowStart]] = {
+    GitFlowKind.FEATURE: GitFlowStartFeature,
+    GitFlowKind.RELEASE: GitFlowStartRelease,
+    GitFlowKind.HOTFIX: GitFlowStartHotfix,
+}

@@ -29,7 +29,7 @@ from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEID
 from gitfourchette.sidebar.sidebar import Sidebar
 from gitfourchette.syntax import LexJobCache
-from gitfourchette.tasks import RepoTaskRunner, TaskEffects, TaskBook
+from gitfourchette.tasks import RepoTaskRunner, TaskEffects, TaskBook, gitflowtasks
 from gitfourchette.tasks.misctasks import VerifyGpgQueue
 from gitfourchette.tasks.nettasks import AutoFetchRemotes
 from gitfourchette.toolbox import *
@@ -893,7 +893,8 @@ class RepoWidget(QWidget):
             # the menu: Quick Launch lists it once you type
             return [TaskBook.action(self, tasks.GitFlowInit, properties={QUICKLAUNCH_SEARCH_ONLY: True})]
 
-        return []
+        # A branch type whose prefix is empty is switched off
+        return [TaskBook.action(self, task) for kind, task in gitflowtasks.START_TASKS.items() if cfg.prefix(kind)]
 
     @CallbackAccumulator.deferredMethod(250)
     def scheduleFlushGpgVerificationQueue(self):

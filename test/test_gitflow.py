@@ -11,6 +11,7 @@ import pytest
 
 from gitfourchette.forms.gitflowinitdialog import GitFlowInitDialog
 from gitfourchette.forms.quicklaunch import QuickLaunch
+from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.sidebar.sidebarmodel import SidebarItem
 from .util import *
 
@@ -311,7 +312,7 @@ def testInitCreatesDevelopAndSwitches(tempDir, mainWindow):
     assert repo.head_branch_shorthand == "develop"
     assert localConfigFlowKeys(wd) == FLOW_KEYS
     assert repo.gitflow_config() == GitFlowConfig(master="master", develop="develop")
-    assert "Initialize Git Flow…" not in flowMenuTitles(mainWindow)
+    assert flowMenuTitles(mainWindow) == ["Start Feature…", "Start Release…", "Start Hotfix…"]
     assert re.search(r"git flow is set up.+master.+develop", mainWindow.statusBar().currentMessage(), re.IGNORECASE)
 
 
@@ -448,4 +449,278 @@ def testCliInitializedRepoIsRecognized(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     initFlowByCli(wd)
     mainWindow.openRepo(wd)
-    assert "Initialize Git Flow…" not in flowMenuTitles(mainWindow)
+    assert flowMenuTitles(mainWindow) == ["Start Feature…", "Start Release…", "Start Hotfix…"]
+
+
+def testKindWithEmptyPrefixIsNotOffered(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git config gitflow.prefix.hotfix ''", wd)
+    mainWindow.openRepo(wd)
+    assert flowMenuTitles(mainWindow) == ["Start Feature…", "Start Release…"]
+
+
+# -----------------------------------------------------------------------------
+# Start
+
+def startDialog(rw, kind: str) -> TextInputDialog:
+    return findQDialog(rw, f"start {kind}", TextInputDialog)
+
+
+@pytest.mark.parametrize("method", ["repomenu", "sidebarfolder", "quicklaunch"])
+def testStartFeature(tempDir, mainWindow, method):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch feature/existing develop", wd)
+    rw = mainWindow.openRepo(wd)
+
+    if method == "repomenu":
+        triggerMenuAction(flowMenu(mainWindow), "start feature")
+    elif method == "sidebarfolder":
+        folderNode = rw.sidebar.findNode(lambda n: n.kind == SidebarItem.RefFolder and n.data == "refs/heads/feature")
+        menu = rw.sidebar.makeNodeMenu(folderNode)
+        assert [stripAccelerators(a.text()) for a in menu.actions()][:1] == ["Start Feature…"]
+        triggerMenuAction(menu, "start feature")
+    elif method == "quicklaunch":
+        palette = openPalette(mainWindow)
+        assert paletteQuery(palette, "start feature") == ["Git Flow › Start Feature…"]
+        QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+
+    dlg = startDialog(rw, "feature")
+    findChildWithText(dlg, r"^starts from .develop.\. the branch name begins with .feature/.\.$", QLabel)
+    assert not dlg.okButton.isEnabled()  # no name yet
+    dlg.lineEdit.setText("login page")
+    assert dlg.lineEdit.text() == "login-page"
+    clickOk(dlg, dlg.buttonBox)
+
+    repo = rw.repo
+    assert repo.head_branch_shorthand == "feature/login-page"
+    assert repo.branches.local["feature/login-page"].target == repo.branches.local["develop"].target
+    assert repo.gitflow_branch_base("feature/login-page") == "develop"
+    assert re.search(r"feature/login-page.+started from.+develop", mainWindow.statusBar().currentMessage(), re.IGNORECASE)
+
+
+def testStartReleaseAndHotfixBases(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git checkout -q develop && git commit -q --allow-empty -m 'next release work' && git checkout -q master", wd)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+
+    triggerMenuAction(flowMenu(mainWindow), "start release")
+    dlg = startDialog(rw, "release")
+    dlg.lineEdit.setText("1.0")
+    clickOk(dlg, dlg.buttonBox)
+    assert repo.head_branch_shorthand == "release/1.0"
+    assert repo.branches.local["release/1.0"].target == repo.branches.local["develop"].target
+    assert repo.gitflow_branch_base("release/1.0") == "develop"
+
+    triggerMenuAction(flowMenu(mainWindow), "start hotfix")
+    dlg = startDialog(rw, "hotfix")
+    dlg.lineEdit.setText("0.9.1")
+    clickOk(dlg, dlg.buttonBox)
+    assert repo.head_branch_shorthand == "hotfix/0.9.1"
+    assert repo.branches.local["hotfix/0.9.1"].target == repo.branches.local["master"].target
+    assert repo.gitflow_branch_base("hotfix/0.9.1") == "master"
+
+
+def testStartReleaseRefusesSecondRelease(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch release/1.0 develop", wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start release")
+    acceptQMessageBox(rw, "release branch .release/1.0. is still open")
+    with pytest.raises(KeyError):
+        startDialog(rw, "release")
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def testStartHotfixMultiHotfixAllowed(tempDir, mainWindow, multi):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git branch hotfix/1.0.1 master", wd)
+    if multi:
+        shell("git config gitflow.multi-hotfix true", wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start hotfix")
+    if not multi:
+        acceptQMessageBox(rw, "hotfix branch .hotfix/1.0.1. is still open")
+        return
+    dlg = startDialog(rw, "hotfix")
+    dlg.lineEdit.setText("1.0.2")
+    clickOk(dlg, dlg.buttonBox)
+    assert rw.repo.head_branch_shorthand == "hotfix/1.0.2"
+
+
+def testStartReleaseTagExists(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git config gitflow.prefix.versiontag v && git tag v1.0 master", wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start release")
+    dlg = startDialog(rw, "release")
+    dlg.lineEdit.setText("1.0")
+    assert not dlg.okButton.isEnabled()
+    assert dlg.validator.inputs[0].error == "Tag “v1.0” already exists."
+    dlg.lineEdit.setText("1.0.")  # a valid branch name, but not a valid tag
+    assert not dlg.okButton.isEnabled()
+    dlg.lineEdit.setText("1.1")
+    assert dlg.okButton.isEnabled()
+    dlg.reject()
+
+
+def testStartReleaseRefusesDirtyTree(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    writeFile(f"{wd}master.txt", "changed\n")
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start release")
+    acceptQMessageBox(rw, "uncommitted changes to tracked files")
+    assert "release/1.0" not in rw.repo.branches.local
+
+
+def testStartReleaseAllowDirty(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git config gitflow.allowdirty true", wd)
+    writeFile(f"{wd}master.txt", "changed\n")
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start release")
+    dlg = startDialog(rw, "release")
+    dlg.lineEdit.setText("1.0")
+    clickOk(dlg, dlg.buttonBox)
+    assert rw.repo.head_branch_shorthand == "release/1.0"
+    assert readTextFile(f"{wd}master.txt") == "changed\n"
+
+
+def testStartFeatureCarriesDirtyChanges(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git checkout -q develop", wd)
+    writeFile(f"{wd}master.txt", "work in progress\n")
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    dlg = startDialog(rw, "feature")
+    dlg.lineEdit.setText("wip")
+    clickOk(dlg, dlg.buttonBox)
+    assert rw.repo.head_branch_shorthand == "feature/wip"
+    assert readTextFile(f"{wd}master.txt") == "work in progress\n"
+
+
+@pytest.mark.parametrize("state", ["behind", "diverged"])
+def testStartRefusesWhenBaseBehindRemote(tempDir, mainWindow, state):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    if state == "behind":
+        shell("git update-ref refs/remotes/origin/develop master && git branch -f develop master~1", wd)
+    else:
+        shell("""
+            git checkout -q develop
+            git commit -q --allow-empty -m 'pushed by someone else'
+            git update-ref refs/remotes/origin/develop HEAD
+            git reset -q --hard HEAD~1
+            git commit -q --allow-empty -m 'local work'
+            git checkout -q master
+        """, wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    if state == "behind":
+        acceptQMessageBox(rw, "develop. is behind .origin/develop.+fast-forward it")
+    else:
+        acceptQMessageBox(rw, "develop. and .origin/develop. have diverged")
+    with pytest.raises(KeyError):
+        startDialog(rw, "feature")
+
+
+@pytest.mark.parametrize("confirm", [False, True])
+def testStartFromDangerousDetachedHeadAsks(tempDir, mainWindow, confirm):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git switch -q --detach master && git commit -q --allow-empty -m 'lost commit'", wd)
+    rw = mainWindow.openRepo(wd)
+    assert rw.repoModel.dangerouslyDetachedHead()
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    dlg = startDialog(rw, "feature")
+    dlg.lineEdit.setText("x")
+    clickOk(dlg, dlg.buttonBox)
+
+    if confirm:
+        acceptQMessageBox(rw, "lose track of this commit.+feature/x")
+        assert rw.repo.head_branch_shorthand == "feature/x"
+    else:
+        rejectQMessageBox(rw, "lose track of this commit.+feature/x")
+        assert "feature/x" not in rw.repo.branches.local
+        assert rw.repo.head_is_detached
+
+
+def testStartRefusedDuringResolvedMerge(tempDir, mainWindow):
+    wd = unpackRepo(tempDir, "testrepoformerging")
+    initFlowByCli(wd)
+    shell("git merge --no-commit --no-ff pep8-fixes", wd)  # no conflicts, just not committed yet
+    rw = mainWindow.openRepo(wd)
+    assert rw.repo.state() == RepositoryState.MERGE
+    assert not rw.repo.any_conflicts
+    mergeHead = readTextFile(f"{wd}.git/MERGE_HEAD")
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    acceptQMessageBox(rw, "a merge is in progress.+commit to conclude the merge, or abort it")
+    assert not any(b.startswith("feature/") for b in rw.repo.branches.local)
+    assert rw.repo.head_branch_shorthand == "master"
+    assert readTextFile(f"{wd}.git/MERGE_HEAD") == mergeHead
+
+
+def testStartValidatorRejectsRemoteBranchName(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git update-ref refs/remotes/origin/feature/x master", wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    dlg = startDialog(rw, "feature")
+    dlg.lineEdit.setText("x")
+    assert not dlg.okButton.isEnabled()
+    assert dlg.validator.inputs[0].error == "“feature/x” already exists on “origin”."
+    dlg.reject()
+
+
+def testStartFeatureDoesNotTrackBase(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    initFlowByCli(wd)
+    shell("git config branch.autoSetupMerge always", wd)
+    rw = mainWindow.openRepo(wd)
+
+    triggerMenuAction(flowMenu(mainWindow), "start feature")
+    dlg = startDialog(rw, "feature")
+    dlg.lineEdit.setText("x")
+    clickOk(dlg, dlg.buttonBox)
+    assert rw.repo.head_branch_shorthand == "feature/x"
+    assert rw.repo.branches.local["feature/x"].upstream is None
+
+
+def testQuickLaunchGitFlowEntriesFollowRepo(tempDir, mainWindow):
+    flowWd = unpackRepo(tempDir, renameTo="flow")
+    plainWd = unpackRepo(tempDir, renameTo="plain")
+    initFlowByCli(flowWd)
+    mainWindow.openRepo(plainWd)
+    flowRw = mainWindow.openRepo(flowWd)
+
+    palette = openPalette(mainWindow)
+    assert "Git Flow › Start Feature…" in palette.visibleTitles()
+    assert paletteQuery(palette, "start feature") == ["Git Flow › Start Feature…"]
+    QTest.keyClick(palette.lineEdit, Qt.Key.Key_Return)
+    startDialog(flowRw, "feature").reject()
+
+    mainWindow.tabs.setCurrentIndex(0)
+    palette = openPalette(mainWindow)
+    assert not any("Git Flow" in title for title in palette.visibleTitles())
+    assert paletteQuery(palette, "start feature") == []
+    palette.close()
