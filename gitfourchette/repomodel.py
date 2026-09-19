@@ -43,6 +43,53 @@ def toggleSetElement(s: set, element):
         return True
 
 
+def findUnpushedCommits(
+        sequence: Iterable[CommitTraits],
+        localTips: Iterable[Oid],
+        remoteTips: Iterable[Oid],
+) -> set[Oid]:
+    """
+    Return the commits in `sequence` that are reachable from `localTips`,
+    but not from any of `remoteTips`.
+
+    `sequence` must be in topological order (children before parents), like
+    RepoModel.commitSequence. It may be truncated: all descendants of a commit
+    come before it, so the rows above a commit are enough to tell whether a
+    remote tip reaches it.
+
+    Only the frontiers are tracked, and the walk stops as soon as no local
+    commit is left undecided. With a few unpushed commits on top of a remote
+    branch, this looks at a handful of rows, however long the history is.
+    """
+
+    remote = set(remoteTips)
+    local = set(localTips) - remote  # a local tip that sits on a remote tip is pushed already
+    unpushed: set[Oid] = set()
+
+    # Without remote branches, there's nothing to compare against, so a repo
+    # without remotes looks the same as it always has. And if every local tip
+    # sits on a remote tip, everything is pushed.
+    if not remote or not local:
+        return unpushed
+
+    for commit in sequence:
+        oid = commit.id
+
+        if oid in remote:
+            # On a remote, and so are all its ancestors
+            remote.remove(oid)
+            remote.update(commit.parent_ids)
+            local.discard(oid)
+            if not local:
+                break
+        elif oid in local:
+            local.remove(oid)
+            local.update(commit.parent_ids)
+            unpushed.add(oid)
+
+    return unpushed
+
+
 class GpgStatus(enum.IntEnum):
     Unsigned        = 0
     Pending         = enum.auto()
@@ -151,6 +198,11 @@ class RepoModel:
     """Use this to look up which commits are part of local branches,
     and which commits are 'foreign'."""
 
+    unpushedCommits: set[Oid]
+    """Commits of local branches (or of HEAD) that no remote-tracking branch
+    contains, i.e. commits that aren't on any remote yet. Empty if the repo
+    has no remote-tracking branches at all (nothing to compare against)."""
+
     hiddenRefs: set[str]
     "All cached refs that are hidden, either explicitly or via ref patterns."
 
@@ -215,6 +267,7 @@ class RepoModel:
         self.hiddenCommits = set()
         self.hideSeeds = set()
         self.localSeeds = set()
+        self.unpushedCommits = set()
 
         self.commitPathspecFilter = CommitPathspecFilter()
         self.commitQueryFilter = CommitQueryFilter()
@@ -506,7 +559,24 @@ class RepoModel:
         self.localSeeds = gsl.localSeeds
         self.hiddenCommits = gsl.hiddenCommits
         self.foreignCommits = gsl.foreignCommits
+        self.syncUnpushedCommits()
         return gsl
+
+    @benchmark
+    def syncUnpushedCommits(self) -> bool:
+        """
+        Refresh `unpushedCommits` from the refs and the commit sequence.
+        Call this whenever either of them changes.
+
+        Return True if the set of unpushed commits changed.
+        """
+        unpushed = findUnpushedCommits(self.commitSequence, self.getLocalTips(), self.getRemoteTips())
+
+        if unpushed == self.unpushedCommits:
+            return False
+
+        self.unpushedCommits = unpushed
+        return True
 
     @benchmark
     def toggleHideRefPattern(self, refPattern: str, allButThis: bool = False):
@@ -595,6 +665,9 @@ class RepoModel:
         return {
             oid for oid, refList in self.refsAt.items()
             if any(name == "HEAD" or name.startswith("refs/heads/") for name in refList)}
+
+    def getRemoteTips(self) -> set[Oid]:
+        return {oid for name, oid in self.refs.items() if name.startswith(RefPrefix.REMOTES)}
 
     def getHiddenTips(self) -> set[Oid]:
         seeds = set()

@@ -87,12 +87,16 @@ def paintGraphFrame(
         rect: QRect,
         oid: Oid,
         graph: Graph,
-        hiddenCommits: Set[Oid]
+        hiddenCommits: Set[Oid],
+        hollow: bool = False,
 ) -> int:
     """
     Draw the graph for a single row and return the number of lane columns that
     the row needed. Callers that reserve a fixed-width graph column use the
     return value to find out how wide that column has to be.
+
+    If `hollow` is True, the commit's bullet point is drawn as a ring (for
+    commits that aren't on any remote yet) instead of a solid dot.
     """
 
     try:
@@ -134,7 +138,9 @@ def paintGraphFrame(
     mx = x + myColumn * LANE_WIDTH  # the screen X of this commit's bullet point
 
     # draw bullet point _outline_ for this commit, beneath everything else
-    painter.setPen(QPen(outlineColor, 2, Qt.PenStyle.SolidLine))
+    # (a hollow bullet point is a ring as thick as a lane, so outline it like a lane)
+    outlineThickness = 2 if not hollow else LANE_THICKNESS + 2
+    painter.setPen(QPen(outlineColor, outlineThickness, Qt.PenStyle.SolidLine))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawEllipse(QPoint(mx, middle), DOT_RADIUS, DOT_RADIUS)
 
@@ -219,8 +225,14 @@ def paintGraphFrame(
         submitPath(path, arc.lane)
 
     # draw bullet point for this commit
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(getColor(commitLane) if oid != UC_FAKEID else UC_COLOR)
+    if not hollow:
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(getColor(commitLane) if oid != UC_FAKEID else UC_COLOR)
+    else:
+        # Ring in the lane's color. Fill its middle with the outline color
+        # to hide the ends of the lines that meet at the commit.
+        painter.setPen(QPen(getColor(commitLane), LANE_THICKNESS))
+        painter.setBrush(outlineColor)
     painter.drawEllipse(QPoint(mx, middle), DOT_RADIUS, DOT_RADIUS)
 
     # we're done, clean up

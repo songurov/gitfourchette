@@ -22,7 +22,7 @@ from gitfourchette.toolbox import *
 class CommitToolTipZone:
     left: int
     right: int
-    kind: Literal['ref', 'author', 'message', 'pathspec']
+    kind: Literal['ref', 'author', 'message', 'pathspec', 'unpushed']
     data: str = ""
 
 
@@ -168,6 +168,8 @@ class CommitLogModel(QAbstractListModel):
                     tip = commitAuthorTooltip(commit, *self.repoModel.getCachedGpgStatus(commit))
                 elif zone.kind == "pathspec":
                     tip = _("This commit touches a path that matches your search")
+                elif zone.kind == "unpushed":
+                    tip = _("This commit isn’t on any remote yet.")
                 break
 
             if self._authorColumnX <= 0:  # author hidden in narrow window

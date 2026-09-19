@@ -174,6 +174,7 @@ class PrimeRepo(RepoTask):
         repoModel.graph = graph
         repoModel.hideSeeds = hideSeeds
         repoModel.localSeeds = localSeeds
+        repoModel.syncUnpushedCommits()
 
         # ---------------------------------------------------------------------
         # RETURN TO UI THREAD

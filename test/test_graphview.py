@@ -7,9 +7,12 @@
 import pytest
 
 from gitfourchette.forms.commitinfodialog import CommitInfoDialog
+from gitfourchette.graph import GraphDiagram, MockOid
+from gitfourchette.graphview import commitlogdelegate
 from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS, NARROW_WIDTH, XMARGIN
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
-from gitfourchette.repomodel import UC_FAKEID
+from gitfourchette.graphview.graphpaint import LANE_WIDTH, flattenLanes, getColor, getCommitBulletColumn
+from gitfourchette.repomodel import UC_FAKEID, findUnpushedCommits
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import avatarColor, avatarInitials
@@ -1110,3 +1113,257 @@ def testFilterCommitLogByAuthor(tempDir, mainWindow):
     QTest.keySequence(graphView, "Escape")
     assert not searchBar.isVisible()
     assert graphView.clFilter.rowCount() == fullRows
+
+
+# -----------------------------------------------------------------------------
+# Commits that aren't on any remote yet
+
+
+def unpushedIds(repo: Repo, *revs: str) -> set[Oid]:
+    return {repo.revparse_single(rev).peel(Commit).id for rev in revs}
+
+
+#   L3 ┯          main (local)
+#   L2 ┿
+#    M ┿─╮        merge commit
+#   F1 │ ┿        feature branch
+#   L1 ┿ │
+#   R1 ┿─╯
+#   R0 ┷
+UNPUSHED_GRAPH = "L3:L2 L2:M M:L1,F1 F1:R1 L1:R1 R1:R0 R0"
+
+
+@pytest.mark.parametrize(("localTips", "remoteTips", "expected"), [
+    ("L3", "R1", "L3 L2 M F1 L1"),  # both parents of an unpushed merge are unpushed
+    ("L3", "F1", "L3 L2 M L1"),  # the feature branch is on a remote, not the merge
+    ("L3", "M", "L3 L2"),  # pushed up to the merge: its parents are on the remote too
+    ("L3", "L3", ""),  # up to date
+    ("L3 F1", "R0", "L3 L2 M F1 L1 R1"),  # the remote branch is behind
+    ("F1", "R1", "F1"),  # a branch that was never pushed
+    ("L3", "", ""),  # nothing to compare against
+    ("", "R1", ""),  # no local branches
+])
+def testFindUnpushedCommits(localTips, remoteTips, expected):
+    sequence, _heads = GraphDiagram.parseDefinition(UNPUSHED_GRAPH)
+    unpushed = findUnpushedCommits(sequence, MockOid.encodeAll(localTips.split()), MockOid.encodeAll(remoteTips.split()))
+    assert unpushed == set(MockOid.encodeAll(expected.split()))
+
+
+def testFindUnpushedCommitsOnlyWalksTheDifference():
+    sequence, _heads = GraphDiagram.parseDefinition(UNPUSHED_GRAPH)
+    walked = []
+
+    def walk():
+        for commit in sequence:
+            walked.append(commit.id)
+            yield commit
+
+    unpushed = findUnpushedCommits(walk(), MockOid.encodeAll(["L3"]), MockOid.encodeAll(["M"]))
+    assert unpushed == set(MockOid.encodeAll(["L3", "L2"]))
+    assert walked == MockOid.encodeAll(["L3", "L2", "M"]), "no need to look past the remote branch"
+
+
+def testFindUnpushedCommitsInTruncatedHistory():
+    sequence, _heads = GraphDiagram.parseDefinition(UNPUSHED_GRAPH)
+    truncated = sequence[:3]  # L3 L2 M
+    unpushed = findUnpushedCommits(truncated, MockOid.encodeAll(["L3"]), MockOid.encodeAll(["R1"]))
+    assert unpushed == set(MockOid.encodeAll(["L3", "L2", "M"]))
+
+
+def testUnpushedCommitsFollowRemoteBranches(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    repo = rw.repo
+
+    # master is 2 commits ahead of origin/master; no-parent is up to date with origin/no-parent
+    assert rw.repoModel.unpushedCommits == unpushedIds(repo, "master", "master~1")
+
+    # A new local commit
+    shell("git commit --allow-empty -m 'new local commit'", wd)
+    rw.refreshRepo()
+    assert rw.repoModel.unpushedCommits == unpushedIds(repo, "master", "master~1", "master~2")
+
+    # Simulate a push: the remote-tracking branch catches up with master
+    shell("git update-ref refs/remotes/origin/master master", wd)
+    rw.refreshRepo()
+    assert not rw.repoModel.unpushedCommits
+
+    # A branch that was never pushed
+    shell("git switch -c never-pushed origin/first-merge && git commit --allow-empty -m 'wip'", wd)
+    rw.refreshRepo()
+    assert rw.repoModel.unpushedCommits == unpushedIds(repo, "never-pushed")
+
+    # A local merge commit that brings in a commit that was never pushed
+    shell("git switch master && git merge --no-ff -m 'local merge' never-pushed", wd)
+    rw.refreshRepo()
+    assert rw.repoModel.unpushedCommits == unpushedIds(repo, "master", "never-pushed")
+
+    # A local merge commit that only brings in commits that are on a remote already
+    shell("""
+        git switch -c other origin/first-merge
+        git commit --allow-empty -m 'somebody else pushed this'
+        git update-ref refs/remotes/origin/other HEAD
+        git switch master
+        git branch -D other never-pushed
+        git reset --hard origin/master
+        git merge --no-ff -m 'merge remote branch' origin/other
+    """, wd)
+    rw.refreshRepo()
+    assert rw.repoModel.unpushedCommits == unpushedIds(repo, "master")
+
+
+def testUnpushedCommitsOnDetachedHead(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("git switch --detach origin/master", wd)
+    rw = mainWindow.openRepo(wd)
+
+    assert rw.repoModel.headIsDetached
+    assert rw.repoModel.unpushedCommits == unpushedIds(rw.repo, "master", "master~1"), "HEAD is on the remote"
+
+    shell("git commit --allow-empty -m 'made on a detached head'", wd)
+    rw.refreshRepo()
+    assert rw.repoModel.unpushedCommits == unpushedIds(rw.repo, "HEAD", "master", "master~1")
+
+
+def testNoUnpushedCommitsWithoutRemoteBranches(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("git remote remove origin", wd)
+    rw = mainWindow.openRepo(wd)
+
+    assert not any(ref.startswith(RefPrefix.REMOTES) for ref in rw.repoModel.refs)
+    assert not rw.repoModel.unpushedCommits, "without remote branches, there's nothing to compare against"
+
+    shell("git commit --allow-empty -m 'new local commit'", wd)
+    rw.refreshRepo()
+    assert not rw.repoModel.unpushedCommits
+
+
+def spyOnGraphFrames(graphView, monkeypatch) -> dict[Oid, QRect]:
+    """Record where the graph is painted on each row from now on."""
+    painted = {}
+    realPaint = commitlogdelegate.paintGraphFrame
+
+    def spy(painter, rect, oid, *args, **kwargs):
+        painted[oid] = QRect(rect)  # copy before paintGraphFrame modifies it
+        return realPaint(painter, rect, oid, *args, **kwargs)
+
+    monkeypatch.setattr(commitlogdelegate, "paintGraphFrame", spy)
+    return painted
+
+
+def bulletPoint(repoModel, oid: Oid, graphRect: QRect) -> tuple[QPoint, QColor]:
+    """Center of a commit's bullet point (same math as paintGraphFrame) and its lane color."""
+    frame = repoModel.graph.getCommitFrame(oid)
+    lanes, numColumns = flattenLanes(frame, repoModel.hiddenCommits)
+    column, _numColumns = getCommitBulletColumn(frame.homeLane(), numColumns, lanes)
+    x = graphRect.left() + LANE_WIDTH // 2 + column * LANE_WIDTH
+    y = (graphRect.top() + graphRect.top() + graphRect.height()) // 2
+    return QPoint(x, y), getColor(frame.homeLane())
+
+
+def colorDistance(a: QColor, b: QColor) -> int:
+    return max(abs(a.red() - b.red()), abs(a.green() - b.green()), abs(a.blue() - b.blue()))
+
+
+@pytest.mark.parametrize("layout", [GraphRowLayout.GraphFirst, GraphRowLayout.HashFirst])
+def testUnpushedCommitsHaveHollowBulletPoints(tempDir, mainWindow, monkeypatch, layout):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=layout)
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    repoModel = rw.repoModel
+    repo = rw.repo
+
+    unpushedOid = repo.revparse_single("master").id
+    pushedOid = repo.revparse_single("origin/master").id
+    assert unpushedOid in repoModel.unpushedCommits
+    assert pushedOid not in repoModel.unpushedCommits
+
+    painted = spyOnGraphFrames(graphView, monkeypatch)
+
+    def sample(oid: Oid):
+        graphView.viewport().repaint()
+        image = graphView.viewport().grab().toImage()
+        dpr = image.devicePixelRatio()
+        center, laneColor = bulletPoint(repoModel, oid, painted[oid])
+
+        def pixel(dx: int):
+            return image.pixelColor(int((center.x() + dx) * dpr), int(center.y() * dpr))
+
+        # Bullet point's middle, its edge (the ring on a hollow bullet point),
+        # and the row background in the margin to the left of the graph
+        background = image.pixelColor(int(2 * dpr), int(center.y() * dpr))
+        return pixel(0), pixel(2), background, laneColor
+
+    # Commit that isn't on any remote: a ring in the lane color, hollow in the middle
+    middle, ring, background, laneColor = sample(unpushedOid)
+    assert colorDistance(ring, laneColor) < 32
+    assert colorDistance(middle, laneColor) > 64
+    assert colorDistance(middle, background) < 32
+
+    # Pushed commit: a solid dot
+    middle, ring, background, laneColor = sample(pushedOid)
+    assert colorDistance(middle, laneColor) < 32
+    assert colorDistance(ring, laneColor) < 32
+
+    # A selected row must still show a hollow bullet point
+    rw.jump(NavLocator.inCommit(unpushedOid))
+    assert graphView.currentCommitId == unpushedOid
+    middle, ring, _background, laneColor = sample(unpushedOid)
+    assert colorDistance(ring, laneColor) < 32
+    assert colorDistance(middle, laneColor) > 64
+
+    # Once the commits are pushed, the bullet point is solid again
+    shell("git update-ref refs/remotes/origin/master master", wd)
+    rw.refreshRepo()
+    assert not repoModel.unpushedCommits
+    middle, _ring, _background, laneColor = sample(unpushedOid)
+    assert colorDistance(middle, laneColor) < 32
+
+
+def testNoHollowBulletPointsWithoutRemoteBranches(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    shell("git remote remove origin", wd)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+
+    painted = spyOnGraphFrames(graphView, monkeypatch)
+    graphView.viewport().repaint()
+    image = graphView.viewport().grab().toImage()
+    dpr = image.devicePixelRatio()
+
+    oids = [c.id for c in rw.repoModel.commitSequence[1:4]]
+    assert all(oid in painted for oid in oids), "expecting the top rows on screen"
+    for oid in oids:
+        center, laneColor = bulletPoint(rw.repoModel, oid, painted[oid])
+        middle = image.pixelColor(int(center.x() * dpr), int(center.y() * dpr))
+        assert colorDistance(middle, laneColor) < 32, f"{oid} should have a solid bullet point"
+
+
+@pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with tooltips, but Qt 6 is fine")
+@pytest.mark.parametrize("layout", [GraphRowLayout.GraphFirst, GraphRowLayout.HashFirst])
+def testUnpushedCommitToolTip(tempDir, mainWindow, monkeypatch, layout):
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=layout)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    repo = rw.repo
+
+    painted = spyOnGraphFrames(graphView, monkeypatch)
+    graphView.viewport().repaint()
+
+    def rowOf(rev):
+        oid = repo.revparse_single(rev).id
+        index = graphView.getFilterIndexForCommit(oid)
+        center, _laneColor = bulletPoint(rw.repoModel, oid, painted[oid])
+        return index.row(), center.x()
+
+    row, x = rowOf("master")
+    toolTip = qlvSummonToolTip(graphView, row, x=x)
+    assert re.search(r"isn.t on any remote yet", toolTip)
+
+    row, x = rowOf("origin/master")
+    with pytest.raises(TimeoutError):
+        qlvSummonToolTip(graphView, row, x=x)

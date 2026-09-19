@@ -742,6 +742,10 @@ class CommitLogDelegate(QStyledItemDelegate):
         """Can be overridden"""
         return oid != NULL_OID and oid in self.repoModel.foreignCommits
 
+    def isUnpushed(self, oid: Oid | None) -> bool:
+        """Can be overridden"""
+        return oid is not None and oid in self.repoModel.unpushedCommits
+
     def uncommittedChangesMessage(self) -> str:
         """Can be overridden"""
         summaryText = _("Working Directory") + " "
@@ -778,7 +782,10 @@ class CommitLogDelegate(QStyledItemDelegate):
             self._paintGraphColumn(painter, rect, oid)
         elif self.wantGraph(oid):
             graphRect = QRect(rect)
-            paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits)
+            hollow = self.isUnpushed(oid)
+            paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits, hollow)
+            if hollow:
+                self.newToolTipZone(CommitToolTipZone(rect.left(), graphRect.right(), "unpushed"))
             rect.setLeft(graphRect.right())
 
         # ------ Refboxes
@@ -823,8 +830,11 @@ class CommitLogDelegate(QStyledItemDelegate):
         if self.wantGraph(oid):
             graphRect = QRect(rect)
             graphRect.setWidth(width)
-            columns = paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits)
+            hollow = self.isUnpushed(oid)
+            columns = paintGraphFrame(painter, graphRect, oid, self.repoModel.graph, self.repoModel.hiddenCommits, hollow)
             self.reserveGraphColumns(columns)
+            if hollow:
+                self.newToolTipZone(CommitToolTipZone(rect.left(), rect.left() + width, "unpushed"))
 
         rect.setLeft(rect.left() + width)
 

@@ -545,6 +545,7 @@ def testPush(tempDir, mainWindow, asNewBranch):
     # We still think the remote's master branch is on the old head for now
     assert rw.repo.branches.remote["localfs/master"].target == oldHead
     assert "localfs/new" not in rw.repo.branches.remote
+    assert rw.repoModel.unpushedCommits == {newHead}, "only the new commit isn't on any remote yet"
 
     node = rw.sidebar.findNodeByRef("refs/heads/master")
     menu = rw.sidebar.makeNodeMenu(node)
@@ -587,6 +588,8 @@ def testPush(tempDir, mainWindow, asNewBranch):
     else:
         assert rw.repo.branches.remote["localfs/new"].target == newHead
         assert rw.repo.branches["master"].upstream_name == "refs/remotes/localfs/new"
+
+    assert not rw.repoModel.unpushedCommits, "the commit is on a remote now"
 
 
 def testShadowUpstream(tempDir, mainWindow):
