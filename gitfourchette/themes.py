@@ -216,6 +216,8 @@ class ThemeColors:
     tabLabelDrop: float = 0
     "How many points smaller than the rest of the text the repo tabs' names are."
     sidebarRowHeight: str = "1.25em"
+    sidebarWidth: int = 220
+    "Width of a new tab's sidebar, which View > Reset Layout goes back to."
     sidebarSourceList: bool = False
     """
     Draw the sidebar like a macOS source list: sections follow one another
@@ -559,6 +561,7 @@ NEUTRAL_DARK = ThemeColors(
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
+    sidebarWidth       = 296,
     sidebarSourceList  = True,
     fileRowHeight      = "1.4em",
     fileIconSize       = 14,
@@ -623,6 +626,7 @@ NEUTRAL_LIGHT = ThemeColors(
     toolbarIconSize    = 16,
     toolbarLabelDrop   = 2,
     sidebarRowHeight   = "1.5em",
+    sidebarWidth       = 296,
     sidebarSourceList  = True,
     fileRowHeight      = "1.4em",
     fileIconSize       = 14,

@@ -70,8 +70,13 @@ class MainWindow(QMainWindow):
     showStatusBarAction: QAction
     showMenuBarAction: QAction
 
+    layoutVersion: int
+    "The version of Neutral's layout that the tabs' shared sizes have caught up with (see catchUpLayout)."
+
     def __init__(self) -> None:
         super().__init__()
+
+        self.layoutVersion = 0
 
         # On macOS, paint the title bar as part of the window, so that it and the
         # toolbar read as one surface. First thing: this sets window flags.
@@ -1499,6 +1504,11 @@ class MainWindow(QMainWindow):
 
         RepoWidget.sharedSplitterSizes = copy.deepcopy(session.splitterSizes)
 
+        # A workspace's session carries the current sizes over, not their version
+        if session.layoutVersion:
+            self.layoutVersion = session.layoutVersion
+        self.catchUpLayout()
+
         if session.prefsPane:
             from gitfourchette.forms.prefsdialog import PrefsDialog
             PrefsDialog.lastPane = session.prefsPane
@@ -1577,6 +1587,30 @@ class MainWindow(QMainWindow):
                 widget.resetLayout()
         self.saveSession()
 
+    def catchUpLayout(self) -> None:
+        """
+        Give the panes whose defaults Neutral changed since the sizes were
+        saved (see settings.LAYOUT_CHANGES) Neutral's defaults, in every tab.
+
+        This happens once, the first time the app shows Neutral: at launch, or
+        when Neutral is picked later. In the other looks, whose defaults didn't
+        change, the sizes stay as they are and the catching up waits.
+        """
+        from gitfourchette.themes import ThemeVariant, activeTheme
+        theme = activeTheme()
+        if theme is None or theme.variant != ThemeVariant.Neutral:
+            return
+        if self.layoutVersion >= settings.LAYOUT_VERSION:
+            return
+
+        names = settings.layoutChangesSince(self.layoutVersion)
+        self.layoutVersion = settings.LAYOUT_VERSION
+        for name in names:
+            RepoWidget.sharedSplitterSizes.pop(name, None)
+        for widget in self.tabs.widgets():
+            if isinstance(widget, RepoWidget):
+                widget.resetLayout(names)
+
     def saveSession(self, writeNow=False) -> None:
         if writeNow:
             # Only on the way out. saveSession also runs every time a tab opens
@@ -1586,6 +1620,7 @@ class MainWindow(QMainWindow):
         session = settings.Session()
         session.windowGeometry = self.saveGeometry().data()
         session.splitterSizes = RepoWidget.sharedSplitterSizes.copy()
+        session.layoutVersion = self.layoutVersion
         session.prefsPane = PrefsDialog.lastPane
         session.tabs = [widget.workdir for widget in self.tabs.widgets()]
         session.activeTabIndex = self.tabs.currentIndex()
@@ -1695,6 +1730,9 @@ class MainWindow(QMainWindow):
         setting needs a restart, and reloads the repositories itself when it
         closes, so no message box interrupts the user there.
         """
+        if "qtStyle" in changedKeys:
+            self.catchUpLayout()
+
         if "homeMascot" in changedKeys:
             self.welcomeWidget.mascot.applyPrefs()
 

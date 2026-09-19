@@ -7,6 +7,7 @@
 import logging
 import os
 import shlex
+from collections.abc import Container
 from contextlib import suppress
 from typing import ClassVar
 
@@ -32,6 +33,7 @@ from gitfourchette.syntax import LexJobCache
 from gitfourchette.tasks import RepoTaskRunner, TaskEffects, TaskBook, gitflowtasks
 from gitfourchette.tasks.misctasks import VerifyGpgQueue
 from gitfourchette.tasks.nettasks import AutoFetchRemotes
+from gitfourchette.themes import activeTheme
 from gitfourchette.toolbox import *
 
 logger = logging.getLogger(__name__)
@@ -148,7 +150,7 @@ class RepoWidget(QWidget):
 
         sideSplitter.addWidget(sidebarContainer)
         sideSplitter.addWidget(centralSplitter)
-        setDefaultSplitterSizes(sideSplitter, [220, 500])
+        setDefaultSplitterSizes(sideSplitter, [self.defaultSidebarWidth(), 500])
         sideSplitter.setStretchFactor(0, 0)  # don't auto-stretch sidebar when resizing window
         sideSplitter.setStretchFactor(1, 1)
         sideSplitter.setChildrenCollapsible(False)
@@ -329,10 +331,26 @@ class RepoWidget(QWidget):
                 splitter.setSizes(sizes)
         self.syncDiffAreaMaximizeButton()
 
-    def resetLayout(self):
-        """Give every pane the size it has in a new tab (see MainWindow.resetLayout)."""
+    @staticmethod
+    def defaultSidebarWidth() -> int:
+        """The theme's width for a new tab's sidebar."""
+        theme = activeTheme()
+        return theme.sidebarWidth if theme is not None else 220
+
+    def resetLayout(self, names: Container[str] | None = None):
+        """
+        Give every pane, or those of the splitters named, the size it has in a
+        new tab (see MainWindow.resetLayout). The theme may have changed since
+        this tab opened: the panes whose sizes it sets go by the current one.
+        """
+        themeDefaults = {
+            self.sideSplitter.objectName(): [self.defaultSidebarWidth(), 500],
+            **self.diffArea.themeDefaultSizes(),
+        }
         for splitter in self.splittersToSave:
-            restoreDefaultSplitterSizes(splitter)
+            name = splitter.objectName()
+            if names is None or name in names:
+                restoreDefaultSplitterSizes(splitter, themeDefaults.get(name))
         self.centralSplitSizesBackup = self.centralSplitter.sizes()
         self.syncDiffAreaMaximizeButton()
 

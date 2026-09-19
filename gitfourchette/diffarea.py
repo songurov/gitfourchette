@@ -144,21 +144,33 @@ class DiffArea(QWidget):
         # each row of its controls to fit on one line (they wrap onto more lines
         # if the user narrows the file lists down). Leave room for the commit
         # button's caption to grow: it counts the staged files once loaded.
-        # The theme may want the file lists wider than that from the start:
-        # Neutral's are Fork's 360 px, with Unstaged over Staged at 70/30.
-        theme = activeTheme()
-        fileStackWidth = max(260, theme.fileColumnWidth if theme is not None else 0)
+        self.commitFormWidth = 0
         if settings.prefs.commitFormPlacement != settings.CommitFormPlacement.BottomBar:
-            fileStackWidth = max(fileStackWidth, fileStack.sizeHint().width() + self.commitButton.sizeHint().width())
-        setDefaultSplitterSizes(splitter, [fileStackWidth, 500])
+            self.commitFormWidth = fileStack.sizeHint().width() + self.commitButton.sizeHint().width()
 
-        if theme is not None and theme.unstagedShare:
-            share = round(theme.unstagedShare * 1000)
-            setDefaultSplitterSizes(self.stagingSplitter, [share, 1000 - share])
+        defaults = self.themeDefaultSizes()
+        setDefaultSplitterSizes(splitter, defaults[splitter.objectName()])
+        if defaults[self.stagingSplitter.objectName()]:
+            setDefaultSplitterSizes(self.stagingSplitter, defaults[self.stagingSplitter.objectName()])
 
         # Ignore height in size policy to keep DiffArea from jumping around when we're showing a banner.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Ignored)
         self.setMinimumHeight(175)
+
+    def themeDefaultSizes(self) -> dict[str, list[int]]:
+        """
+        The sizes the file lists start out with in the current theme, by
+        splitter; [] leaves a splitter to Qt. The theme may want the file lists
+        wider than the commit form needs: Neutral's are Fork's 360 px, with
+        Unstaged over Staged at 70/30.
+        """
+        theme = activeTheme()
+        width = max(260, theme.fileColumnWidth if theme is not None else 0, self.commitFormWidth)
+        share = round(theme.unstagedShare * 1000) if theme is not None else 0
+        return {
+            "Split_DiffArea": [width, 500],
+            "Split_Staging": [share, 1000 - share] if share else [],
+        }
 
     # -------------------------------------------------------------------------
     # Constructor helpers

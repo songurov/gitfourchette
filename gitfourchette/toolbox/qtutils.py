@@ -453,16 +453,19 @@ def setDefaultSplitterSizes(splitter: QSplitter, sizes: list[int]):
     splitter.setSizes(sizes)
 
 
-def restoreDefaultSplitterSizes(splitter: QSplitter):
+def restoreDefaultSplitterSizes(splitter: QSplitter, defaults: list[int] | None = None):
     """
     Size a splitter's panes the way it started out, whatever its size now: the
     sizes given to setDefaultSplitterSizes, or else, like Qt on a splitter
     nobody sized, in proportion to what each pane asks for.
 
+    `defaults`, if given, stand in for the sizes it started out with: say, a
+    theme's, picked since the splitter was built. [] stands for none.
+
     A pane that doesn't stretch gets its size back exactly; the stretching
     ones share the rest.
     """
-    sizes = splitter.property(_DEFAULT_SPLITTER_SIZES)
+    sizes = splitter.property(_DEFAULT_SPLITTER_SIZES) if defaults is None else defaults
     if not sizes:
         horizontal = splitter.orientation() == Qt.Orientation.Horizontal
         hints = (splitter.widget(i).sizeHint() for i in range(splitter.count()))

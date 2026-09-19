@@ -582,6 +582,26 @@ class History(PrefsFile):
         self._maxSeq = -1
 
 
+LAYOUT_CHANGES: dict[int, tuple[str, ...]] = {
+    # Neutral's layout: a sidebar 296 px wide, and file lists 360 px wide
+    # that give most of their height to the unstaged files
+    1: ("Split_Side", "Split_DiffArea", "Split_Staging"),
+}
+"""
+The splitters whose default sizes Neutral changed, by version of its layout.
+Sizes saved under an earlier version are dropped once, the first time the app
+shows Neutral, so that its defaults show; every other pane keeps the size it
+was given. The other looks' defaults didn't change: they keep all sizes.
+"""
+
+LAYOUT_VERSION = max(LAYOUT_CHANGES)
+
+
+def layoutChangesSince(version: int) -> set[str]:
+    """The splitters whose defaults changed in the versions of Neutral's layout after `version`."""
+    return {name for v, names in LAYOUT_CHANGES.items() if v > version for name in names}
+
+
 @dataclasses.dataclass
 class Session(PrefsFile):
     _filename = "session.json"
@@ -590,6 +610,9 @@ class Session(PrefsFile):
     activeTabIndex              : int                   = -1
     windowGeometry              : bytes                 = b""
     splitterSizes               : dict[str, list[int]]  = dataclasses.field(default_factory=dict)
+    layoutVersion               : int                   = 0
+    """The version of Neutral's layout (LAYOUT_CHANGES) that splitterSizes have
+    caught up with; 0 until the app has shown Neutral with them."""
     prefsPane                   : str                   = ""
     "The Settings pane shown last, so that Settings opens on it again."
 
