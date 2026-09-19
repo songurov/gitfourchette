@@ -23,6 +23,38 @@ def testGithubNoreplyAddressNamesTheAccount():
     assert githubLogin("octocat@example.com") == ""
 
 
+def testAvatarsModuleLoadsWithoutQtNetwork():
+    # QtNetwork is optional: the PyInstaller bundles leave it out.
+    # Without it, the app must still start (it used to die with "NameError: QNetworkReply").
+    import subprocess
+    import sys
+    import textwrap
+    from pathlib import Path
+    import gitfourchette
+
+    code = textwrap.dedent("""\
+        import sys
+        from importlib.abc import MetaPathFinder
+
+        class HideQtNetwork(MetaPathFinder):
+            def find_spec(self, name, path, target=None):
+                if name.endswith(".QtNetwork"):
+                    raise ImportError(name)
+                return None
+
+        sys.meta_path.insert(0, HideQtNetwork())
+
+        from gitfourchette.qt import HAS_QTNETWORK
+        assert not HAS_QTNETWORK
+        import gitfourchette.avatars
+    """)
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(gitfourchette.__file__).parents[1])
+    result = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
 def testAvatarUrlPicksASource():
     ghUrl = avatarUrl(Signature("Octo Cat", "1234+octocat@users.noreply.github.com"))
     assert ghUrl == "https://github.com/octocat.png?size=64"

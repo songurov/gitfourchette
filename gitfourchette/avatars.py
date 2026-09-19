@@ -12,6 +12,9 @@ the same person always gets the same color. No network access: the color and
 the letters come from the signature that's already in the commit.
 """
 
+# Keep annotations lazy: QtNetwork types don't exist when QtNetwork is absent (see HAS_QTNETWORK)
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
