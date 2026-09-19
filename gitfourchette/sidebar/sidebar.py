@@ -153,7 +153,7 @@ class Sidebar(QTreeView):
         for sortMode in RefSort:
             if sortMode == RefSort.UseGlobalPref:
                 continue
-            caption = trtables.enum(sortMode)
+            caption = englishTitleCase(trtables.enum(sortMode))  # Menu items are title case
             action = ActionDef(
                 caption,
                 lambda m=sortMode: setSortMode(m),

@@ -1812,6 +1812,10 @@ msgstr "텍스트 위치"
 msgid "Icons Only"
 msgstr "아이콘만"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "아이콘만"
+
 #: forms/maintoolbar.py:150
 msgid "Text Only"
 msgstr "텍스트만"
@@ -6298,12 +6302,12 @@ msgstr "자동(권장)"
 
 #: trtables.py:257
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
+msgid "Date, newest first"
 msgstr "날짜, 최신순"
 
 #: trtables.py:258
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
+msgid "Date, oldest first"
 msgstr "날짜, 오래된순"
 
 #: trtables.py:259
@@ -6907,6 +6911,10 @@ msgstr "(감지되지 않음)"
 #: trtables.py:499
 msgid "Use ssh-agent provided by the system"
 msgstr "시스템이 제공하는 ssh-agent 사용"
+
+#: trtables.py:548
+msgid "Use ssh-agent provided by the system (not detected)"
+msgstr "시스템이 제공하는 ssh-agent 사용 (감지되지 않음)"
 
 #: trtables.py:500
 #, python-brace-format

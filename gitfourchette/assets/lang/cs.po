@@ -1866,6 +1866,10 @@ msgstr "Umístění textu"
 msgid "Icons Only"
 msgstr "Pouze ikony"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "Pouze ikony"
+
 #: forms/maintoolbar.py:150
 msgid "Text Only"
 msgstr "Pouze text"
@@ -6438,12 +6442,12 @@ msgstr "Automaticky (doporučeno)"
 
 #: trtables.py:257
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
+msgid "Date, newest first"
 msgstr "Datum, nejnovější první"
 
 #: trtables.py:258
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
+msgid "Date, oldest first"
 msgstr "Datum, nejstarší první"
 
 #: trtables.py:259
@@ -7047,6 +7051,10 @@ msgstr "(nezjištěno)"
 #: trtables.py:499
 msgid "Use ssh-agent provided by the system"
 msgstr "Používat ssh-agent poskytovaný systémem"
+
+#: trtables.py:548
+msgid "Use ssh-agent provided by the system (not detected)"
+msgstr "Používat ssh-agent poskytovaný systémem (nezjištěno)"
 
 #: trtables.py:500
 #, python-brace-format

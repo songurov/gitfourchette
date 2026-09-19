@@ -193,7 +193,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
     }
 
     table[GraphRefBoxWidth] = {
-        GraphRefBoxWidth.IconsOnly: _("Icons Only"),
+        GraphRefBoxWidth.IconsOnly: _("Icons only"),
         GraphRefBoxWidth.Standard: _("Truncate long ref names"),
         GraphRefBoxWidth.Wide: _("Show full ref names"),
     }
@@ -266,8 +266,8 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
     }
 
     table[RefSort] = {
-        RefSort.TimeDesc: _p("sort refs by date of latest commit, descending", "Date, Newest First"),
-        RefSort.TimeAsc: _p("sort refs by date of latest commit, ascending", "Date, Oldest First"),
+        RefSort.TimeDesc: _p("sort refs by date of latest commit, descending", "Date, newest first"),
+        RefSort.TimeAsc: _p("sort refs by date of latest commit, ascending", "Date, oldest first"),
         RefSort.AlphaAsc: _p("sort refs alphabetically, ascending", "Name, A-Z"),
         RefSort.AlphaDesc: _p("sort refs alphabetically, descending", "Name, Z-A"),
         RefSort.UseGlobalPref: "",
@@ -538,13 +538,14 @@ def _prefKeyTable() -> dict[str, str]:
             _("The {0} placeholder is mandatory. It is automatically substituted for a wrapper script that "
               "enters your working directory and optionally starts one of your Custom Commands.",
               "$COMMAND")),
-        "gitPath": "git",
+        "gitPath": "Git",
         "ownAskpass": _("Have OpenSSH ask for passphrases via {app}", app=APP_DISPLAY_NAME),
         "ownAskpass_help": paragraphs(
             _("Tick this to have OpenSSH use {app} to ask for passphrases."),
             _("Untick this if you’ve set up another program in the {0} environment variable (such as {1}).", tquo("SSH_ASKPASS"), tquo("ksshaskpass"))),
         "ownSshAgent": "ssh-agent",
-        "ownSshAgent_false": _("Use ssh-agent provided by the system") + " " + "" if sshAuthSock else _("(not detected)"),
+        "ownSshAgent_false": (_("Use ssh-agent provided by the system") if sshAuthSock
+                              else _("Use ssh-agent provided by the system (not detected)")),
         "ownSshAgent_true": _("Have {app} manage its own ssh-agent", app=APP_DISPLAY_NAME),
         "ownSshAgent_help": paragraphs(
             _("“ssh-agent” can save your SSH credentials so you don’t have to retype the same passphrase over and over. "

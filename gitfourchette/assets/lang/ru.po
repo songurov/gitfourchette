@@ -2157,6 +2157,10 @@ msgstr "Положение текста"
 msgid "Icons Only"
 msgstr "Только значки"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "Только значки"
+
 #: forms/maintoolbar.py:297
 msgid "Text Only"
 msgstr "Только текст"
@@ -7210,12 +7214,12 @@ msgstr "Автоматически (рекомендуется)"
 
 #: trtables.py:263
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
+msgid "Date, newest first"
 msgstr "Дата, сначала новые"
 
 #: trtables.py:264
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
+msgid "Date, oldest first"
 msgstr "Дата, сначала старые"
 
 #: trtables.py:265
@@ -7867,13 +7871,13 @@ msgstr "Включите, чтобы OpenSSH запрашивал парольн
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr "Отключите, если вы указали другую программу в переменной окружения {0} (например, {1})."
 
-#: trtables.py:528
-msgid "(not detected)"
-msgstr "(не обнаружен)"
-
-#: trtables.py:528
+#: trtables.py:547
 msgid "Use ssh-agent provided by the system"
 msgstr "Использовать ssh-agent, предоставляемый системой"
+
+#: trtables.py:548
+msgid "Use ssh-agent provided by the system (not detected)"
+msgstr "Использовать ssh-agent, предоставляемый системой (не обнаружен)"
 
 #: trtables.py:529
 #, python-brace-format

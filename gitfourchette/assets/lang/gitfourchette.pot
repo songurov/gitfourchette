@@ -2150,6 +2150,10 @@ msgstr ""
 msgid "Icons Only"
 msgstr ""
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr ""
+
 #: forms/maintoolbar.py:297
 msgid "Text Only"
 msgstr ""
@@ -7142,12 +7146,12 @@ msgstr ""
 
 #: trtables.py:263
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
+msgid "Date, newest first"
 msgstr ""
 
 #: trtables.py:264
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
+msgid "Date, oldest first"
 msgstr ""
 
 #: trtables.py:265
@@ -7799,12 +7803,12 @@ msgstr ""
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr ""
 
-#: trtables.py:528
-msgid "(not detected)"
+#: trtables.py:547
+msgid "Use ssh-agent provided by the system"
 msgstr ""
 
-#: trtables.py:528
-msgid "Use ssh-agent provided by the system"
+#: trtables.py:548
+msgid "Use ssh-agent provided by the system (not detected)"
 msgstr ""
 
 #: trtables.py:529

@@ -2124,6 +2124,10 @@ msgstr "Metin Konumu"
 msgid "Icons Only"
 msgstr "Yalnızca Simgeler"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "Yalnızca simgeler"
+
 #: forms/maintoolbar.py:297
 msgid "Text Only"
 msgstr "Yalnızca Metin"
@@ -7123,13 +7127,13 @@ msgstr "Otomatik (önerilen)"
 
 #: trtables.py:263
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
-msgstr "Tarih, En Yeni Önce"
+msgid "Date, newest first"
+msgstr "Tarih, en yeni önce"
 
 #: trtables.py:264
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
-msgstr "Tarih, En Eski Önce"
+msgid "Date, oldest first"
+msgstr "Tarih, en eski önce"
 
 #: trtables.py:265
 msgctxt "sort refs alphabetically, ascending"
@@ -7780,13 +7784,13 @@ msgstr "OpenSSH'nin parola sorarken {app} uygulamasını kullanmasını istiyors
 msgid "Untick this if you’ve set up another program in the {0} environment variable (such as {1})."
 msgstr "{0} ortam değişkeninde başka bir program ayarladıysanız (örneğin {1}) bunun işaretini kaldırın."
 
-#: trtables.py:528
-msgid "(not detected)"
-msgstr "(algılanmadı)"
-
-#: trtables.py:528
+#: trtables.py:547
 msgid "Use ssh-agent provided by the system"
 msgstr "Sistemin sağladığı ssh-agent'ı kullan"
+
+#: trtables.py:548
+msgid "Use ssh-agent provided by the system (not detected)"
+msgstr "Sistemin sağladığı ssh-agent'ı kullan (algılanmadı)"
 
 #: trtables.py:529
 #, python-brace-format

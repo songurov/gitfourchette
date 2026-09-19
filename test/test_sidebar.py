@@ -296,6 +296,14 @@ def testRefSortModes(tempDir, mainWindow, headerKind, leafKind):
     assert getNodeDatas() == sortedByNameAsc
 
 
+def testRefSortMenuItemsAreTitleCase(tempDir, mainWindow):
+    # Settings words its sort orders as pop-up items ("Date, newest first"); in a menu they're title case
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    captions = [action.caption for action in rw.sidebar.refSortMenu("sortBranches")]
+    assert captions == ["Date, Newest First", "Date, Oldest First", "Name, A-Z", "Name, Z-A"]
+
+
 def testRefFolderSidebarDisplayNames(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     shell("""

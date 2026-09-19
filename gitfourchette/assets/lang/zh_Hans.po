@@ -1861,6 +1861,10 @@ msgstr "文本位置"
 msgid "Icons Only"
 msgstr "仅图标"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "仅图标"
+
 #: forms/maintoolbar.py:150
 msgid "Text Only"
 msgstr "仅文本"
@@ -6404,12 +6408,12 @@ msgstr "自动（推荐）"
 
 #: trtables.py:257
 msgctxt "sort refs by date of latest commit, descending"
-msgid "Date, Newest First"
+msgid "Date, newest first"
 msgstr "日期，最新的在前"
 
 #: trtables.py:258
 msgctxt "sort refs by date of latest commit, ascending"
-msgid "Date, Oldest First"
+msgid "Date, oldest first"
 msgstr "日期，最旧的在前"
 
 #: trtables.py:259

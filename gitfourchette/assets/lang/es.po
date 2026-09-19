@@ -1891,6 +1891,10 @@ msgstr "Posición del Texto"
 msgid "Icons Only"
 msgstr "Solo Iconos"
 
+#: trtables.py:196
+msgid "Icons only"
+msgstr "Solo iconos"
+
 #: forms/maintoolbar.py:150
 msgid "Text Only"
 msgstr "Solo Texto"

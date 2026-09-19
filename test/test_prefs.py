@@ -4,12 +4,15 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import dataclasses
+import enum
 import gettext
+import re
 import textwrap
 
 import pytest
 
-from gitfourchette import settings
+from gitfourchette import settings, trtables
 from gitfourchette.forms.prefsdialog import PrefsDialog
 from gitfourchette.nav import NavLocator
 from gitfourchette.toolbox.fontpicker import FontPicker
@@ -538,3 +541,54 @@ def testStoredContextLinesBelowTheMinimumComeBackInRange(mainWindow):
         assert oldPrefs.tabSpaces == 8
     finally:
         path.unlink()
+
+
+@pytest.mark.parametrize("sshAuthSock", ["", "/tmp/agent.sock"], ids=["noSystemAgent", "systemAgent"])
+def testSshAgentChoiceReadsRightWithOrWithoutASystemAgent(mainWindow, monkeypatch, sshAuthSock):
+    if sshAuthSock:
+        monkeypatch.setenv("SSH_AUTH_SOCK", sshAuthSock)
+    else:
+        monkeypatch.delenv("SSH_AUTH_SOCK", raising=False)
+    trtables.retranslate(f"SSH_AUTH_SOCK={sshAuthSock}")  # Rebuild the tables for this environment
+    try:
+        dlg = GFApplication.instance().openPrefsDialog("ownSshAgent")
+        comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_ownSshAgent")
+        systemAgentChoice = comboBox.itemText(1)  # the False item
+        expected = "Use ssh-agent provided by the system" + ("" if sshAuthSock else " (not detected)")
+        assert systemAgentChoice == expected
+        dlg.reject()
+    finally:
+        trtables.retranslate(settings.prefs.language)
+
+    assertTranslatedInForkLanguages("Use ssh-agent provided by the system (not detected)")
+
+
+def testGitExecutableRowIsLabelledGit(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("gitPath")
+    control = dlg.findChild(QWidget, "prefctl_gitPath")
+    label = next(label for label in dlg.findChildren(QLabel) if label.buddy() is control)
+    assert label.text() == "Git:"
+    dlg.reject()
+
+
+def testPopUpItemsAreSentenceCase(mainWindow):
+    """Pop-up items read like sentences ("Date, newest first"); only names keep their capitals."""
+
+    def titleCaseWords(text: str) -> list[str]:
+        words = re.findall(r"[^\s,()/]+", text)[1:]
+        return [word for word in words if len(word) > 1 and word[0].isupper() and word[1:].islower()]
+
+    items = []
+    for field in dataclasses.fields(settings.Prefs):
+        if isinstance(field.type, type) and issubclass(field.type, enum.Enum):
+            items += [trtables.enum(member) for member in field.type]
+        items += [trtables.prefKeyNoDefault(f"{field.name}_{state}") for state in ("true", "false")]
+    items = [item for item in items if item]
+
+    assert "Date, newest first" in items
+    assert "Icons only" in items
+    assert {item: titleCaseWords(item) for item in items if titleCaseWords(item)} == {}
+
+    assertTranslatedInForkLanguages("Icons only")
+    assertTranslatedInForkLanguages("Date, newest first", context="sort refs by date of latest commit, descending")
+    assertTranslatedInForkLanguages("Date, oldest first", context="sort refs by date of latest commit, ascending")
