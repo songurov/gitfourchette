@@ -42,6 +42,51 @@ def testCommitFormPlacementPreservesMessage(tempDir, mainWindow):
     assert editor.toPlainText() == "Keep this message"
 
 
+def testBottomBarCommitFormOnlyUnderWorkdirDiffs(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    reposcenario.stagedNewEmptyFile(wd)
+    mainWindow.resize(1400, 1000)
+    rw = mainWindow.openRepo(wd)
+    host = rw.diffArea.bottomCommitFormHost
+    splitter = rw.diffArea.bottomCommitSplitter
+    oid = Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664")
+
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    assert rw.navLocator.context.isWorkdir()
+    assert host.isVisibleTo(rw)
+
+    # Make the form taller than it starts out
+    total = sum(splitter.sizes())
+    splitter.setSizes([total - 300, 300])
+    QTest.qWait(0)
+    formHeight = splitter.sizes()[1]
+    assert formHeight > 260, "should be clearly taller than the 220px it starts out at"
+
+    # A past commit's diff runs to the bottom: nothing to commit there
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    assert not host.isVisibleTo(rw)
+
+    # Changing a pref while looking at a commit doesn't bring the form back
+    GFApplication.applyPrefs(sideBySideDiff=not settings.prefs.sideBySideDiff)
+    assert not host.isVisibleTo(rw)
+
+    # Back to the working directory: the form returns, as tall as it was
+    rw.jump(NavLocator.inWorkdir())
+    rw.taskRunner.joinWorkerThread()
+    assert host.isVisibleTo(rw)
+    QTest.qWait(0)
+    assert splitter.sizes()[1] == formHeight
+
+    # Picking the bottom bar while looking at a commit waits for the working directory too
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.FilesPanel)
+    rw.jump(NavLocator.inCommit(oid, "a/a1.txt"), check=True)
+    GFApplication.applyPrefs(commitFormPlacement=settings.CommitFormPlacement.BottomBar)
+    assert not host.isVisibleTo(rw)
+    rw.jump(NavLocator.inWorkdir())
+    rw.taskRunner.joinWorkerThread()
+    assert host.isVisibleTo(rw)
+
+
 def testCommitAiButtonRequiresCliAndStagedChanges(tempDir, mainWindow, monkeypatch):
     from gitfourchette import diffarea
 

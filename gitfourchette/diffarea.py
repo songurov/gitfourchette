@@ -194,9 +194,21 @@ class DiffArea(QWidget):
         targetLayout = self.bottomCommitFormLayout if bottom else self.stageCommitFormLayout
         targetLayout.addWidget(self.commitForm)
         self.stageCommitFormHost.setVisible(not bottom)
-        self.bottomCommitFormHost.setVisible(bottom)
-        if bottom and self.bottomCommitSplitter.sizes()[1] < 120:
+        if self.refreshBottomCommitFormVisibility() and self.bottomCommitSplitter.sizes()[1] < 120:
             self.bottomCommitSplitter.setSizes([max(300, self.height() - 220), 220])
+
+    def refreshBottomCommitFormVisibility(self) -> bool:
+        """
+        Show the bottom-bar commit form under the working directory's diffs only.
+
+        Like the form under the staged files, it belongs to the working
+        directory: a past commit's diff runs to the bottom. While hidden, the
+        splitter keeps the height the user gave the form.
+        """
+        bottom = settings.prefs.commitFormPlacement == settings.CommitFormPlacement.BottomBar
+        visible = bottom and self.fileStackPage() == "workdir"
+        self.bottomCommitFormHost.setVisible(visible)
+        return visible
 
     def _makeFileStack(self, repoModel):
         dirtyContainer = self._makeDirtyContainer(repoModel)
@@ -1045,6 +1057,7 @@ class DiffArea(QWidget):
 
     def setFileStackPage(self, p: FileStackPage):
         self.fileStack.setCurrentIndex(self._fileStackPageValues.index(p))
+        self.refreshBottomCommitFormVisibility()
 
     def setFileStackPageByContext(self, context: NavContext):
         page: FileStackPage = "workdir" if context.isWorkdir() else "commit"
