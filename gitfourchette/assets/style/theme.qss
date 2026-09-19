@@ -121,9 +121,9 @@ QMenu::indicator {
 QToolBar {
     background: ${bg};
     border: none;
-    padding: 4px 6px;
+    padding: ${toolbarPadding};
     spacing: 2px;
-    border-bottom: 1px solid ${border};
+    border-bottom: ${toolbarBorderWidth}px solid ${border};
 }
 
 QToolBar[borderless] {
@@ -150,11 +150,11 @@ QToolButton {
 }
 
 QToolButton {
-    padding: 3px 7px;
+    padding: ${toolButtonPadding};
 }
 
 QPushButton {
-    padding: 5px 14px;
+    padding: ${buttonPadding};
     min-width: 56px;
 }
 
@@ -264,11 +264,11 @@ QDateTimeEdit,
 QComboBox,
 QTextEdit,
 QPlainTextEdit {
-    background: ${surface};
+    background: ${fieldBg};
     color: ${text};
-    border: 1px solid ${border};
+    border: 1px solid ${fieldBorder};
     border-radius: ${outerRadius};
-    padding: 4px 6px;
+    padding: ${fieldPadding};
     selection-background-color: ${accent};
     selection-color: ${onAccent};
 }
@@ -349,7 +349,7 @@ QTabBar::tab {
     margin-left: 1px;
     margin-right: 1px;
 
-    padding: 6px 12px;
+    padding: ${tabPadding};
     border-radius: ${outerRadius};
     border-bottom-left-radius: 0px;
     border-bottom-right-radius: 0px;
@@ -397,7 +397,7 @@ QTabBar::close-button:hover {
  * ------------------------------------------------------------------------ */
 
 QSplitter::handle {
-    background: ${textFaint};
+    background: ${splitterHandle};
 }
 
 QSplitter::handle:hover, QSplitter::handle:pressed {
@@ -491,12 +491,12 @@ QScrollBar::handle {
 
 QScrollBar::handle:vertical {
     min-height: 32px;
-    margin: 1px 3px;
+    margin: 1px ${scrollHandleMargin};
 }
 
 QScrollBar::handle:horizontal {
     min-width: 32px;
-    margin: 3px 1px;
+    margin: ${scrollHandleMargin} 1px;
 }
 
 QScrollBar::handle:hover, QScrollBar::handle:pressed {
@@ -554,8 +554,8 @@ GraphView::item, FileList::item {
     border-radius: 0;
 }
 
-Sidebar::item { height: 1.25em; }
-FileList::item, StashDialog #fileList::item { height: 1.15em; }
+Sidebar::item { height: ${sidebarRowHeight}; }
+FileList::item, StashDialog #fileList::item { height: ${fileRowHeight}; }
 
 Sidebar {
     background: palette(window);
@@ -677,3 +677,41 @@ SearchBar[red] QLineEdit {
 https://web.archive.org/web/qtcentre.org/threads/69272-QComboBox-padding-bug */
 ${fusionOnly}QComboBox { combobox-popup: 0; }
 ${fusionOnly}QComboBox QAbstractItemView::item { padding: 4px 2px; }
+
+/* --------------------------------------------------------------------------
+ * Neutral variant only
+ * ------------------------------------------------------------------------ */
+
+/* Repo tabs: pills on a rounded track, instead of folder tabs */
+${neutralOnly}QTabWidget2 QTabBar {
+    background: ${tabTrack};
+    border: 1px solid ${tabTrackEdge};
+    border-radius: ${pillRadius};
+}
+
+${neutralOnly}QTabWidget2 QTabBar::tab,
+${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:first,
+${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:last {
+    margin: 1px;
+    border: 1px solid transparent;
+    border-radius: ${pillRadius};
+}
+
+${neutralOnly}QTabWidget2 QTabBar::tab:selected,
+${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:first:selected,
+${neutralOnly}QTabWidget2 QTabBar[expanding="true"]::tab:last:selected {
+    background: ${tabPill};
+    border-color: ${tabPillEdge};
+    color: ${tabActiveText};
+    font-weight: normal;
+}
+
+/* Check boxes a little larger, as on the Mac. Only the size: the drawing stays the style's own. */
+${neutralOnly}QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+}
+
+${neutralOnly}ContextHeader {
+    background-color: ${panelHeader};
+}

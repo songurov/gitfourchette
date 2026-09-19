@@ -17,11 +17,11 @@ import dataclasses
 import pytest
 
 from gitfourchette import themes
-from gitfourchette.themes import MODERN_DARK, MODERN_LIGHT, ThemeColors, ThemeName
+from gitfourchette.themes import MODERN_DARK, MODERN_LIGHT, NEUTRAL_DARK, NEUTRAL_LIGHT, ThemeColors, ThemeName
 from gitfourchette.toolbox import contrastRatio
 from .util import *
 
-THEMES = {"dark": MODERN_DARK, "light": MODERN_LIGHT}
+THEMES = {"dark": MODERN_DARK, "light": MODERN_LIGHT, "dark,neutral": NEUTRAL_DARK, "light,neutral": NEUTRAL_LIGHT}
 
 
 def ratio(color1: str | QColor, color2: str | QColor) -> float:

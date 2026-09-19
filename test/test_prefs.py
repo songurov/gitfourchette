@@ -393,10 +393,10 @@ def testThemeStringsRoundTripThroughOneParser():
         assert formatStyle(*parseStyle(styleName)) == styleName
 
     # Token order and repeats don't matter; the last one wins, as when resolving a theme
-    assert parseStyle(f"{ThemeName.BuiltIn},#e93d58,light,dark") == (ThemeName.BuiltIn, "dark", "#e93d58")
+    assert parseStyle(f"{ThemeName.BuiltIn},#e93d58,light,dark") == (ThemeName.BuiltIn, "dark", "#e93d58", "")
     assert withThemeMode(f"{ThemeName.BuiltIn},#e93d58,light", True) == f"{ThemeName.BuiltIn},dark,#e93d58"
-    assert parseStyle("Fusion") == ("Fusion", "", "")
-    assert parseStyle("") == ("", "", "")
+    assert parseStyle("Fusion") == ("Fusion", "", "", "")
+    assert parseStyle("") == ("", "", "", "")
 
 
 def testThemePickerShowsEveryThemeTheAppWrites(mainWindow):

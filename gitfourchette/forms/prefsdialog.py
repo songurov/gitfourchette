@@ -1309,7 +1309,7 @@ class PrefsDialog(QDialog):
         return control
 
     def qtStyleControl(self, prefKey, prefValue):
-        currentStyleName, _mode, _accent = parseStyle(prefValue)
+        currentStyleName = parseStyle(prefValue).engine
         control = QComboBox(self)
         variantPicker = self._customThemeVariantPickerControl(prefValue)
 

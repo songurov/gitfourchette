@@ -17,6 +17,7 @@ import enum
 from contextlib import suppress
 from pathlib import Path
 from string import Template
+from typing import NamedTuple
 
 from gitfourchette.qt import *
 from gitfourchette.toolbox import mixColors, relativeLuminance, contrastRatio
@@ -29,6 +30,16 @@ class ThemeName(enum.StrEnum):
     not collide with anything QStyleFactory may return.
     """
     BuiltIn = "gitfourchette-builtin"
+
+
+class ThemeVariant(enum.StrEnum):
+    """
+    Looks of the built-in theme, as a token in Prefs.qtStyle
+    ("gitfourchette-builtin,dark,neutral"). Modern has no token of its own, so
+    every qtStyle string written before variants existed still reads as Modern.
+    """
+    Modern = ""
+    Neutral = "neutral"
 
 
 class ThemeAccent(enum.StrEnum):
@@ -44,32 +55,45 @@ class ThemeAccent(enum.StrEnum):
     Purple = "#b875dc"
 
 
-def parseStyle(styleName: str) -> tuple[str, str, str]:
+class StyleParts(NamedTuple):
+    """A Prefs.qtStyle string, taken apart by parseStyle."""
+    engine: str
+    mode: str = ""
+    accent: str = ""
+    variant: str = ThemeVariant.Modern
+
+
+def parseStyle(styleName: str) -> StyleParts:
     """
-    Split a Prefs.qtStyle string into (engine, mode, accent).
+    Split a Prefs.qtStyle string into (engine, mode, accent, variant).
 
     The engine is "" (system default), ThemeName.BuiltIn or a Qt style name.
     Only the built-in theme has a mode ("light", "dark", or "" to follow the
-    system) and an accent ("#rrggbb", or "" for the system's accent), e.g.
-    "gitfourchette-builtin,dark,#e93d58". When a token repeats, the last one wins.
+    system), an accent ("#rrggbb", or "" for the system's accent) and a variant
+    (a ThemeVariant), e.g. "gitfourchette-builtin,dark,neutral,#e93d58". When a
+    token repeats, the last one wins; a token nobody knows is ignored.
 
     Every reader and writer of qtStyle goes through this pair, so a value
     written in one place reads back the same everywhere else.
     """
     tokens = [t for t in styleName.split(",") if t]
     if not tokens:
-        return "", "", ""
+        return StyleParts("")
     engine, rest = tokens[0], tokens[1:]
     modes = [t for t in rest if t in ("light", "dark")]
     accents = [t for t in rest if t.startswith("#")]
-    return engine, (modes[-1] if modes else ""), (accents[-1] if accents else "")
+    variants = [t for t in rest if t in ThemeVariant]
+    return StyleParts(engine,
+                      modes[-1] if modes else "",
+                      accents[-1] if accents else "",
+                      ThemeVariant(variants[-1]) if variants else ThemeVariant.Modern)
 
 
-def formatStyle(engine: str, mode: str = "", accent: str = "") -> str:
+def formatStyle(engine: str, mode: str = "", accent: str = "", variant: str = ThemeVariant.Modern) -> str:
     """The Prefs.qtStyle string for parseStyle's parts; the inverse of parseStyle."""
     if engine != ThemeName.BuiltIn:
         return engine
-    return ",".join(t for t in (engine, mode, accent) if t)
+    return ",".join(t for t in (engine, mode, variant, accent) if t)
 
 
 def isDarkStyle(styleName: str) -> bool:
@@ -79,7 +103,7 @@ def isDarkStyle(styleName: str) -> bool:
     A built-in theme carries its mode as a token ("gitfourchette-builtin,dark").
     Without one, or with any other Qt style, the system decides.
     """
-    _engine, mode, _accent = parseStyle(styleName)
+    mode = parseStyle(styleName).mode
     if mode:
         return mode == "dark"
     try:
@@ -96,7 +120,7 @@ def pinnedColorScheme(styleName: str) -> Qt.ColorScheme:
     Anything else, including the built-in theme without a mode, follows the
     system, which Qt spells ColorScheme.Unknown.
     """
-    engine, mode, _accent = parseStyle(styleName)
+    engine, mode, _accent, _variant = parseStyle(styleName)
     if engine != ThemeName.BuiltIn:
         return Qt.ColorScheme.Unknown
     if mode == "dark":
@@ -121,15 +145,16 @@ def withThemeMode(styleName: str, dark: bool) -> str:
 
     Only the built-in theme has a mode to set, so asking a native Qt style to
     go dark switches to the built-in theme - which is the honest reading of
-    "make it dark" when the current style has no say in the matter.
+    "make it dark" when the current style has no say in the matter. The accent
+    and the variant stay: Neutral Light becomes Neutral Dark, not Modern Dark.
     """
     mode = "dark" if dark else "light"
-    engine, _mode, accent = parseStyle(styleName)
+    engine, _mode, accent, variant = parseStyle(styleName)
 
     if engine != ThemeName.BuiltIn:
         return formatStyle(ThemeName.BuiltIn, mode)
 
-    return formatStyle(engine, mode, accent)
+    return formatStyle(engine, mode, accent, variant)
 
 
 @dataclasses.dataclass
@@ -150,8 +175,40 @@ class ThemeColors:
     accent: str = ThemeAccent.Blue
     highContrast: bool = False
     "The system asks for more contrast: outlines get stronger and secondary text stops being dimmed."
+    variant: str = ThemeVariant.Modern
     outerRadius: int = 7
     innerRadius: int = round(outerRadius * .75)
+
+    # Metrics. The defaults are the Modern look's, which theme.qss used to spell out.
+    buttonPadding: str = "5px 14px"
+    toolButtonPadding: str = "3px 7px"
+    fieldPadding: str = "4px 6px"
+    tabPadding: str = "6px 12px"
+    toolbarPadding: str = "4px 6px"
+    toolbarBorderWidth: int = 1
+    "Line under the main toolbar, in pixels."
+    pillRadius: int = 7
+    "Roundness of the tabs' pills (Neutral only)."
+    sidebarRowHeight: str = "1.25em"
+    fileRowHeight: str = "1.15em"
+    scrollHandleMargin: str = "3px"
+    "Room on each side of a scroll bar's handle, across the bar."
+
+    # Colors that only some variants set; "" means derived from the colors above.
+    fieldBg: str = ""
+    "Inside of text fields and combo boxes."
+    fieldBorder: str = ""
+    "Outline of text fields and combo boxes."
+    splitterHandle: str = ""
+    "The line between panes that can be resized."
+    panelHeader: str = ""
+    "Background of panel headers, e.g. the strip naming what the lower half shows."
+    tabTrack: str = ""
+    tabTrackEdge: str = ""
+    tabPill: str = ""
+    "The current tab's pill (Neutral only)."
+    tabPillEdge: str = ""
+    tabActiveText: str = ""
 
     # All tokens below are inferred automatically. Do not define manually!
     onAccent: str = "white"
@@ -179,6 +236,8 @@ class ThemeColors:
     # The token is replaced with an empty string if the engine matches,
     # otherwise it's replaced with garbage so that the rule is ignored.
     fusionOnly: str = ""
+    # Same idea for rules that only the Neutral variant has.
+    neutralOnly: str = ""
 
     def __post_init__(self):
         """
@@ -224,7 +283,19 @@ class ThemeColors:
         self.inputDisabled      = mix(self.bg, self.surface, .5)
         self.onAccent           = "white" if accentLuminance < luminanceThreshold else "black"
 
+        # Colors a variant may leave out
+        self.fieldBg            = self.fieldBg or self.surface
+        self.fieldBorder        = self.fieldBorder or self.border
+        self.splitterHandle     = self.splitterHandle or self.textFaint
+        self.panelHeader        = self.panelHeader or mix(self.bg, self.text, .07)
+        self.tabTrack           = self.tabTrack or mix(self.bg, self.text, .08)
+        self.tabTrackEdge       = self.tabTrackEdge or self.border
+        self.tabPill            = self.tabPill or self.button
+        self.tabPillEdge        = self.tabPillEdge or self.border
+        self.tabActiveText      = self.tabActiveText or self.text
+
         self.fusionOnly         = "" if engine == "fusion" else "___IGNORE"
+        self.neutralOnly        = "" if self.variant == ThemeVariant.Neutral else "___IGNORE"
         self.menuRadius         = min(maxMenuRadius, self.outerRadius)
         self.comboBoxMenuRadius = min(maxMenuRadius, self.outerRadius)
 
@@ -242,14 +313,15 @@ class ThemeColors:
         Return the color tokens for one of our themes, or None if the input
         couldn't be parsed (e.g. if the given name is for a native Qt style).
 
-        The input string must follow this format: "styleID,lightOrDark,#accentHex"
-        Example: "gitfourchette-builtin,dark,#ff00ff"
+        The input string must follow this format: "styleID,lightOrDark,variant,#accentHex"
+        Example: "gitfourchette-builtin,dark,neutral,#ff00ff"
 
         Omit lightOrDark and/or #accentHex to infer colors from system palette.
+        Omit the variant for the Modern look.
         The system's contrast preference (Increase Contrast on macOS) is honored too.
         """
 
-        engine, _mode, accentToken = parseStyle(styleName)
+        engine, _mode, accentToken, variant = parseStyle(styleName)
 
         if engine != ThemeName.BuiltIn:
             return None
@@ -258,7 +330,8 @@ class ThemeColors:
         if accentToken:
             accent = QColor(accentToken)
 
-        theme = MODERN_DARK if dark else MODERN_LIGHT
+        light, darkTheme = BUILTIN_THEMES[variant]
+        theme = darkTheme if dark else light
         if accent is not None:
             theme = dataclasses.replace(theme, accent=accent.name())
         if systemPrefersHighContrast():
@@ -368,3 +441,85 @@ MODERN_LIGHT = ThemeColors(
     tooltipText       = "#f0f2f5",
     danger            = "#d92b1f",
 )
+
+# Neutral: flat grays with no blue in them, a denser layout and pill-shaped
+# tabs. The dark colors were measured on a reference screenshot; the light
+# ones are derived from them in the same ratios, not measured.
+NEUTRAL_DARK = ThemeColors(
+    variant            = ThemeVariant.Neutral,
+    bg                 = "#242424",
+    surface            = "#1c1c1c",
+    altRow             = "#202020",
+    border             = "#393939",
+    text               = "#dedede",
+    hover              = "#0fffffff",
+    selInactive        = "#3d3d3d",
+    button             = "#3e3e3e",
+    scrollHandle       = "#669e9e9e",
+    tooltipBg          = "#2e2e2e",
+    tooltipText        = "#e2e2e2",
+    danger             = "#ff6b60",
+    outerRadius        = 5,
+    innerRadius        = 5,
+    pillRadius         = 12,
+    buttonPadding      = "3px 12px",
+    toolButtonPadding  = "2px 6px",
+    fieldPadding       = "2px 6px",
+    tabPadding         = "4px 12px",
+    toolbarPadding     = "2px 8px",
+    toolbarBorderWidth = 0,
+    sidebarRowHeight   = "1.5em",
+    fileRowHeight      = "1.4em",
+    scrollHandleMargin = "2px",
+    fieldBg            = "#242424",
+    fieldBorder        = "#4a4a4a",
+    splitterHandle     = "#393939",
+    panelHeader        = "#2e2e2e",
+    tabTrack           = "#363636",
+    tabTrackEdge       = "#464646",
+    tabPill            = "#3e3e3e",
+    tabPillEdge        = "#646464",
+    tabActiveText      = "#ebebeb",
+)
+
+NEUTRAL_LIGHT = ThemeColors(
+    variant            = ThemeVariant.Neutral,
+    bg                 = "#f5f5f5",
+    surface            = "#ffffff",
+    altRow             = "#fafafa",
+    border             = "#dcdcdc",
+    text               = "#1f1f1f",
+    hover              = "#10000000",
+    selInactive        = "#dcdcdc",
+    button             = "#ffffff",
+    scrollHandle       = "#4d000000",
+    tooltipBg          = "#2e2e2e",
+    tooltipText        = "#f0f0f0",
+    danger             = "#d92b1f",
+    outerRadius        = 5,
+    innerRadius        = 5,
+    pillRadius         = 12,
+    buttonPadding      = "3px 12px",
+    toolButtonPadding  = "2px 6px",
+    fieldPadding       = "2px 6px",
+    tabPadding         = "4px 12px",
+    toolbarPadding     = "2px 8px",
+    toolbarBorderWidth = 0,
+    sidebarRowHeight   = "1.5em",
+    fileRowHeight      = "1.4em",
+    scrollHandleMargin = "2px",
+    fieldBorder        = "#c8c8c8",
+    splitterHandle     = "#dcdcdc",
+    panelHeader        = "#ededed",
+    tabTrack           = "#e4e4e4",
+    tabTrackEdge       = "#d0d0d0",
+    tabPill            = "#ffffff",
+    tabPillEdge        = "#c8c8c8",
+    tabActiveText      = "#1f1f1f",
+)
+
+BUILTIN_THEMES: dict[str, tuple[ThemeColors, ThemeColors]] = {
+    ThemeVariant.Modern: (MODERN_LIGHT, MODERN_DARK),
+    ThemeVariant.Neutral: (NEUTRAL_LIGHT, NEUTRAL_DARK),
+}
+"(light, dark) for each variant of the built-in theme"
