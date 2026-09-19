@@ -4,9 +4,11 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import ast
 import os
 import re
 import shlex
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +17,7 @@ from gitfourchette.forms.gitflowinitdialog import GitFlowInitDialog
 from gitfourchette.forms.quicklaunch import QuickLaunch
 from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.sidebar.sidebarmodel import SidebarItem
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
 FLOW_KEYS = {
@@ -1472,3 +1475,56 @@ def testFinishReleaseStartedFromOtherBase(tempDir, mainWindow):
     triggerMenuAction(flowMenu(mainWindow), "finish release .1.0.")
     acceptQMessageBox(rw, r"release/1\.0. was started from .support/1\.x., not from .develop.+git-flow command line tools")
     assert refsSnapshot(rw.repo) == refsBefore
+
+
+# -----------------------------------------------------------------------------
+# Localization
+
+GITFLOW_SOURCES = ["tasks/gitflowtasks.py", "forms/gitflowinitdialog.py", "forms/ui_gitflowinitdialog.py"]
+
+GITFLOW_STRINGS_ELSEWHERE = [
+    "&Git Flow",  # repowidget.py
+    # taskbook.py
+    "Initialize Git Flow", "Start feature", "Start release", "Start hotfix",
+    "Finish feature", "Finish release", "Finish hotfix",
+    "Set up the Git Flow branches and prefixes in this repo",
+    "Branch off the development branch to work on a feature",
+    "Branch off the development branch to prepare a release",
+    "Branch off the production branch to fix a release",
+    "Merge this feature into the development branch",
+    "Merge into production, tag the version, merge back into development",
+]
+
+
+def gitFlowMsgids() -> list[tuple[str, str]]:
+    """(context, msgid) of every string that the Git Flow code passes to _() or _p()."""
+    import gitfourchette
+    srcDir = Path(gitfourchette.__file__).parent
+    msgids = [("", msgid) for msgid in GITFLOW_STRINGS_ELSEWHERE]
+    for source in GITFLOW_SOURCES:
+        tree = ast.parse((srcDir / source).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("_", "_p")):
+                continue
+            strings = [arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)]
+            if node.func.id == "_p":
+                msgids.append((strings[0], strings[1]))
+            else:
+                msgids.append(("", strings[0]))
+    return list(dict.fromkeys(msgids))
+
+
+def testGitFlowIsTranslatedInForkLanguages(qapp):
+    msgids = gitFlowMsgids()
+    assert len(msgids) > 80  # the extraction found the code's strings
+
+    for context, msgid in msgids:
+        assertTranslatedInForkLanguages(msgid, context=context)
+
+    # The template carries them too, for upstream's translators
+    template = Path(QFile("assets:lang/gitfourchette.pot").fileName()).read_text(encoding="utf-8")
+    for context, msgid in msgids:
+        entry = f'msgid "{msgid}"'
+        if context:
+            entry = f'msgctxt "{context}"\n' + entry
+        assert entry in template, f"not in the .pot: {msgid!r}"
