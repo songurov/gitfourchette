@@ -2235,11 +2235,6 @@ msgstr "{0} işlemesinde yeni etiket"
 msgid "This name is already taken by another tag."
 msgstr "Bu ad zaten başka bir etiket tarafından kullanılıyor."
 
-#: forms/prefsdialog.py:100
-#, python-brace-format
-msgid "{app} Settings"
-msgstr "{app} Ayarları"
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr "Yerleşik git (korumalı alanda)"

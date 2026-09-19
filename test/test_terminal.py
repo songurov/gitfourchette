@@ -7,6 +7,7 @@
 import pytest
 
 from .util import *
+from gitfourchette.forms.prefsdialog import PrefsDialog
 
 
 def testTerminal(tempDir, mainWindow):
@@ -37,7 +38,7 @@ def testTerminalNotConfiguredYet(tempDir, mainWindow):
 
     triggerMenuAction(mainWindow.menuBar(), "repo/terminal")
     acceptQMessageBox(mainWindow, "terminal.+isn.t configured")
-    findQDialog(mainWindow, "settings").reject()
+    findQDialog(mainWindow, "", PrefsDialog).reject()
 
 
 def testTerminalPlaceholderTokenMissing(tempDir, mainWindow):
@@ -52,7 +53,7 @@ def testTerminalPlaceholderTokenMissing(tempDir, mainWindow):
     qmb = findQMessageBox(mainWindow, "missing placeholder:.+COMMAND")
     editButton = next(b for b in qmb.buttons() if "edit command" in b.text().lower())
     editButton.click()
-    findQDialog(mainWindow, "settings").reject()
+    findQDialog(mainWindow, "", PrefsDialog).reject()
 
 
 @pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with this test, but Qt 6 is fine")

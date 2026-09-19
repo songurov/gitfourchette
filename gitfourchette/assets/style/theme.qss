@@ -618,6 +618,39 @@ PrefsDialog QComboBox::down-arrow {
     height: 12px;
 }
 
+/* Settings' pane switcher (macOS): a row of icons with their names, the
+   current one on a rounded fill with a brighter name. */
+PrefsDialog QToolBar#PrefsPaneBar {
+    background: ${bg};
+    border: none;
+    border-bottom: 1px solid ${border};
+    padding: 6px 12px 7px 12px;
+    spacing: 2px;
+}
+
+PrefsDialog QToolBar#PrefsPaneBar QToolButton {
+    background: transparent;
+    border: none;
+    border-radius: ${outerRadius};
+    color: ${textDim};
+    padding: 5px 8px 4px 8px;
+    min-width: 50px;
+}
+
+PrefsDialog QToolBar#PrefsPaneBar QToolButton:hover {
+    background: ${hover};
+}
+
+PrefsDialog QToolBar#PrefsPaneBar QToolButton:checked {
+    background: ${selInactive};
+    color: ${text};
+}
+
+/* Elsewhere, a list on the left */
+PrefsDialog QListWidget#PrefsPaneList::item {
+    padding: 4px 6px;
+}
+
 SearchBar QLineEdit {
     border: 1px solid ${border};
     border-radius: ${outerRadius};

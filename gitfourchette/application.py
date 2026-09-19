@@ -74,8 +74,10 @@ class GFApplication(QApplication):
 
         self.mainWindow = None
         self.initialSession = None
-        self.prefsAtLaunch = {}
+        self.prefsAtLaunch: dict[str, Any] = {}
         "Values of the prefs that take a restart to apply fully, as the app started with them."
+        self.prefsDialog: PrefsDialog | None = None
+        "The Settings window, while it's open."
         self.commandLinePaths = []
         self.installedLocale = None
         self.qtbaseTranslator = QTranslator(self)
@@ -792,10 +794,22 @@ class GFApplication(QApplication):
     def openPrefsDialog(self, focusOnPrefKey: str = "") -> PrefsDialog:
         from gitfourchette.forms.prefsdialog import PrefsDialog
 
+        # One Settings window: asking for it again brings it forward, on the setting asked for
+        dlg = self.prefsDialog
+        if dlg is not None and isObjectAlive(dlg) and dlg.isVisible():
+            if focusOnPrefKey:
+                dlg.jumpTo(focusOnPrefKey)
+            dlg.raise_()
+            dlg.activateWindow()
+            return dlg
+
         # Settings apply as they're changed: there's nothing to do once the window closes
         dlg = PrefsDialog(self.mainWindow, focusOnPrefKey)
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)  # don't leak dialog
+        dlg.finished.connect(lambda _result: setattr(self, "prefsDialog", None))
+        self.prefsDialog = dlg
         dlg.show()
+        dlg.activateWindow()
         return dlg
 
     @staticmethod

@@ -37,6 +37,14 @@ class _MissingTranslation(gettext.NullTranslations):
         return self.MISSING
 
 
+def openAllPanes(dlg: PrefsDialog) -> PrefsDialog:
+    """Panes are built the first time they're shown: show them all, then go back to the first."""
+    for index in range(dlg.stackedWidget.count()):
+        dlg.setCategory(index)
+    dlg.setCategory(0)
+    return dlg
+
+
 def assertTranslatedInForkLanguages(*msgids: str, context="", plural=""):
     for lang in FORK_LANGUAGES:
         with open(QFile(f"assets:lang/{lang}.mo").fileName(), "rb") as moFile:
@@ -56,7 +64,7 @@ def assertTranslatedInForkLanguages(*msgids: str, context="", plural=""):
 def testPrefsDialog(tempDir, mainWindow):
     def openPrefs() -> PrefsDialog:
         triggerMenuAction(mainWindow.menuBar(), "file/settings")
-        return findQDialog(mainWindow, "settings")
+        return findQDialog(mainWindow, "", PrefsDialog)
 
     # Open a repo so that refreshPrefs functions are exercised in coverage
     wd = unpackRepo(tempDir)
@@ -81,6 +89,7 @@ def testPrefsDialog(tempDir, mainWindow):
     # Change statusbar setting: it applies at once, and closing with Esc keeps it
     assert mainWindow.statusBar().isVisible()
     dlg = openPrefs()
+    dlg.setCategory("general")
     checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_showStatusBar")
     assert checkBox.isChecked()
     checkBox.setChecked(False)
@@ -98,6 +107,7 @@ def testPrefsDialog(tempDir, mainWindow):
 
     # Change topo setting: the repo reloads when Settings closes, without asking
     dlg = openPrefs()
+    dlg.setCategory("history")
     dlg.findChild(QRadioButton, "prefctl_chronologicalOrder_false").click()
     dlg.accept()
     assert not settings.prefs.chronologicalOrder
@@ -323,7 +333,7 @@ def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName,
 
 def testNoRawPrefKeyLabels(mainWindow):
     """No row of the dialog may show a pref's internal name instead of words."""
-    dlg = GFApplication.instance().openPrefsDialog()
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog())
     keys = [w.objectName().removeprefix(PrefsDialog.ControlQObjectNamePrefix)
             for w in dlg.findChildren(QWidget)
             if w.objectName().startswith(PrefsDialog.ControlQObjectNamePrefix)]
@@ -424,7 +434,7 @@ def testThemePickerKeepsTheToolbarsDarkPin(mainWindow):
 
 
 def testEveryCountIsABoundedSpinBox(mainWindow):
-    dlg = GFApplication.instance().openPrefsDialog()
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog())
     controls = {w.objectName().removeprefix(PrefsDialog.ControlQObjectNamePrefix): w
                 for w in dlg.findChildren(QWidget)
                 if w.objectName().startswith(PrefsDialog.ControlQObjectNamePrefix)}
@@ -433,6 +443,7 @@ def testEveryCountIsABoundedSpinBox(mainWindow):
 
     for key in intKeys:
         control = controls[key]
+        dlg.setCategory(prefsschema.findPane(key))
         before = getattr(settings.prefs, key)
         # Typing a minus sign over the value used to raise ValueError in the text-field version
         control.setFocus()
@@ -474,7 +485,7 @@ def testSectionTitlesAndPreviewsAreNotDrawnDisabled(mainWindow):
 
     GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark")
     try:
-        dlg = GFApplication.instance().openPrefsDialog("doubleClickTabBar")
+        dlg = openAllPanes(GFApplication.instance().openPrefsDialog("doubleClickTabBar"))
         window = dlg.palette().color(QPalette.ColorRole.Window)
 
         # Section titles are titles, not unavailable options
@@ -499,7 +510,7 @@ def testDependentRowsFollowTheirParent(mainWindow):
     settings.prefs.wholeFileDiff = True
     settings.prefs.autoFetch = False
 
-    dlg = GFApplication.instance().openPrefsDialog("homeMascot")
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog("homeMascot"))
 
     def control(key: str) -> QWidget:
         return dlg.findChild(QWidget, f"prefctl_{key}")
@@ -617,7 +628,7 @@ def testPopUpItemsAreSentenceCase(mainWindow):
 def testHintButtonsAreReachableFromTheKeyboard(mainWindow):
     from gitfourchette.toolbox import QHintButton
 
-    dlg = GFApplication.instance().openPrefsDialog()
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog())
     hints: list[QHintButton] = dlg.findChildren(QHintButton)
     assert len(hints) >= 12
 
@@ -751,7 +762,7 @@ def testLabelsLineUpInOneRightAlignedColumnOnEveryPane(mainWindow):
 
 
 def testRadioChoicesAreNamedAfterTheirRowWithTheDefaultFirst(mainWindow):
-    dlg = GFApplication.instance().openPrefsDialog()
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog())
     groups = {w.objectName().removeprefix("prefctl_"): w for w in dlg.findChildren(QWidget)
               if w.objectName().startswith("prefctl_") and w.findChildren(QRadioButton)
               and hasattr(settings.prefs, w.objectName().removeprefix("prefctl_"))}
@@ -773,7 +784,7 @@ def testNotesAreSecondaryTextButNeverTiny(mainWindow, monkeypatch, macos):
     from gitfourchette.forms import prefsdialog
     monkeypatch.setattr(prefsdialog, "MACOS", macos)
 
-    dlg = GFApplication.instance().openPrefsDialog()
+    dlg = openAllPanes(GFApplication.instance().openPrefsDialog())
     notes = [label for label in dlg.findChildren(QLabel) if label.objectName().startswith("prefnote_")]
     assert notes
     appSize = QApplication.font().pointSizeF()
@@ -881,7 +892,10 @@ def testHalfTypedGitPathIsNeverUsed(mainWindow):
 def testSettingsHaveTheEightPanesOfTheMap(mainWindow):
     """Eight panes like a Mac settings toolbar holds them, each a handful of short sections."""
     dlg = GFApplication.instance().openPrefsDialog()
-    names = [dlg.categoryList.item(i).text() for i in range(dlg.categoryList.count())]
+    names = []
+    for index in range(dlg.stackedWidget.count()):
+        dlg.setCategory(index)
+        names.append(dlg.windowTitle())
     assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Commands", "Advanced"]
     for pane in prefsschema.PANES:
         assert len(pane.sections) <= 5, pane.id
@@ -947,3 +961,166 @@ def testEveryWordInSettingsIsTranslatedInForkLanguages(mainWindow, monkeypatch, 
 
     assertTranslatedInForkLanguages("lines around each change", "Whole file")
     assertTranslatedInForkLanguages("No limit", context="a limit of zero means no limit")
+
+
+@pytest.mark.parametrize("toolBar", [True, False], ids=["toolbar", "list"])
+def testWindowIsNamedAfterItsPaneAndFitsIt(mainWindow, monkeypatch, toolBar):
+    monkeypatch.setattr(PrefsDialog, "useToolBar", toolBar)
+    monkeypatch.setattr(PrefsDialog, "animateResize", False)
+
+    dlg = GFApplication.instance().openPrefsDialog()
+    width = dlg.width()
+    heights = {}
+    for index, pane in enumerate(prefsschema.PANES):
+        dlg.setCategory(index)
+        QTest.qWait(0)
+        name = trtables.prefKey(pane.id)
+        assert dlg.windowTitle() == name  # Just the pane's name, like a Mac settings window
+        assert dlg.width() == width, "the width stays put"
+        heights[pane.id] = dlg.height()
+        # Nothing to scroll: the window is as tall as the pane, unless that's more than most of the screen
+        scrollArea: QScrollArea = dlg.stackedWidget.currentWidget()
+        tooTall = dlg.height() >= int(dlg.screen().availableGeometry().height() * PrefsDialog.MaxScreenFraction)
+        assert scrollArea.verticalScrollBar().isVisible() == tooTall, pane.id
+
+    if toolBar:
+        assert heights["diff"] > heights["userCommands"] > heights["integration"]
+    assert not dlg.windowFlags() & Qt.WindowType.WindowMinimizeButtonHint
+    dlg.reject()
+
+
+def testPaneToolbarItemsAreNamedAndKeyboardReachable(mainWindow, monkeypatch):
+    monkeypatch.setattr(PrefsDialog, "useToolBar", True)
+    monkeypatch.setattr(PrefsDialog, "animateResize", False)
+    PrefsDialog.lastPane = "general"
+
+    dlg = GFApplication.instance().openPrefsDialog()
+    bar: QToolBar = dlg.findChild(QToolBar, "PrefsPaneBar")
+    assert bar.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+    assert not bar.isMovable()
+    assert bar.contextMenuPolicy() == Qt.ContextMenuPolicy.PreventContextMenu
+
+    buttons = [bar.widgetForAction(action) for action in dlg.paneActions]
+    names = [button.accessibleName() for button in buttons]
+    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Commands", "Advanced"]
+    assert [button.isChecked() for button in buttons] == [True] + [False] * 7
+
+    buttons[4].click()
+    assert dlg.windowTitle() == "Git"
+    assert [button.isChecked() for button in buttons].index(True) == 4
+
+    # Cmd+1..8 (Ctrl elsewhere) and Ctrl+Tab
+    waitUntilTrue(dlg.isActiveWindow)
+    QTest.keyClick(dlg, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier)
+    assert dlg.windowTitle() == "Diff"
+    assert dlg.stackedWidget.currentWidget().isAncestorOf(dlg.focusWidget()), "keyboard users land in the pane"
+    QTest.keyClick(dlg, Qt.Key.Key_Tab, Qt.KeyboardModifier.ControlModifier)
+    assert dlg.windowTitle() == "History"
+    dlg.reject()
+
+
+def testPaneListFitsEveryNameInFull(mainWindow, monkeypatch):
+    monkeypatch.setattr(PrefsDialog, "useToolBar", False)
+    dlg = GFApplication.instance().openPrefsDialog()
+    paneList: QListWidget = dlg.findChild(QListWidget, "PrefsPaneList")
+    assert paneList.textElideMode() == Qt.TextElideMode.ElideNone
+    for row in range(paneList.count()):
+        item = paneList.item(row)
+        assert paneList.visualItemRect(item).width() >= paneList.fontMetrics().horizontalAdvance(item.text())
+    dlg.reject()
+
+
+def testSettingsIsOneWindowThatLetsTheAppBeUsed(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog()
+    assert not dlg.isModal()
+
+    # Asking again (Cmd+comma, a menu's "Configure..." item) brings the same window to the setting asked for
+    again = GFApplication.instance().openPrefsDialog("contextLines")
+    assert again is dlg
+    assert dlg.windowTitle() == "Diff"
+    assert dlg.focusWidget() is dlg.findChild(QSpinBox, "prefctl_contextLines")
+    dlg.reject()
+
+    # Once closed, a new one opens
+    assert GFApplication.instance().openPrefsDialog() is not dlg
+    GFApplication.instance().prefsDialog.reject()
+
+
+def testPanesAreBuiltWhenFirstShown(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("font")
+    diffIndex = prefsschema.findPane("font")
+    assert [page is not None for page in dlg.pages].count(True) == 1
+    assert dlg.pages[diffIndex] is not None
+    assert dlg.findChild(QCheckBox, "prefctl_homeMascot") is None
+    dlg.setCategory("general")
+    assert dlg.findChild(QCheckBox, "prefctl_homeMascot") is not None
+    dlg.reject()
+
+
+def testSettingsReopensOnTheLastPaneAfterARestart(mainWindow):
+    from gitfourchette.settings import Session
+
+    dlg = GFApplication.instance().openPrefsDialog()
+    dlg.setCategory("git")
+    dlg.reject()
+    mainWindow.saveSession(writeNow=True)
+
+    # Next launch
+    PrefsDialog.lastPane = ""
+    session = Session()
+    assert session.load()
+    assert session.prefsPane == "git"
+    mainWindow.restoreSession(session)
+    dlg = GFApplication.instance().openPrefsDialog()
+    assert dlg.windowTitle() == "Git"
+    dlg.reject()
+
+
+def testReduceMotionIsReadFromTheSystem(monkeypatch):
+    from gitfourchette.toolbox import reducemotion
+
+    assert reducemotion.parseMacReduceMotion("1\n")
+    assert not reducemotion.parseMacReduceMotion("0\n")
+    assert not reducemotion.parseMacReduceMotion("")  # Never set
+    assert reducemotion.parseGnomeEnableAnimations("false\n")
+    assert not reducemotion.parseGnomeEnableAnimations("true\n")
+
+    commands = []
+
+    def fakeRun(command):
+        commands.append(command)
+        return "1\n" if command == reducemotion.MAC_COMMAND else "false\n"
+
+    monkeypatch.setattr(reducemotion, "_runCommand", fakeRun)
+    for macos, freedesktop, expectedCommand in [(True, False, reducemotion.MAC_COMMAND),
+                                                (False, True, reducemotion.GNOME_COMMAND)]:
+        monkeypatch.setattr(reducemotion, "MACOS", macos)
+        monkeypatch.setattr(reducemotion, "FREEDESKTOP", freedesktop)
+        assert reducemotion.systemReducesMotion(refresh=True)
+        assert commands[-1] == expectedCommand
+        assert reducemotion.systemReducesMotion(), "cached"
+        assert len(commands) == 1 + (not macos)
+
+    monkeypatch.setattr(reducemotion, "FREEDESKTOP", False)
+    assert not reducemotion.systemReducesMotion(refresh=True)  # Windows: no such setting
+    monkeypatch.setattr(reducemotion, "_cachedAnswer", None)
+
+
+@pytest.mark.parametrize("reduceMotion", [False, True])
+def testPaneSwitchGlidesUnlessTheSystemReducesMotion(mainWindow, monkeypatch, reduceMotion):
+    from gitfourchette.forms import prefsdialog
+    monkeypatch.setattr(prefsdialog, "systemReducesMotion", lambda refresh=False: reduceMotion)
+    monkeypatch.setattr(PrefsDialog, "useToolBar", True)
+
+    dlg = GFApplication.instance().openPrefsDialog("font")
+    QTest.qWait(0)
+    tall = dlg.height()
+    dlg.setCategory("integration")
+    target = dlg.targetHeight(dlg.stackedWidget.currentIndex())
+    assert target < tall
+    if reduceMotion:
+        assert dlg.height() == target, "no motion: straight to the new height"
+    else:
+        assert dlg.resizeAnimation.state() == QAbstractAnimation.State.Running
+        waitUntilTrue(lambda: dlg.height() == target)
+    dlg.reject()

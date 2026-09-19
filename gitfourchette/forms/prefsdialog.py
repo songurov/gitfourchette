@@ -8,7 +8,7 @@ import logging
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from gitfourchette import prefsschema, settings, trtables
 from gitfourchette.application import GFApplication
@@ -23,6 +23,7 @@ from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, Pref
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
 from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent, formatStyle, parseStyle
 from gitfourchette.toolbox import *
+from gitfourchette.toolbox.reducemotion import systemReducesMotion
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,8 @@ class _GridBuilder:
         self.grid.setRowMinimumHeight(self.row, height)
         self.row += 1
 
-    def addRow(self, label: QWidget | None, field: QWidget | QLayout, wide: bool = False):
-        if wide:
+    def addRow(self, label: QWidget | None, field: QWidget | QLayout):
+        if self.wide:  # No label column: the field takes the whole width
             assert label is None
             if isinstance(field, QLayout):
                 self.grid.addLayout(field, self.row, 0, 1, 3)
@@ -119,7 +120,14 @@ def localeCodeToLanguageName(code: str) -> str:
 
 
 class PrefsDialog(QDialog):
-    lastCategory = 0
+    lastPane: ClassVar[str] = ""
+    "Pane shown last; the next window opens on it (kept in session.json across launches)."
+
+    useToolBar: ClassVar[bool] = MACOS
+    "Switch panes from a toolbar of icons at the top, like a Mac settings window; elsewhere, from a list on the left."
+
+    animateResize: ClassVar[bool] = True
+    "Let the window's height glide to the next pane's (never while the system asks for less motion)."
 
     ControlQObjectNamePrefix = "prefctl_"
     NoteQObjectNamePrefix = "prefnote_"
@@ -127,6 +135,21 @@ class PrefsDialog(QDialog):
 
     PaneWidth = 640
     "Width of a pane's content: labels, gap and controls."
+
+    WindowMargin = 20
+    "Around the pane's content (left, right, bottom)."
+
+    ToolBarGap = 16
+    "Between the pane toolbar and the pane's content."
+
+    ToolBarIconSize = 24
+    ToolBarLabelPointSize = 11
+
+    ResizeDurationMs = 180
+    "How long the window takes to fit a pane's height."
+
+    MaxScreenFraction = 0.8
+    "A pane taller than this much of the screen scrolls instead."
 
     LabelColumnMaxWidth = 220
     "Labels wider than this wrap."
@@ -169,7 +192,9 @@ class PrefsDialog(QDialog):
         super().__init__(parent)
 
         self.setObjectName("PrefsDialog")
-        self.setWindowTitle(_("{app} Settings", app=qAppName()))
+        # A settings window: no minimize or zoom button, and no "?" button in its title bar
+        self.setWindowFlag(Qt.WindowType.WindowMinMaxButtonsHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
         self.prefDiff: dict[str, Any] = {}
         "What changed while this window was open: key -> new value."
@@ -204,7 +229,11 @@ class PrefsDialog(QDialog):
         self.reloadTimer.timeout.connect(self.reloadRepos)
         self.reloadPending = False
 
-        self.categoryKeys: list[str] = []
+        self.panes = list(prefsschema.PANES)
+        self.categoryKeys: list[str] = [pane.id for pane in self.panes]
+
+        self.pages: list[QWidget | None] = [None] * len(self.panes)
+        "Content of each pane, built the first time it's shown."
 
         self.dependencies: dict[str, tuple[str, bool]] = {}
         """
@@ -219,68 +248,271 @@ class PrefsDialog(QDialog):
         self.labelColumnWidth = self.measureLabelColumn()
         "One width for the label column of every pane, so that switching panes doesn't shift the controls."
 
-        self.categoryList = QListWidget()
-        self.categoryList.setWordWrap(True)
-        self.categoryList.setUniformItemSizes(True)
-        self.categoryList.setMinimumWidth(200)
-        self.categoryList.setMaximumWidth(200)
-        self.categoryList.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.categoryList.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.categoryList.currentRowChanged.connect(self.onCategoryChanged)
-        self.categoryList.setIconSize(QSize(24, 24))
+        self.reducesMotion = systemReducesMotion(refresh=True)
+        self.resizeAnimation = QVariantAnimation(self)
+        self.resizeAnimation.setDuration(self.ResizeDurationMs)
+        self.resizeAnimation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.resizeAnimation.valueChanged.connect(lambda height: self.setFixedHeight(int(height)))
 
-        self.stackedWidget = QStackedWidget()
+        # One scroll area per pane, filled in when the pane is first shown
+        self.stackedWidget = QStackedWidget(self)
         self.stackedWidget.setFixedWidth(self.PaneWidth)
+        for pane in self.panes:
+            scrollArea = QScrollArea(self.stackedWidget)
+            scrollArea.setObjectName(f"prefspane_{pane.id}")
+            scrollArea.setFrameShape(QFrame.Shape.NoFrame)
+            scrollArea.setWidgetResizable(True)
+            scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            scrollArea.viewport().setAutoFillBackground(False)
+            self.stackedWidget.addWidget(scrollArea)
 
-        layout = QGridLayout(self)
-        layout.setHorizontalSpacing(20)
-        layout.addWidget(self.categoryList,     0, 0, 2, 1)
-        layout.addWidget(self.stackedWidget,    0, 1)
-        self._fillControls(focusOn)
-        self._bindDependencies()
+        self.paneBar: QToolBar | None = None
+        self.paneActions: list[QAction] = []
+        self.categoryList: QListWidget | None = None
+        self.buttonBox: QDialogButtonBox | None = None
 
+        if self.useToolBar:
+            self._buildPaneBar()
+        else:
+            self._buildPaneList()
+
+        self._buildShortcuts()
+
+        GFApplication.instance().focusChanged.connect(self.onFocusChanged)
+
+        # Open where the user asked to go, or where they left off
+        if focusOn and prefsschema.findPane(focusOn) >= 0:
+            self.jumpTo(focusOn)
+        else:
+            self.setCategory(PrefsDialog.lastPane if PrefsDialog.lastPane in self.categoryKeys else 0)
+
+    # -------------------------------------------------------------------------
+    # Window shell
+
+    def _buildPaneBar(self):
+        """
+        Mac settings window: a row of icons with their names across the top,
+        the current pane's name in the title bar, and its content underneath.
+        """
+        bar = QToolBar(self)
+        bar.setObjectName("PrefsPaneBar")
+        bar.setMovable(False)
+        bar.setFloatable(False)
+        bar.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        bar.setIconSize(QSize(self.ToolBarIconSize, self.ToolBarIconSize))
+        barFont = QFont(bar.font())
+        barFont.setPointSizeF(self.ToolBarLabelPointSize if MACOS else barFont.pointSizeF())
+        bar.setFont(barFont)
+
+        def spacer():
+            widget = QWidget(bar)
+            widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            return widget
+
+        group = QActionGroup(self)
+        group.setExclusive(True)
+
+        bar.addWidget(spacer())
+        for index, pane in enumerate(self.panes):
+            name = trtables.prefKey(pane.id)
+            action = QAction(stockIcon(pane.icon), name, self)
+            action.setCheckable(True)
+            action.setToolTip(name)
+            action.triggered.connect(lambda _checked=False, i=index: self.setCategory(i))
+            group.addAction(action)
+            bar.addAction(action)
+            button = bar.widgetForAction(action)
+            button.setObjectName(f"prefspanebutton_{pane.id}")
+            button.setAccessibleName(name)
+            button.setFont(barFont)
+            self.paneActions.append(action)
+        bar.addWidget(spacer())
+        self.paneBar = bar
+
+        content = QVBoxLayout()
+        content.setContentsMargins(self.WindowMargin, self.ToolBarGap, self.WindowMargin, self.WindowMargin)
+        content.setSpacing(0)
+        content.addWidget(self.stackedWidget)
+        self._addButtonBox(content)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(QMargins())
+        layout.setSpacing(0)
+        layout.addWidget(bar)
+        layout.addLayout(content)
+
+        self.setFixedWidth(self.PaneWidth + 2 * self.WindowMargin)
+
+    def _buildPaneList(self):
+        """Elsewhere: the panes in a list on the left, wide enough for every name in full."""
+        paneList = QListWidget(self)
+        paneList.setObjectName("PrefsPaneList")
+        paneList.setUniformItemSizes(True)
+        paneList.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        paneList.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        paneList.setTextElideMode(Qt.TextElideMode.ElideNone)
+        paneList.setIconSize(QSize(self.ToolBarIconSize, self.ToolBarIconSize))
+        for pane in self.panes:
+            item = QListWidgetItem(stockIcon(pane.icon), trtables.prefKey(pane.id))
+            paneList.addItem(item)
+        widest = max(paneList.fontMetrics().horizontalAdvance(trtables.prefKey(pane.id)) for pane in self.panes)
+        paneList.setFixedWidth(widest + self.ToolBarIconSize + 48)
+        paneList.currentRowChanged.connect(self.onCategoryChanged)
+        self.categoryList = paneList
+
+        right = QVBoxLayout()
+        right.setSpacing(0)
+        right.addWidget(self.stackedWidget)
+        self._addButtonBox(right)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(self.WindowMargin, self.WindowMargin, self.WindowMargin, self.WindowMargin)
+        layout.setSpacing(self.WindowMargin)
+        layout.addWidget(paneList)
+        layout.addLayout(right)
+
+        self.setFixedWidth(paneList.width() + self.PaneWidth + 3 * self.WindowMargin)
+
+    def _addButtonBox(self, layout: QBoxLayout):
         # Changes apply as they're made, so there's nothing to confirm or cancel. Where the desktop
         # expects a way out at the bottom of a window (KDE, Windows), there's a Close button.
-        if not MACOS and not GNOME:
-            buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-            buttonBox.rejected.connect(self.reject)
-            layout.addWidget(buttonBox, 1, 1)  # Add buttonBox last so it comes last in tab order
+        if MACOS or GNOME:
+            return
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        self.buttonBox.rejected.connect(self.reject)
+        layout.addSpacing(self.WindowMargin)
+        layout.addWidget(self.buttonBox)
 
-        layout.setColumnStretch(0, 0)
-        layout.setColumnStretch(1, 2)
-
+    def _buildShortcuts(self):
         # Esc, the close button and Cmd+W (Ctrl+W) all close the window, keeping every change
         closeShortcut = QShortcut(QKeySequence.StandardKey.Close, self)
         closeShortcut.activated.connect(self.close)
 
-        if not focusOn:
-            # Restore last category
-            self.setCategory(PrefsDialog.lastCategory)
+        # Cmd+1 to Cmd+8 (Ctrl elsewhere) go straight to a pane
+        for index in range(min(len(self.panes), 9)):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{index + 1}"), self)
+            shortcut.activated.connect(lambda i=index: self.setCategory(i, fromKeyboard=True))
+
+        # Ctrl+Tab, Ctrl+Shift+Tab step through them (on macOS, Qt calls the Control key Meta)
+        nextKeys = makeMultiShortcut(QKeySequence.StandardKey.NextChild, *(["Meta+Tab"] if MACOS else []))
+        previousKeys = makeMultiShortcut(QKeySequence.StandardKey.PreviousChild, *(["Meta+Shift+Backtab"] if MACOS else []))
+        for keys, step in ((nextKeys, 1), (previousKeys, -1)):
+            shortcut = QShortcut(self)
+            shortcut.setKeys(keys)
+            shortcut.activated.connect(lambda step=step: self.stepCategory(step))
+
+    def setCategory(self, pane: int | str, fromKeyboard: bool = False):
+        index = self.categoryKeys.index(pane) if isinstance(pane, str) else pane
+        if self.categoryList is not None:
+            if self.categoryList.currentRow() != index:
+                self.categoryList.setCurrentRow(index)  # calls onCategoryChanged
+            else:
+                self.onCategoryChanged(index)
         else:
-            # Save this category if we close the dialog without changing tabs
-            PrefsDialog.lastCategory = self.stackedWidget.currentIndex()
+            self.onCategoryChanged(index)
+        if fromKeyboard:
+            self.focusFirstControl()
 
-        QApplication.instance().focusChanged.connect(self.onFocusChanged)
+    def stepCategory(self, step: int):
+        self.setCategory((self.stackedWidget.currentIndex() + step) % len(self.panes), fromKeyboard=True)
 
-        self.setModal(True)
+    def onCategoryChanged(self, index: int):
+        if index < 0:
+            return
+        self.ensurePaneBuilt(index)
+        self.stackedWidget.setCurrentIndex(index)
+        paneName = trtables.prefKey(self.categoryKeys[index])
+        self.setWindowTitle(paneName)
+        if self.paneActions:
+            self.paneActions[index].setChecked(True)
+            self.refreshPaneBarIcons()
+        self.fitToPane()
+
+        # Remember which pane we've last shown for next time the window opens
+        PrefsDialog.lastPane = self.categoryKeys[index]
+
+    def ensurePaneBuilt(self, index: int) -> QWidget:
+        page = self.pages[index]
+        if page is None:
+            page = self._renderPane(self.panes[index])
+            self._bindDependencies()
+            scrollArea = self.stackedWidget.widget(index)
+            assert isinstance(scrollArea, QScrollArea)
+            scrollArea.setWidget(page)
+            page.setAutoFillBackground(False)
+            self.pages[index] = page
+        return page
+
+    def jumpTo(self, prefKey: str):
+        """Show the pane with this setting, and put the keyboard focus on it."""
+        index = prefsschema.findPane(prefKey)
+        if index < 0:
+            return
+        self.setCategory(index)
+        control = self.pages[index].findChild(QWidget, self.ControlQObjectNamePrefix + prefKey)
+        if control is not None:
+            control.setFocus()
+
+    def focusFirstControl(self):
+        page = self.pages[self.stackedWidget.currentIndex()]
+        for widget in page.findChildren(QWidget):
+            if (widget.isEnabled() and widget.isVisibleTo(page)
+                    and widget.focusPolicy() & Qt.FocusPolicy.TabFocus and widget.focusProxy() is None):
+                widget.setFocus(Qt.FocusReason.TabFocusReason)
+                return
+
+    def paneHeight(self, index: int) -> int:
+        """Height of a pane's content at the pane's width."""
+        layout = self.ensurePaneBuilt(index).layout()
+        if layout.hasHeightForWidth():
+            return layout.totalHeightForWidth(self.PaneWidth)
+        return layout.totalSizeHint().height()
+
+    def targetHeight(self, index: int) -> int:
+        content = self.paneHeight(index)
+        extra = 0
+        if self.buttonBox is not None:
+            extra = self.WindowMargin + self.buttonBox.sizeHint().height()
+        if self.paneBar is not None:
+            height = self.paneBar.sizeHint().height() + self.ToolBarGap + content + extra + self.WindowMargin
+        else:
+            listHeight = sum(self.categoryList.sizeHintForRow(i) for i in range(self.categoryList.count()))
+            listHeight += 2 * self.categoryList.frameWidth() + 8
+            height = 2 * self.WindowMargin + max(content + extra, listHeight)
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            height = min(height, int(screen.availableGeometry().height() * self.MaxScreenFraction))
+        return height
+
+    def fitToPane(self):
+        """Settings windows fit the pane they show: the height follows it, the width stays."""
+        target = self.targetHeight(self.stackedWidget.currentIndex())
+        self.resizeAnimation.stop()
+        animate = (self.animateResize and self.isVisible() and self.paneBar is not None
+                   and not self.reducesMotion and self.height() != target)
+        if animate:
+            self.resizeAnimation.setStartValue(self.height())
+            self.resizeAnimation.setEndValue(target)
+            self.resizeAnimation.start()
+        else:
+            self.setFixedHeight(target)
+
+    def refreshPaneBarIcons(self):
+        """The current pane's icon takes the accent color, like its fill and its brighter name."""
+        accent = self.palette().color(QPalette.ColorRole.Highlight).name()
+        for action, pane in zip(self.paneActions, self.panes, strict=True):
+            action.setIcon(stockIcon(pane.icon, f"gray={accent}") if action.isChecked() else stockIcon(pane.icon))
+
+    def changeEvent(self, event: QEvent):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.StyleChange) and self.paneActions:
+            self.refreshPaneBarIcons()
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            QTimer.singleShot(0, self.fitToPane)  # e.g. Density changed the font
 
     # -------------------------------------------------------------------------
     # Layout
-
-    def _fillControls(self, focusOn: str):
-        for pane in prefsschema.PANES:
-            page = self._renderPane(pane)
-
-            self.categoryKeys.append(pane.id)
-            self.stackedWidget.addWidget(page)
-            self.categoryList.addItem(QListWidgetItem(stockIcon(pane.icon), trtables.prefKey(pane.id)))
-
-            # If the setting we want to focus on is on this page, bring the page to the foreground
-            if focusOn and prefsschema.findPane(focusOn) == len(self.categoryKeys) - 1:
-                control = page.findChild(QWidget, self.ControlQObjectNamePrefix + focusOn)
-                if control is not None:
-                    self.setCategory(self.stackedWidget.indexOf(page))
-                    control.setFocus()
 
     def visibleSections(self, pane: prefsschema.Pane) -> list[tuple[prefsschema.Section, list[prefsschema.Row]]]:
         sections = []
@@ -298,7 +530,7 @@ class PrefsDialog(QDialog):
         that row has no label of its own; otherwise it gets a row of its own.
         """
         page = QWidget(self)
-        page.setObjectName(f"prefspane_{pane.id}")
+        page.setObjectName(f"prefspage_{pane.id}")
 
         builder = _GridBuilder(QGridLayout(page), self.labelColumnWidth, self.ColumnGap)
         builder.wide = pane.wide
@@ -343,9 +575,9 @@ class PrefsDialog(QDialog):
 
         button.toggled.connect(toggle)
 
-        builder.addRow(None, button, builder.wide)
+        builder.addRow(None, button)
         builder.addGap(self.NoteGap)
-        builder.addRow(None, browser, builder.wide)
+        builder.addRow(None, browser)
 
     def _renderSection(self, builder: _GridBuilder, section: prefsschema.Section, rows: list[prefsschema.Row]):
         titleBeside = None
@@ -402,13 +634,11 @@ class PrefsDialog(QDialog):
 
         # Any help text? Then make a help button for it & set tooltip text on the main control.
         # A row with a note says the gist under the control already: the tooltip is enough there.
-        tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix)
+        tip = trtables.prefKeyNoDefault(key + self.LocSettingHelpSuffix).format(app=qAppName())
         hintButton = None
-        if tip and row.note:
-            control.setToolTip(tip.format(app=qAppName()))
-        elif tip:
-            tip = tip.format(app=qAppName())
+        if tip:
             control.setToolTip(tip)
+        if tip and not row.note:
             hintButton = QHintButton(self, tip)
             hintButton.makeReachable(stripAccelerators(" ".join(t for t in (caption, suffix) if t)))
             # Keep rows tight, but never below the smallest clickable size
@@ -441,7 +671,7 @@ class PrefsDialog(QDialog):
         if isChild:
             self.dependentRowWidgets[key] = ([label] if label else []) + rowWidgets
 
-        builder.addRow(label, field, builder.wide)
+        builder.addRow(label, field)
 
         noteText = trtables.prefKeyNoDefault(row.note) if row.note else ""
         if key in PrefEffects.RestartApp:
@@ -464,9 +694,9 @@ class PrefsDialog(QDialog):
                 noteField = QHBoxLayout()
                 noteField.addSpacing(self.checkBoxTextIndent(rowWidgets[0]))
                 noteField.addWidget(note)
-                builder.addRow(None, noteField, builder.wide)
+                builder.addRow(None, noteField)
             else:
-                builder.addRow(None, note, builder.wide)
+                builder.addRow(None, note)
             if isChild:
                 self.dependentRowWidgets[key].append(note)
 
@@ -556,21 +786,22 @@ class PrefsDialog(QDialog):
                 and not self.boolChoiceNames(row.key))
 
     @staticmethod
-    def boolChoiceNames(key: str) -> tuple[str, str]:
+    def boolChoiceNames(key: str) -> tuple[str, str] | None:
         """Words for the True and False choices of a bool pref shown as a choice, not a checkbox."""
         trueText = trtables.prefKeyNoDefault(key + "_true")
         falseText = trtables.prefKeyNoDefault(key + "_false")
         if trueText or falseText:
             return trueText, falseText
-        return ()
+        return None
 
     def _bindDependencies(self):
-        for childKey, (parentKey, parentValue) in self.dependencies.items():
+        for childKey, (parentKey, parentValue) in list(self.dependencies.items()):
             parent = self.findChild(QCheckBox, self.ControlQObjectNamePrefix + parentKey)
             childWidgets = self.dependentRowWidgets.get(childKey, [])
-            if parent is None or not childWidgets:  # One of them isn't shown on this platform
+            if parent is None or not childWidgets:  # Not built yet, or not shown on this platform
                 continue
             self.bindEnabled(parent, childWidgets, enabledWhen=parentValue)
+            del self.dependencies[childKey]  # Bound once
 
     def bindEnabled(self, parent: QCheckBox, widgets: list[QWidget], enabledWhen: bool = True):
         """Enable `widgets` only while `parent` is checked (or unchecked, if not `enabledWhen`)."""
@@ -581,15 +812,6 @@ class PrefsDialog(QDialog):
 
         parent.checkStateChanged.connect(follow)
         follow(parent.checkState())  # Prime enabled/disabled state
-
-    def setCategory(self, row: int):
-        self.categoryList.setCurrentRow(row)
-
-    def onCategoryChanged(self, row: int):
-        self.stackedWidget.setCurrentIndex(row)
-
-        # Remember which tab we've last clicked on for next time we open the dialog
-        PrefsDialog.lastCategory = row
 
     # -------------------------------------------------------------------------
     # Applying changes as they're made
@@ -704,7 +926,7 @@ class PrefsDialog(QDialog):
     def done(self, result: int):
         # Closing never discards anything: whatever is still waiting applies now
         with suppress(TypeError, RuntimeError):
-            QApplication.instance().focusChanged.disconnect(self.onFocusChanged)
+            GFApplication.instance().focusChanged.disconnect(self.onFocusChanged)
         self.flush()
         super().done(result)
 
@@ -967,7 +1189,9 @@ class PrefsDialog(QDialog):
         """(caption, value, object name suffix) of each choice, the default choice first."""
         default = settings.Prefs.__dataclass_fields__[prefKey].default
         if type(prefValue) is bool:
-            trueText, falseText = self.boolChoiceNames(prefKey)
+            choiceNames = self.boolChoiceNames(prefKey)
+            assert choiceNames, f"{prefKey} needs words for its choices ({prefKey}_true, {prefKey}_false)"
+            trueText, falseText = choiceNames
             choices = [(trueText, True, "true"), (falseText, False, "false")]
         else:
             choices = [(trtables.enum(member), member, member.name) for member in type(prefValue)]

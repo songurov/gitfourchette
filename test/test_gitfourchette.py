@@ -15,6 +15,7 @@ from pytestqt.qtbot import QtBot
 from gitfourchette.forms.textinputdialog import TextInputDialog
 from gitfourchette.repowidget import RepoWidget
 from .util import *
+from gitfourchette.forms.prefsdialog import PrefsDialog
 
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
@@ -239,7 +240,7 @@ def testTruncatedHistory(tempDir, mainWindow, method, action):
 
     # Change the threshold
     if action == "change threshold":
-        prefsDialog = findQDialog(mainWindow, "settings")
+        prefsDialog = findQDialog(mainWindow, "", PrefsDialog)
         maxCommits = prefsDialog.findChild(QWidget, "prefctl_maxCommits")
         waitUntilTrue(maxCommits.hasFocus)
         maxCommits.setValue(0)

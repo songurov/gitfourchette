@@ -1470,6 +1470,10 @@ class MainWindow(QMainWindow):
 
         RepoWidget.sharedSplitterSizes = copy.deepcopy(session.splitterSizes)
 
+        if session.prefsPane:
+            from gitfourchette.forms.prefsdialog import PrefsDialog
+            PrefsDialog.lastPane = session.prefsPane
+
         # Stop here if there are no tabs to load
         if not session.tabs:
             return
@@ -1538,9 +1542,11 @@ class MainWindow(QMainWindow):
             # Only on the way out. saveSession also runs every time a tab opens
             # or closes, and a workspace shouldn't absorb every repo you glance at.
             self.rememberCurrentWorkspace()
+        from gitfourchette.forms.prefsdialog import PrefsDialog
         session = settings.Session()
         session.windowGeometry = self.saveGeometry().data()
         session.splitterSizes = RepoWidget.sharedSplitterSizes.copy()
+        session.prefsPane = PrefsDialog.lastPane
         session.tabs = [widget.workdir for widget in self.tabs.widgets()]
         session.activeTabIndex = self.tabs.currentIndex()
         session.setDirty()

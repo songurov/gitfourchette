@@ -2234,11 +2234,6 @@ msgstr "Новый тег на коммите {0}"
 msgid "This name is already taken by another tag."
 msgstr "Данное имя уже взято другим тегом."
 
-#: forms/prefsdialog.py:100
-#, python-brace-format
-msgid "{app} Settings"
-msgstr "Настройки {app}"
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr "Встроенный git (в песочнице)"

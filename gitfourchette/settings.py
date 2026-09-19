@@ -548,6 +548,8 @@ class Session(PrefsFile):
     activeTabIndex              : int                   = -1
     windowGeometry              : bytes                 = b""
     splitterSizes               : dict[str, list[int]]  = dataclasses.field(default_factory=dict)
+    prefsPane                   : str                   = ""
+    "The Settings pane shown last, so that Settings opens on it again."
 
 
 # Initialize default prefs and history.

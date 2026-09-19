@@ -377,7 +377,8 @@ def testTheSettingsSwitchTurnsTheMascotOff(mainWindow):
     waitUntilTrue(mascot.isAnimating)
 
     triggerMenuAction(mainWindow.menuBar(), "file/settings")
-    dlg: PrefsDialog = findQDialog(mainWindow, "settings")
+    dlg: PrefsDialog = findQDialog(mainWindow, "", PrefsDialog)
+    dlg.setCategory("general")
     checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_homeMascot")
     assert checkBox.isChecked()
     assert dlg.findChild(QCheckBox, "prefctl_homeMascotFollowsCursor").isChecked()
@@ -397,7 +398,8 @@ def testTheSettingsSwitchTurnsTheMascotOff(mainWindow):
 
     # Switched back on: right back, nest included
     triggerMenuAction(mainWindow.menuBar(), "file/settings")
-    dlg = findQDialog(mainWindow, "settings")
+    dlg = findQDialog(mainWindow, "", PrefsDialog)
+    dlg.setCategory("general")
     dlg.findChild(QCheckBox, "prefctl_homeMascot").setChecked(True)
     dlg.accept()
     assert mascot.isAnimating()
