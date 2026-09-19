@@ -54,6 +54,7 @@ class DiffArea(QWidget):
         self.setObjectName("CommitExplorer")
         self.repoModel = repoModel
         self.commitAiProcess = None
+        self.inlineCommitPending = False
         self.commitAiProviders = availableProviders()
         self.fileViewActions = []
 
@@ -186,6 +187,8 @@ class DiffArea(QWidget):
         targetLayout.addWidget(self.commitForm)
         self.stageCommitFormHost.setVisible(not bottom)
         self.bottomCommitFormHost.setVisible(bottom)
+        if bottom and self.bottomCommitSplitter.sizes()[1] < 120:
+            self.bottomCommitSplitter.setSizes([max(300, self.height() - 220), 220])
 
     def _makeFileStack(self, repoModel):
         dirtyContainer = self._makeDirtyContainer(repoModel)
@@ -304,7 +307,8 @@ class DiffArea(QWidget):
         messageEditor.setPlaceholderText(
             _("Enter commit message. Use an empty line to separate subject and description."))
         messageEditor.setTabChangesFocus(True)
-        messageEditor.setFixedHeight(140)
+        messageEditor.setMinimumHeight(105)
+        messageEditor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         subjectCounter = QLabel(self)
         subjectCounter.setObjectName("commitSubjectCounter")
@@ -324,6 +328,7 @@ class DiffArea(QWidget):
         stashButton.setObjectName("stashButton")
         stashButton.setText(_("Stash…"))
         stashButton.setToolTip(TaskBook.tips[NewStash])
+        stashButton.setAutoRaise(True)
 
         aiButton = QToolButton(self)
         aiButton.setObjectName("commitAiButton")
@@ -337,6 +342,8 @@ class DiffArea(QWidget):
             "Română", "English", "Русский", "Українська", "Deutsch", "Français", "Español"])
         aiLanguageCombo.setCurrentText(settings.history.aiLanguage)
         aiLanguageCombo.setToolTip(_("Language for the AI-generated commit message"))
+        aiLanguageCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        aiLanguageCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
         aiDetailCombo = QComboBox(self)
         aiDetailCombo.setObjectName("commitAiDetailCombo")
@@ -346,6 +353,8 @@ class DiffArea(QWidget):
         detailIndex = aiDetailCombo.findData(settings.history.aiCommitDetail)
         aiDetailCombo.setCurrentIndex(max(0, detailIndex))
         aiDetailCombo.setToolTip(_("Level of detail and structure for the AI-generated commit message"))
+        aiDetailCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        aiDetailCombo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
         commitButton = QToolButton(self)
         commitButton.setObjectName("commitButton")
@@ -367,6 +376,7 @@ class DiffArea(QWidget):
         stagedFiles.flModel.modelReset.connect(
             lambda: unstageAllButton.setEnabled(not stagedFiles.isEmpty()))
         stagedFiles.flModel.modelReset.connect(self.refreshCommitAiButton)
+        stagedFiles.flModel.modelReset.connect(self.resetCompletedInlineCommit)
 
         def fullMessage():
             return messageEditor.toPlainText().strip()
@@ -375,6 +385,7 @@ class DiffArea(QWidget):
             message = fullMessage()
             task = AmendCommit if amendCheckBox.isChecked() else NewCommit
             if message:
+                self.inlineCommitPending = True
                 task.invoke(
                     self,
                     message,
@@ -422,7 +433,8 @@ class DiffArea(QWidget):
         commitFormLayout.addItem(QSpacerItem(1, 1, QSizePolicy.Policy.Expanding), 2, 3)
         commitFormLayout.addWidget(commitButton,        2, 4)
         commitFormLayout.addWidget(commitPushButton,    2, 5, 1, 2)
-        commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        commitFormLayout.setRowStretch(0, 1)
+        commitForm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         stageCommitFormHost = QWidget(self)
         stageCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -472,6 +484,15 @@ class DiffArea(QWidget):
         self.refreshWorktreeAiButton()
 
         return container
+
+    def resetCompletedInlineCommit(self):
+        if not self.inlineCommitPending or not self.stagedFiles.isEmpty():
+            return
+        self.inlineCommitPending = False
+        self.commitMessageEditor.clear()
+        self.signoffCommitCheckBox.setChecked(False)
+        self.noVerifyCommitCheckBox.setChecked(False)
+        self.amendCommitCheckBox.setChecked(False)
 
     def selectedWorktreePaths(self):
         paths = []
@@ -742,11 +763,19 @@ class DiffArea(QWidget):
         layout.addWidget(stack)
 
         bottomCommitFormHost = QWidget(self)
-        bottomCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        bottomCommitFormHost.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         bottomCommitFormLayout = QVBoxLayout(bottomCommitFormHost)
         bottomCommitFormLayout.setContentsMargins(QMargins())
         bottomCommitFormLayout.setSpacing(0)
-        layout.addWidget(bottomCommitFormHost)
+
+        bottomCommitSplitter = QSplitter(Qt.Orientation.Vertical, self)
+        bottomCommitSplitter.setObjectName("Split_BottomCommitForm")
+        bottomCommitSplitter.setChildrenCollapsible(False)
+        bottomCommitSplitter.addWidget(stackContainer)
+        bottomCommitSplitter.addWidget(bottomCommitFormHost)
+        bottomCommitSplitter.setStretchFactor(0, 1)
+        bottomCommitSplitter.setStretchFactor(1, 0)
+        bottomCommitSplitter.setSizes([500, 220])
 
         self.diffHeader = header
         self.diffStack = stack
@@ -758,8 +787,9 @@ class DiffArea(QWidget):
         self.diffButtons = diffTools
         self.bottomCommitFormHost = bottomCommitFormHost
         self.bottomCommitFormLayout = bottomCommitFormLayout
+        self.bottomCommitSplitter = bottomCommitSplitter
 
-        return stackContainer
+        return bottomCommitSplitter
 
     def applyCustomStyling(self):
         for smallButton in (

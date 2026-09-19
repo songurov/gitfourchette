@@ -71,6 +71,8 @@ def testTreeViewShowsWorkingDirectoryFiles(tempDir, mainWindow):
     files.selectionModel().select(second, QItemSelectionModel.SelectionFlag.Select)
     files.setTreeMode(True)
     assert files.treeModel.indexForPath("a/new.txt").isValid()
+    assert not files.treeModel.indexForPath("").isValid()
+    assert not files.treeModel.indexForPath("removed/file.txt").isValid()
     nested = files.treeModel.indexForPath("a/deep/nested/file.txt")
     assert nested.parent().data(Qt.ItemDataRole.DisplayRole) == "deep/nested"
     assert files.currentIndex().data(FileListModel.Role.FilePath) == "a/new.txt"

@@ -76,6 +76,10 @@ def testInlineCommitSkipsDialog(tempDir, mainWindow):
 
     assert not [dialog for dialog in rw.findChildren(CommitDialog) if dialog.isVisible()]
     assert rw.repo.head_commit.message == "Inline summary\n\nInline description\n"
+    assert rw.diffArea.commitMessageEditor.toPlainText() == ""
+    assert not rw.diffArea.signoffCommitCheckBox.isChecked()
+    assert not rw.diffArea.noVerifyCommitCheckBox.isChecked()
+    assert not rw.diffArea.amendCommitCheckBox.isChecked()
 
 
 def testCommit(tempDir, mainWindow):

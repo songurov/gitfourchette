@@ -346,8 +346,8 @@ class PrefEffects:
 class History(PrefsFile):
     aiProvider: str = "codex"
     aiModels: dict[str, str] = dataclasses.field(default_factory=dict)
-    aiLanguage: str = "Română"
-    aiCommitDetail: str = "detailed"
+    aiLanguage: str = "English"
+    aiCommitDetail: str = "deep"
     _filename = "history.json"
 
     class JsonRepo(TypedDict, total=False):

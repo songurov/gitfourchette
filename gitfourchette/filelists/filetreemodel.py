@@ -112,6 +112,7 @@ class FileTreeModel(QAbstractItemModel):
         return flags
 
     def indexForPath(self, path: str) -> QModelIndex:
-        node = self.paths[path]
-        assert node.parent is not None
+        node = self.paths.get(path)
+        if node is None or node.parent is None:
+            return QModelIndex()
         return self.createIndex(node.parent.children.index(node), 0, node)
