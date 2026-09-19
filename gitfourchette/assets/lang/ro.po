@@ -2272,11 +2272,6 @@ msgstr "Acest nume este deja folosit de o altă etichetă."
 msgid "{app} Settings"
 msgstr "Setări {app}"
 
-#: forms/prefsdialog.py:312
-#, python-brace-format
-msgid "{0} Handy Reference"
-msgstr "Referință rapidă: {0}"
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr "Git integrat (izolat)"
@@ -2307,24 +2302,9 @@ msgstr[0] "{n} mesaj este ascuns."
 msgstr[1] "{n} mesaje sunt ascunse."
 msgstr[2] "{n} de mesaje sunt ascunse."
 
-#: forms/prefsdialog.py:523
-#, python-brace-format
-msgid ""
-"# Enter custom terminal commands here.\n"
-"# You can then launch them from the {menu} menu.\n"
-"# Click {button} below for more information."
-msgstr ""
-"# Introdu aici comenzi de terminal personalizate.\n"
-"# Le poți lansa apoi din meniul {menu}.\n"
-"# Apasă {button} mai jos pentru mai multe informații."
-
 #: forms/prefsdialog.py:526 mainwindow.py:243 trtables.py:651
 msgid "&Commands"
 msgstr "&Comenzi"
-
-#: forms/prefsdialog.py:527
-msgid "Handy Reference"
-msgstr "Referință rapidă"
 
 #: forms/prefsdialog.py:602
 msgctxt "system default theme setting"
@@ -8432,11 +8412,6 @@ msgstr "Semnătură validă; cheie sau semnătură expirată"
 msgid "Key revoked or bad signature"
 msgstr "Cheie revocată sau semnătură invalidă"
 
-#: trtables.py:649
-#, python-brace-format
-msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
-msgstr "Copiază exemplul de mai jos și lipește-l în caseta de text. Apoi apasă OK și explorează {menu} din bara de meniu."
-
 #: trtables.py:654
 msgid "&Interactive Rebase"
 msgstr "&Rebase interactiv"
@@ -8460,3 +8435,36 @@ msgstr "Poți folosi următorii substituenți în comenzile tale:"
 #: trtables.py:661
 msgid "For advanced usage tips, please visit [the user’s guide]."
 msgstr "Pentru sfaturi de utilizare avansată, consultă [ghidul utilizatorului]."
+
+#: forms/prefsdialog.py:442
+#, python-brace-format
+msgid "Takes effect after you restart {app}."
+msgstr "Se aplică după ce repornești {app}."
+
+#: forms/prefsdialog.py:330
+msgid "Command reference"
+msgstr "Referință comenzi"
+
+#: gitdriver/gitdriver.py:88
+msgid "Enter the command that runs git."
+msgstr "Introdu comanda care rulează git."
+
+#: gitdriver/gitdriver.py:91
+msgid "This command doesn’t run git."
+msgstr "Această comandă nu rulează git."
+
+#: forms/prefsdialog.py:893
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Open {button} below for more information."
+msgstr ""
+"# Introdu aici comenzi de terminal personalizate.\n"
+"# Le poți lansa apoi din meniul {menu}.\n"
+"# Deschide {button} mai jos pentru mai multe informații."
+
+#: trtables.py:669
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
+msgstr "Copiază exemplul de mai jos și lipește-l în caseta de text. Comenzile tale apar apoi în {menu} din bara de meniu."

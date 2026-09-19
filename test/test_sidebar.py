@@ -289,8 +289,7 @@ def testRefSortModes(tempDir, mainWindow, headerKind, leafKind):
     dlg = GFApplication.instance().openPrefsDialog("refSort")
     comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_refSort")
     qcbSetIndex(comboBox, "name.+a-z")
-    dlg.accept()
-    acceptQMessageBox(mainWindow, "take effect.+until you reload")
+    dlg.accept()  # Closing Settings reloads the repos; no need to ask
     del rw, sb
     rw = mainWindow.currentRepoWidget()
     assert getNodeDatas() == sortedByNameAsc

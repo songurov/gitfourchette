@@ -5,17 +5,21 @@
 # -----------------------------------------------------------------------------
 
 import logging
+from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from gitfourchette import prefsschema, settings, trtables
+from gitfourchette.application import GFApplication
 from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.exttools.toolpresets import ToolPresets
 from gitfourchette.exttools.usercommandsyntaxhighlighter import UserCommandSyntaxHighlighter
+from gitfourchette.gitdriver import GitDriver
 from gitfourchette.localization import *
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
-from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, prefs
+from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, PrefEffects, prefs
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
 from gitfourchette.themes import ThemeName, ThemeColors, ThemeAccent, formatStyle, parseStyle
 from gitfourchette.toolbox import *
@@ -139,6 +143,18 @@ class PrefsDialog(QDialog):
     RadioGap = 16
     "Between the radio buttons of one choice, when they fit on one row."
 
+    DebounceMs = 400
+    "A count or a format applies once it stops changing for this long, so each spin step doesn't reload the diff."
+
+    CommandsDebounceMs = 800
+    "Custom commands rebuild the Commands menu: wait for a pause in the typing."
+
+    WriteDelayMs = 1000
+    "Prefs are saved this long after the last change, and when the window closes."
+
+    ReloadDelayMs = 1500
+    "Repositories reload this long after the last change that needs it, and when the window closes."
+
     @benchmark
     def __init__(self, parent: QWidget, focusOn: str = ""):
         super().__init__(parent)
@@ -147,7 +163,37 @@ class PrefsDialog(QDialog):
         self.setWindowTitle(_("{app} Settings", app=qAppName()))
 
         self.prefDiff: dict[str, Any] = {}
-        "Delta to on-disk preferences."
+        "What changed while this window was open: key -> new value."
+
+        self.valuesAtOpen: dict[str, Any] = {}
+        "Value of each assigned pref when the window opened."
+
+        self.pending: dict[str, Any] = {}
+        "Values waiting for a pause (counts, commands) or a commit (paths and commands of external programs)."
+
+        self.commitKeys: set[str] = set()
+        "Prefs that apply only once the field is left or a preset is picked, and only if valid."
+
+        self.validators: dict[str, Callable[[Any], str]] = {}
+        "Checks for commitKeys: an error message, or an empty string if the value can be used."
+
+        self.restartNotes: dict[str, QLabel] = {}
+        "Notes saying a change needs a restart, per pref key."
+
+        self.debounceTimer = QTimer(self)
+        self.debounceTimer.setSingleShot(True)
+        self.debounceTimer.timeout.connect(self.applyPendingValues)
+
+        self.writeTimer = QTimer(self)
+        self.writeTimer.setSingleShot(True)
+        self.writeTimer.setInterval(self.WriteDelayMs)
+        self.writeTimer.timeout.connect(self.writePrefs)
+
+        self.reloadTimer = QTimer(self)
+        self.reloadTimer.setSingleShot(True)
+        self.reloadTimer.setInterval(self.ReloadDelayMs)
+        self.reloadTimer.timeout.connect(self.reloadRepos)
+        self.reloadPending = False
 
         self.categoryKeys: list[str] = []
 
@@ -177,38 +223,35 @@ class PrefsDialog(QDialog):
         self.stackedWidget = QStackedWidget()
         self.stackedWidget.setFixedWidth(self.PaneWidth)
 
-        buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Help)
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-        self.guideButton = buttonBox.button(QDialogButtonBox.StandardButton.Help)
-        self.guideButton.setCheckable(True)
-        self.guideButton.clicked.connect(self.toggleGuideBrowser)
-
-        self.guideBrowser = QTextBrowser(self)
-        self.guideBrowser.setMinimumWidth(400)
-        self.guideBrowser.setOpenExternalLinks(True)
-        self.guideBrowser.setVisible(False)
-        tweakWidgetFont(self.guideBrowser, 90)
-
         layout = QGridLayout(self)
         layout.setHorizontalSpacing(20)
         layout.addWidget(self.categoryList,     0, 0, 2, 1)
         layout.addWidget(self.stackedWidget,    0, 1)
-        layout.addWidget(self.guideBrowser,     0, 2, 2, 1)
         self._fillControls(focusOn)
         self._bindDependencies()
-        layout.addWidget(buttonBox, 1, 1)  # Add buttonBox last so it comes last in tab order
+
+        # Changes apply as they're made, so there's nothing to confirm or cancel. Where the desktop
+        # expects a way out at the bottom of a window (KDE, Windows), there's a Close button.
+        if not MACOS and not GNOME:
+            buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+            buttonBox.rejected.connect(self.reject)
+            layout.addWidget(buttonBox, 1, 1)  # Add buttonBox last so it comes last in tab order
 
         layout.setColumnStretch(0, 0)
         layout.setColumnStretch(1, 2)
 
+        # Esc, the close button and Cmd+W (Ctrl+W) all close the window, keeping every change
+        closeShortcut = QShortcut(QKeySequence.StandardKey.Close, self)
+        closeShortcut.activated.connect(self.close)
+
         if not focusOn:
             # Restore last category
             self.setCategory(PrefsDialog.lastCategory)
-            buttonBox.button(QDialogButtonBox.StandardButton.Ok).setFocus()
         else:
             # Save this category if we close the dialog without changing tabs
             PrefsDialog.lastCategory = self.stackedWidget.currentIndex()
+
+        QApplication.instance().focusChanged.connect(self.onFocusChanged)
 
         self.setModal(True)
 
@@ -264,8 +307,42 @@ class PrefsDialog(QDialog):
                 builder.addGap(self.SectionGap)
             self._renderSection(builder, section, rows)
 
+        guide = trtables.prefKeyNoDefault(f"{pane.id}_guide")
+        if guide:
+            builder.addGap(self.RowGap)
+            self._renderGuide(builder, pane.id, guide)
+
         builder.addStretch()
         return page
+
+    def _renderGuide(self, builder: _GridBuilder, paneId: str, guideHtml: str):
+        """A reference for the pane, folded under a disclosure button until it's asked for."""
+        browser = QTextBrowser(self)
+        browser.setObjectName(f"prefguidetext_{paneId}")
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(guideHtml)
+        browser.setMinimumHeight(240)
+        browser.setVisible(False)
+        tweakWidgetFont(browser, 90)
+
+        button = QToolButton(self)
+        button.setObjectName(f"prefguide_{paneId}")
+        button.setText(_("Command reference"))
+        button.setAccessibleName(button.text())
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setArrowType(Qt.ArrowType.RightArrow)
+        button.setAutoRaise(True)
+        button.setCheckable(True)
+
+        def toggle(show: bool):
+            button.setArrowType(Qt.ArrowType.DownArrow if show else Qt.ArrowType.RightArrow)
+            browser.setVisible(show)
+
+        button.toggled.connect(toggle)
+
+        builder.addRow(None, button)
+        builder.addGap(self.NoteGap)
+        builder.addRow(None, browser)
 
     def _renderSection(self, builder: _GridBuilder, section: prefsschema.Section, rows: list[prefsschema.Row]):
         titleBeside = None
@@ -360,6 +437,15 @@ class PrefsDialog(QDialog):
         builder.addRow(label, field)
 
         noteText = trtables.prefKeyNoDefault(row.note) if row.note else ""
+        if key in PrefEffects.RestartApp:
+            # Shown only while the value differs from the one the app started with
+            note = self.makeNote(_("Takes effect after you restart {app}.", app=qAppName()), key)
+            self.restartNotes[key] = note
+            self.refreshRestartNote(key)
+        elif key in self.commitKeys:
+            # Shown only when the value can't be used
+            note = self.makeNote("", key)
+            note.setVisible(False)
         if noteText and note is None:
             note = self.makeNote(noteText, key)
         if note is not None:
@@ -486,45 +572,131 @@ class PrefsDialog(QDialog):
         self.categoryList.setCurrentRow(row)
 
     def onCategoryChanged(self, row: int):
-        categoryKey = self.categoryKeys[row]
-        categoryName = trtables.prefKey(categoryKey)
-        categoryGuide = trtables.prefKeyNoDefault(f"{categoryKey}_guide")
-
         self.stackedWidget.setCurrentIndex(row)
-
-        self.toggleGuideBrowser(False)
-        if categoryGuide:
-            self.guideButton.setText(_("{0} Handy Reference").format(categoryName))
-            self.guideButton.setVisible(True)
-            self.guideBrowser.setHtml(categoryGuide)
-        else:
-            self.guideButton.setVisible(False)
 
         # Remember which tab we've last clicked on for next time we open the dialog
         PrefsDialog.lastCategory = row
 
-    def toggleGuideBrowser(self, show: bool):
-        if show == self.guideBrowser.isVisible():
-            pass
-        elif show:
-            self._widthBeforeGuide = self.width()
-            self.guideBrowser.show()
-        else:
-            self.guideBrowser.hide()
-            QTimer.singleShot(0, lambda: self.resize(self._widthBeforeGuide, self.height()))
-        self.guideButton.setChecked(show)
+    # -------------------------------------------------------------------------
+    # Applying changes as they're made
 
-    def assign(self, k, v):
-        if prefs.__dict__[k] == v:
-            if k in self.prefDiff:
-                del self.prefDiff[k]
+    def assign(self, k: str, v: Any):
+        """
+        A control changed a pref. Most changes apply right away; counts, formats
+        and commands wait for a pause; paths and commands of external programs
+        wait until the field is left, and apply only if they can be used.
+        """
+        self.valuesAtOpen.setdefault(k, prefs.__dict__[k])
+        if v == self.valuesAtOpen[k]:
+            self.prefDiff.pop(k, None)
         else:
             self.prefDiff[k] = v
         logger.debug(f"Assign {k} {v} ({type(v)})")
 
+        if k in self.commitKeys:
+            self.pending[k] = v
+        elif k == "commands":
+            self.pending[k] = v
+            self.debounceTimer.start(self.CommandsDebounceMs)
+        elif type(v) is int or k == "shortTimeFormat":
+            self.pending[k] = v
+            self.debounceTimer.start(max(self.DebounceMs, self.debounceTimer.interval() if self.debounceTimer.isActive() else 0))
+        else:
+            self.applyValues({k: v})
+
+    def assignMany(self, values: dict[str, Any]):
+        """Several prefs that one control sets together, applied together after a pause."""
+        for k, v in values.items():
+            self.valuesAtOpen.setdefault(k, prefs.__dict__[k])
+            if v == self.valuesAtOpen[k]:
+                self.prefDiff.pop(k, None)
+            else:
+                self.prefDiff[k] = v
+            self.pending[k] = v
+        self.debounceTimer.start(self.DebounceMs)
+
+    def commit(self, k: str) -> bool:
+        """Apply a pending path or command once it's been entered, if it can be used."""
+        if k not in self.pending:
+            return True
+        value = self.pending[k]
+        validate = self.validators.get(k)
+        error = validate(value) if validate else ""
+        errorNote = self.findChild(QLabel, self.NoteQObjectNamePrefix + k)
+        if errorNote is not None:
+            errorNote.setText(error)
+            errorNote.setVisible(bool(error))
+        if error:
+            return False
+        del self.pending[k]
+        self.applyValues({k: value})
+        return True
+
+    def applyPendingValues(self):
+        """Apply what's waiting for a pause (not the paths waiting to be committed)."""
+        self.debounceTimer.stop()
+        values = {k: v for k, v in self.pending.items() if k not in self.commitKeys}
+        for k in values:
+            del self.pending[k]
+        if values:
+            self.applyValues(values)
+
+    def applyValues(self, values: dict[str, Any]):
+        values = {k: v for k, v in values.items() if prefs.__dict__[k] != v}
+        if not values:
+            return
+        GFApplication.instance()._applyPrefs(dict(values), quiet=True)
+        self.writeTimer.start()
+        for k in values:
+            self.refreshRestartNote(k)
+        if PrefEffects.ReloadRepo & set(values):
+            self.reloadPending = True
+            self.reloadTimer.start()
+
+    def flush(self):
+        """Apply everything still waiting, reload what needs it, and save."""
+        self.applyPendingValues()
+        for k in list(self.pending):
+            self.commit(k)
+        if self.reloadPending:
+            self.reloadRepos()
+        self.writePrefs()
+
+    def writePrefs(self):
+        self.writeTimer.stop()
+        if prefs.isDirty():
+            prefs.write()
+
+    def reloadRepos(self):
+        """Some changes (sorting, how many commits to load) take a full reload of the repositories."""
+        self.reloadTimer.stop()
+        self.reloadPending = False
+        mainWindow = GFApplication.instance().mainWindow
+        if mainWindow is not None and mainWindow.tabs.count() != 0:
+            mainWindow.reloadAllTabs()
+
+    def refreshRestartNote(self, k: str):
+        note = self.restartNotes.get(k)
+        if note is None:
+            return
+        launchValue = GFApplication.instance().prefsAtLaunch.get(k, prefs.__dict__[k])
+        note.setVisible(prefs.__dict__[k] != launchValue)
+
+    def onFocusChanged(self, old: QWidget | None, _new: QWidget | None):
+        # A count that's been typed in applies as soon as the field is left, without waiting
+        if old is not None and self.isAncestorOf(old) and self.pending:
+            self.applyPendingValues()
+
+    def done(self, result: int):
+        # Closing never discards anything: whatever is still waiting applies now
+        with suppress(TypeError, RuntimeError):
+            QApplication.instance().focusChanged.disconnect(self.onFocusChanged)
+        self.flush()
+        super().done(result)
+
     def getMostRecentValue(self, k):
-        if k in self.prefDiff:
-            return self.prefDiff[k]
+        if k in self.pending:
+            return self.pending[k]
         elif k in prefs.__dict__:
             return prefs.__dict__[k]
         else:
@@ -612,7 +784,7 @@ class PrefsDialog(QDialog):
             if builtInGit:
                 presets[_("Built-in git (sandboxed)")] = builtInGit
             presets[_("Auto-detected system git")] = ToolPresets.defaultGit(hostOnly=True)
-            return self.strControlWithPresets(key, value, presets)
+            return self.strControlWithPresets(key, value, presets, validate=GitDriver.validateGitPath)
         elif issubclass(valueType, enum.Enum):
             return self.enumControl(key, value, type(value))
         elif valueType is int:
@@ -665,8 +837,7 @@ class PrefsDialog(QDialog):
         sizeKey = "fontSize"
 
         def assignFont(family: str, size: int):
-            self.assign(familyKey, family)
-            self.assign(sizeKey, size)
+            self.assignMany({familyKey: family, sizeKey: size})
 
         fontControl.setCurrentFont(self.getMostRecentValue(familyKey), self.getMostRecentValue(sizeKey))
         fontControl.assign.connect(assignFont)
@@ -690,9 +861,16 @@ class PrefsDialog(QDialog):
         control.setEditText(prefValue)
         control.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred))
 
-        control.editTextChanged.connect(lambda text: self.assign(prefKey, text))
-
+        # Half-typed paths and commands never reach the app: they apply once the field
+        # is left (or a preset is picked), and only if they can be used.
+        self.commitKeys.add(prefKey)
         if validate:
+            self.validators[prefKey] = validate
+        control.editTextChanged.connect(lambda text: self.assign(prefKey, text))
+        control.lineEdit().editingFinished.connect(lambda: self.commit(prefKey))
+        control.activated.connect(lambda _index: self.commit(prefKey))
+
+        if validate and prefKey != "gitPath":  # Running git on each keystroke would be too slow
             validator = ValidatorMultiplexer(self)
             validator.connectInput(control.lineEdit(), validate, mustBeValid=False)
             validator.run()
@@ -714,9 +892,9 @@ class PrefsDialog(QDialog):
         control.setPlaceholderText(_(
             "# Enter custom terminal commands here.\n"
             "# You can then launch them from the {menu} menu.\n"
-            "# Click {button} below for more information.",
+            "# Open {button} below for more information.",
             menu=tquo(stripAccelerators(_("&Commands"))),
-            button=tquo(_("Handy Reference"))))
+            button=tquo(_("Command reference"))))
 
         control.setPlainText(prefValue)
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
@@ -731,8 +909,7 @@ class PrefsDialog(QDialog):
         countLabel.setProperty("class", "secondary")
 
         def refresh():
-            pending = self.getMostRecentValue("resetDontShowAgain")
-            count = 0 if pending else len(prefs.dontShowAgain)
+            count = len(prefs.dontShowAgain)
             countLabel.setText(_n("{n} message is hidden.", "{n} messages are hidden.", count))
             button.setEnabled(count > 0)
 

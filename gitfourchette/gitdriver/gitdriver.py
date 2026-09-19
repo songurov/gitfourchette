@@ -73,6 +73,25 @@ class GitDriver(QProcess):
                                     isCancelled=isCancelled)
 
     @classmethod
+    def validateGitPath(cls, gitPath: str, timeoutMsec: int = 2000) -> str:
+        """
+        Why this command can't be used to run git, or an empty string if it can:
+        `<gitPath> --version` has to answer like git within the time limit.
+        """
+        from gitfourchette.localization import _
+
+        try:
+            tokens = ToolCommands.splitCommandTokens(gitPath)
+        except ValueError as exc:
+            return str(exc)
+        if not tokens:
+            return _("Enter the command that runs git.")
+        output = ToolCommands.runSync(*tokens, "--version", timeoutMsec=timeoutMsec)
+        if not output.startswith("git version"):
+            return _("This command doesn’t run git.")
+        return ""
+
+    @classmethod
     def setGitPath(cls, gitPath: str):
         cls._commandStem = ToolCommands.splitCommandTokens(gitPath)
         cls._cachedGitVersionValid = False

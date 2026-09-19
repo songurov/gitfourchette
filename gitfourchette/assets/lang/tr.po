@@ -2240,11 +2240,6 @@ msgstr "Bu ad zaten başka bir etiket tarafından kullanılıyor."
 msgid "{app} Settings"
 msgstr "{app} Ayarları"
 
-#: forms/prefsdialog.py:312
-#, python-brace-format
-msgid "{0} Handy Reference"
-msgstr "{0} Hızlı Başvuru"
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr "Yerleşik git (korumalı alanda)"
@@ -2274,24 +2269,9 @@ msgid_plural "{n} messages are hidden."
 msgstr[0] "{n} ileti gizli."
 msgstr[1] "{n} ileti gizli."
 
-#: forms/prefsdialog.py:523
-#, python-brace-format
-msgid ""
-"# Enter custom terminal commands here.\n"
-"# You can then launch them from the {menu} menu.\n"
-"# Click {button} below for more information."
-msgstr ""
-"# Özel terminal komutlarınızı buraya girin.\n"
-"# Daha sonra bunları {menu} menüsünden başlatabilirsiniz.\n"
-"# Daha fazla bilgi için aşağıdaki {button} düğmesine tıklayın."
-
 #: forms/prefsdialog.py:526 mainwindow.py:243 trtables.py:651
 msgid "&Commands"
 msgstr "&Komutlar"
-
-#: forms/prefsdialog.py:527
-msgid "Handy Reference"
-msgstr "Hızlı Başvuru"
 
 #: forms/prefsdialog.py:602
 msgctxt "system default theme setting"
@@ -8344,11 +8324,6 @@ msgstr "İmza geçerli; Anahtarın veya imzanın süresi dolmuş"
 msgid "Key revoked or bad signature"
 msgstr "Anahtar iptal edilmiş veya imza geçersiz"
 
-#: trtables.py:649
-#, python-brace-format
-msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
-msgstr "Aşağıdaki örneği kopyalayıp metin kutusuna yapıştırabilirsiniz. Ardından Tamam'a tıklayın ve menü çubuğundaki {menu} menüsünü keşfedin."
-
 #: trtables.py:654
 msgid "&Interactive Rebase"
 msgstr "&Etkileşimli Yeniden Temellendir"
@@ -8372,3 +8347,36 @@ msgstr "Komutlarınızda aşağıdaki yer tutucuları kullanabilirsiniz:"
 #: trtables.py:661
 msgid "For advanced usage tips, please visit [the user’s guide]."
 msgstr "Gelişmiş kullanım ipuçları için lütfen [kullanıcı kılavuzunu] ziyaret edin."
+
+#: forms/prefsdialog.py:442
+#, python-brace-format
+msgid "Takes effect after you restart {app}."
+msgstr "{app} yeniden başlatıldıktan sonra geçerli olur."
+
+#: forms/prefsdialog.py:330
+msgid "Command reference"
+msgstr "Komut başvurusu"
+
+#: gitdriver/gitdriver.py:88
+msgid "Enter the command that runs git."
+msgstr "git'i çalıştıran komutu girin."
+
+#: gitdriver/gitdriver.py:91
+msgid "This command doesn’t run git."
+msgstr "Bu komut git'i çalıştırmıyor."
+
+#: forms/prefsdialog.py:893
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Open {button} below for more information."
+msgstr ""
+"# Özel terminal komutlarınızı buraya girin.\n"
+"# Daha sonra bunları {menu} menüsünden başlatabilirsiniz.\n"
+"# Daha fazla bilgi için aşağıdaki {button} bölümünü açın."
+
+#: trtables.py:669
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
+msgstr "Aşağıdaki örneği kopyalayıp metin kutusuna yapıştırabilirsiniz. Komutlarınız ardından menü çubuğundaki {menu} menüsünde görünür."

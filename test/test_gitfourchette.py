@@ -244,8 +244,7 @@ def testTruncatedHistory(tempDir, mainWindow, method, action):
         waitUntilTrue(maxCommits.hasFocus)
         maxCommits.setValue(0)
         assert maxCommits.text() == "\u221E", "infinity symbol"
-        prefsDialog.accept()
-        acceptQMessageBox(mainWindow, "new setting.+take effect.+until you reload")
+        prefsDialog.accept()  # Closing Settings reloads the repos; no need to ask
 
     # Heads up! RepoWidget changes after a full reload
     rw = mainWindow.currentRepoWidget()

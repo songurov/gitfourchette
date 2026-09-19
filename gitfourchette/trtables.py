@@ -667,7 +667,7 @@ def _userCommandsGuide() -> str:
     tok { font-weight: bold; }
     </style><body>""")
     markup += paragraphs(_("Feel free to copy the sample below and paste it into the text box. "
-                           "Then, click OK, and explore {menu} in the menu bar.",
+                           "Your commands then appear in {menu} in the menu bar.",
                            menu=tquo(stripAccelerators(_("&Commands")))))
     markup += textwrap.dedent(f"""\
     <pre>

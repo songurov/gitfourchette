@@ -2239,11 +2239,6 @@ msgstr "Данное имя уже взято другим тегом."
 msgid "{app} Settings"
 msgstr "Настройки {app}"
 
-#: forms/prefsdialog.py:312
-#, python-brace-format
-msgid "{0} Handy Reference"
-msgstr "{0}: краткая справка"
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr "Встроенный git (в песочнице)"
@@ -2274,24 +2269,9 @@ msgstr[0] "{n} сообщение скрыто."
 msgstr[1] "{n} сообщения скрыты."
 msgstr[2] "{n} сообщений скрыто."
 
-#: forms/prefsdialog.py:523
-#, python-brace-format
-msgid ""
-"# Enter custom terminal commands here.\n"
-"# You can then launch them from the {menu} menu.\n"
-"# Click {button} below for more information."
-msgstr ""
-"# Введите здесь свои команды терминала.\n"
-"# Затем их можно запускать из меню {menu}.\n"
-"# Нажмите {button} ниже, чтобы узнать больше."
-
 #: forms/prefsdialog.py:526 mainwindow.py:243 trtables.py:651
 msgid "&Commands"
 msgstr "&Команды"
-
-#: forms/prefsdialog.py:527
-msgid "Handy Reference"
-msgstr "Краткая справка"
 
 #: forms/prefsdialog.py:602
 msgctxt "system default theme setting"
@@ -8024,11 +8004,6 @@ msgstr "Подпись верна; срок действия ключа или �
 msgid "Key revoked or bad signature"
 msgstr "Ключ отозван или подпись неверна"
 
-#: trtables.py:649
-#, python-brace-format
-msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
-msgstr "Можете скопировать пример ниже и вставить его в текстовое поле. Затем нажмите OK и загляните в меню {menu}."
-
 #: trtables.py:654
 msgid "&Interactive Rebase"
 msgstr "&Интерактивное перебазирование"
@@ -8052,6 +8027,39 @@ msgstr "В командах можно использовать следующи
 #: trtables.py:661
 msgid "For advanced usage tips, please visit [the user’s guide]."
 msgstr "Советы по продвинутому использованию смотрите в [руководстве пользователя]."
+
+#: forms/prefsdialog.py:442
+#, python-brace-format
+msgid "Takes effect after you restart {app}."
+msgstr "Вступит в силу после перезапуска {app}."
+
+#: forms/prefsdialog.py:330
+msgid "Command reference"
+msgstr "Справка по командам"
+
+#: gitdriver/gitdriver.py:88
+msgid "Enter the command that runs git."
+msgstr "Введите команду, которая запускает git."
+
+#: gitdriver/gitdriver.py:91
+msgid "This command doesn’t run git."
+msgstr "Эта команда не запускает git."
+
+#: forms/prefsdialog.py:893
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Open {button} below for more information."
+msgstr ""
+"# Введите здесь свои команды терминала.\n"
+"# Затем их можно запускать из меню {menu}.\n"
+"# Откройте {button} ниже, чтобы узнать больше."
+
+#: trtables.py:669
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
+msgstr "Можете скопировать пример ниже и вставить его в текстовое поле. Ваши команды появятся в меню {menu}."
 
 #~ msgid "Show details about this commit"
 #~ msgstr "Показать детали о коммите"

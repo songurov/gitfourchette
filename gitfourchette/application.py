@@ -74,6 +74,8 @@ class GFApplication(QApplication):
 
         self.mainWindow = None
         self.initialSession = None
+        self.prefsAtLaunch = {}
+        "Values of the prefs that take a restart to apply fully, as the app started with them."
         self.commandLinePaths = []
         self.installedLocale = None
         self.qtbaseTranslator = QTranslator(self)
@@ -283,6 +285,7 @@ class GFApplication(QApplication):
         settings.prefs.reset()
         with NonCriticalOperation("Loading prefs"):
             settings.prefs.load()
+        self.prefsAtLaunch = {key: settings.prefs.__dict__[key] for key in settings.PrefEffects.RestartApp}
 
         # Load history file
         settings.history.reset()
@@ -480,7 +483,13 @@ class GFApplication(QApplication):
     def applyPrefs(cls, **kwargs):
         cls.instance()._applyPrefs(kwargs)
 
-    def _applyPrefs(self, prefDiff: dict[str, Any], writeNow=False):
+    def _applyPrefs(self, prefDiff: dict[str, Any], writeNow=False, quiet=False):
+        """
+        Commit prefDiff to the prefs and bring the app in line with them.
+
+        quiet: the change comes from the Settings window, which says in place
+        what a change needs (a restart, a reload); don't pop up any message box.
+        """
         from gitfourchette.settings import prefs
 
         # Reset "don't show again" dialogs
@@ -548,7 +557,7 @@ class GFApplication(QApplication):
 
         changedKeys = set(prefDiff.keys())
         self.prefsChanged.emit()
-        self.mainWindow.onApplyPrefs(changedKeys)
+        self.mainWindow.onApplyPrefs(changedKeys, quiet=quiet)
 
     def dispatchSimplePrefsToStandaloneClasses(self):
         from gitfourchette import settings
@@ -783,8 +792,8 @@ class GFApplication(QApplication):
     def openPrefsDialog(self, focusOnPrefKey: str = "") -> PrefsDialog:
         from gitfourchette.forms.prefsdialog import PrefsDialog
 
+        # Settings apply as they're changed: there's nothing to do once the window closes
         dlg = PrefsDialog(self.mainWindow, focusOnPrefKey)
-        dlg.accepted.connect(lambda: self._applyPrefs(dlg.prefDiff, writeNow=True))
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)  # don't leak dialog
         dlg.show()
         return dlg

@@ -8,11 +8,13 @@ import dataclasses
 import enum
 import gettext
 import re
+import shlex
 import textwrap
 
 import pytest
 
 from gitfourchette import settings, trtables
+from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.forms.prefsdialog import PrefsDialog
 from gitfourchette.nav import NavLocator
 from gitfourchette.toolbox.fontpicker import FontPicker
@@ -76,28 +78,30 @@ def testPrefsDialog(tempDir, mainWindow):
     assert dlg.stackedWidget.currentIndex() == 2
     dlg.reject()
 
-    # Change statusbar setting, and cancel
+    # Change statusbar setting: it applies at once, and closing with Esc keeps it
     assert mainWindow.statusBar().isVisible()
     dlg = openPrefs()
     checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_showStatusBar")
     assert checkBox.isChecked()
     checkBox.setChecked(False)
+    assert not mainWindow.statusBar().isVisible()
     dlg.reject()
-    assert mainWindow.statusBar().isVisible()
-
-    # Change statusbar setting, and accept
-    dlg = openPrefs()
-    checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_showStatusBar")
-    assert checkBox.isChecked()
-    checkBox.setChecked(False)
-    dlg.accept()
     assert not mainWindow.statusBar().isVisible()
 
-    # Change topo setting, and accept
+    # Change it back, and close
+    dlg = openPrefs()
+    checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_showStatusBar")
+    assert not checkBox.isChecked()
+    checkBox.setChecked(True)
+    dlg.accept()
+    assert mainWindow.statusBar().isVisible()
+
+    # Change topo setting: the repo reloads when Settings closes, without asking
     dlg = openPrefs()
     dlg.findChild(QRadioButton, "prefctl_chronologicalOrder_false").click()
     dlg.accept()
-    acceptQMessageBox(mainWindow, "take effect.+reload")
+    assert not settings.prefs.chronologicalOrder
+    assert not mainWindow.findChildren(QMessageBox)
 
 
 def testPrefsComboBoxWithPreview(tempDir, mainWindow):
@@ -160,12 +164,21 @@ def testPrefsLanguageControl(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     mainWindow.openRepo(wd)
 
-    # Change font setting, and accept
+    # Change the language: a note says it takes a restart, instead of a message box
     dlg = GFApplication.instance().openPrefsDialog("language")
     comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_language")
+    note: QLabel = dlg.findChild(QLabel, "prefnote_language")
+    assert not note.isVisible()
     qcbSetIndex(comboBox, "fran.ais")
+    assert settings.prefs.language == "fr"
+    assert note.isVisible()
+    assert "restart" in note.text()
+    assert not mainWindow.findChildren(QMessageBox)
+
+    # Back to what the app started with: nothing to restart for
+    qcbSetIndex(comboBox, "system default")
+    assert not note.isVisible()
     dlg.accept()
-    acceptQMessageBox(mainWindow, "application des pr.f.rences")
 
 
 def testPrefsRecreateDiffDocument(tempDir, mainWindow):
@@ -239,16 +252,13 @@ def testPrefsUserCommandsSyntaxHighlighter(mainWindow):
 
 
 def testPrefsUserCommandsGuide(mainWindow):
-    dlg = GFApplication.instance().openPrefsDialog("language")
-    if not QT5:  # Qt 5 doesn't want to hide the guide button initially, but I don't care about Qt 5
-        assert not dlg.guideButton.isVisible()
-    dlg.reject()
-
     dlg = GFApplication.instance().openPrefsDialog("commands")
-    guideBrowser = dlg.guideBrowser
-    guideButton = dlg.guideButton
+    guideButton: QToolButton = dlg.findChild(QToolButton, "prefguide_userCommands")
+    guideBrowser: QTextBrowser = dlg.findChild(QTextBrowser, "prefguidetext_userCommands")
     assert guideButton.isVisible()
+    assert guideButton.accessibleName() == "Command reference"
     assert not guideBrowser.isVisible()
+    assert "click OK" not in guideBrowser.toPlainText()  # There's no OK button any more
 
     # Click button to show, click button again to hide
     guideButton.click()
@@ -286,12 +296,12 @@ def testPrefsQtStyleVariantPicker(mainWindow):
     assert accent1 != accent2
 
 
-@pytest.mark.parametrize(["nativeName", "applySettings", "pushBranch", "repoMenu"], [
-    ("rom.n", "aplică setările", "Fă push la ramură", "&Depozit"),  # "română", in its own name
-    ("русский", "Применение настроек", "Отправить ветку", "&Репо"),
-    ("Türkçe", "Ayarları Uygula", "Dalı gönder", "De&po"),
+@pytest.mark.parametrize(["nativeName", "pushBranch", "repoMenu"], [
+    ("rom.n", "Fă push la ramură", "&Depozit"),  # "română", in its own name
+    ("русский", "Отправить ветку", "&Репо"),
+    ("Türkçe", "Dalı gönder", "De&po"),
 ], ids=["ro", "ru", "tr"])
-def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName, applySettings, pushBranch, repoMenu):
+def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName, pushBranch, repoMenu):
     from gitfourchette.tasks import PushBranch
     from gitfourchette.tasks.taskbook import TaskBook
 
@@ -299,7 +309,6 @@ def testTranslationIsOfferedAndTranslatesTheApp(tempDir, mainWindow, nativeName,
     comboBox: QComboBox = dlg.findChild(QWidget, "prefctl_language")
     qcbSetIndex(comboBox, nativeName)
     dlg.accept()
-    acceptQMessageBox(mainWindow, applySettings)
     try:
         assert TaskBook.names[PushBranch] == pushBranch
         mainWindow.fillGlobalMenuBar()
@@ -769,3 +778,95 @@ def testNotesAreSecondaryTextButNeverTiny(mainWindow, monkeypatch, macos):
         else:  # Desktop fonts are small already: the color alone sets notes apart
             assert note.font().pointSizeF() == appSize, note.objectName()
     dlg.reject()
+
+
+def testSettingsApplyAsTheyChangeAndClosingKeepsThem(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("showToolBar")
+    assert not dlg.findChildren(QDialogButtonBox) or not MACOS  # Nothing to confirm or cancel on macOS
+    assert not [b for b in dlg.findChildren(QPushButton) if b.text().replace("&", "") in ("OK", "Cancel")]
+
+    checkBox: QCheckBox = dlg.findChild(QCheckBox, "prefctl_showToolBar")
+    checkBox.setChecked(False)
+    assert not settings.prefs.showToolBar
+    assert not mainWindow.mainToolBar.isVisibleTo(mainWindow)
+
+    QTest.keyClick(dlg, Qt.Key.Key_Escape)  # Esc closes, and keeps the change
+    assert not dlg.isVisible()
+    assert not settings.prefs.showToolBar
+    GFApplication.applyPrefs(showToolBar=True)
+
+
+def testCountsApplyAfterAPauseOrWhenTheWindowCloses(mainWindow):
+    dlg = GFApplication.instance().openPrefsDialog("tabSpaces")
+    spinBox: QSpinBox = dlg.findChild(QSpinBox, "prefctl_tabSpaces")
+    spinBox.setValue(5)
+    spinBox.setValue(6)
+    assert settings.prefs.tabSpaces == 4  # Not at every step
+    waitUntilTrue(lambda: settings.prefs.tabSpaces == 6)
+
+    spinBox.setValue(8)
+    dlg.reject()  # Still waiting for its pause, but closing never loses it
+    assert settings.prefs.tabSpaces == 8
+
+
+def testSettingsAreSavedSoonAfterAChange(mainWindow):
+    prefsPath = Path(settings.prefs._getFullPath(forWriting=True))
+    dlg = GFApplication.instance().openPrefsDialog("wordWrap")
+    dlg.findChild(QCheckBox, "prefctl_wordWrap").setChecked(True)
+    waitUntilTrue(lambda: prefsPath.is_file() and '"wordWrap": true' in prefsPath.read_text())
+    dlg.reject()
+
+
+def testReloadingSettingsAskNothingAndReloadOnce(tempDir, mainWindow, monkeypatch):
+    wd = unpackRepo(tempDir)
+    mainWindow.openRepo(wd)
+    reloads = []
+    monkeypatch.setattr(mainWindow, "reloadAllTabs", lambda: reloads.append(1))
+
+    dlg = GFApplication.instance().openPrefsDialog("refSort")
+    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_refSort")
+    qcbSetIndex(comboBox, "name, a-z")
+    qcbSetIndex(comboBox, "name, z-a")
+    dlg.findChild(QRadioButton, "prefctl_chronologicalOrder_false").click()
+    assert not mainWindow.findChildren(QMessageBox)
+    assert reloads == []
+    dlg.accept()
+    assert reloads == [1]
+    assert settings.prefs.refSort == settings.RefSort.AlphaDesc
+
+
+def testHalfTypedGitPathIsNeverUsed(mainWindow):
+    from gitfourchette.gitdriver import GitDriver
+
+    goodPath = settings.prefs.gitPath
+    stemBefore = list(GitDriver._commandStem)
+
+    dlg = GFApplication.instance().openPrefsDialog("gitPath")
+    comboBox: QComboBox = dlg.findChild(QComboBox, "prefctl_gitPath")
+    note: QLabel = dlg.findChild(QLabel, "prefnote_gitPath")
+    assert not note.isVisible()
+
+    comboBox.lineEdit().clear()
+    QTest.keyClicks(comboBox.lineEdit(), "/usr/bi")
+    comboBox.lineEdit().editingFinished.emit()
+    assert settings.prefs.gitPath == goodPath
+    assert GitDriver._commandStem == stemBefore
+    assert note.isVisible()
+    assert note.text() == "This command doesn’t run git."
+
+    dlg.reject()  # Closing doesn't sneak it in either
+    assert settings.prefs.gitPath == goodPath
+    assert GitDriver._commandStem == stemBefore
+
+    # A path that runs git is taken as soon as it's entered
+    dlg = GFApplication.instance().openPrefsDialog("gitPath")
+    comboBox = dlg.findChild(QComboBox, "prefctl_gitPath")
+    comboBox.lineEdit().setText(shlex.quote(ToolCommands.which("git")) + " ")
+    comboBox.lineEdit().editingFinished.emit()
+    assert settings.prefs.gitPath.endswith(" ")
+    assert not dlg.findChild(QLabel, "prefnote_gitPath").isVisible()
+    dlg.reject()
+    GFApplication.applyPrefs(gitPath=goodPath)
+
+    assertTranslatedInForkLanguages("This command doesn’t run git.", "Takes effect after you restart {app}.",
+                                    "Command reference")

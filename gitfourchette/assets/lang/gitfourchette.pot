@@ -2266,11 +2266,6 @@ msgstr ""
 msgid "{app} Settings"
 msgstr ""
 
-#: forms/prefsdialog.py:312
-#, python-brace-format
-msgid "{0} Handy Reference"
-msgstr ""
-
 #: forms/prefsdialog.py:422
 msgid "Built-in git (sandboxed)"
 msgstr ""
@@ -2300,20 +2295,8 @@ msgid_plural "{n} messages are hidden."
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/prefsdialog.py:523
-#, python-brace-format
-msgid ""
-"# Enter custom terminal commands here.\n"
-"# You can then launch them from the {menu} menu.\n"
-"# Click {button} below for more information."
-msgstr ""
-
 #: forms/prefsdialog.py:526 mainwindow.py:243 trtables.py:651
 msgid "&Commands"
-msgstr ""
-
-#: forms/prefsdialog.py:527
-msgid "Handy Reference"
 msgstr ""
 
 #: forms/prefsdialog.py:602
@@ -8363,11 +8346,6 @@ msgstr ""
 msgid "Key revoked or bad signature"
 msgstr ""
 
-#: trtables.py:649
-#, python-brace-format
-msgid "Feel free to copy the sample below and paste it into the text box. Then, click OK, and explore {menu} in the menu bar."
-msgstr ""
-
 #: trtables.py:654
 msgid "&Interactive Rebase"
 msgstr ""
@@ -8390,4 +8368,34 @@ msgstr ""
 
 #: trtables.py:661
 msgid "For advanced usage tips, please visit [the user’s guide]."
+msgstr ""
+
+#: forms/prefsdialog.py:442
+#, python-brace-format
+msgid "Takes effect after you restart {app}."
+msgstr ""
+
+#: forms/prefsdialog.py:330
+msgid "Command reference"
+msgstr ""
+
+#: gitdriver/gitdriver.py:88
+msgid "Enter the command that runs git."
+msgstr ""
+
+#: gitdriver/gitdriver.py:91
+msgid "This command doesn’t run git."
+msgstr ""
+
+#: forms/prefsdialog.py:893
+#, python-brace-format
+msgid ""
+"# Enter custom terminal commands here.\n"
+"# You can then launch them from the {menu} menu.\n"
+"# Open {button} below for more information."
+msgstr ""
+
+#: trtables.py:669
+#, python-brace-format
+msgid "Feel free to copy the sample below and paste it into the text box. Your commands then appear in {menu} in the menu bar."
 msgstr ""

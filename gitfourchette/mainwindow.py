@@ -1643,17 +1643,24 @@ class MainWindow(QMainWindow):
         self.showStatusBarAction.setChecked(settings.prefs.showStatusBar)
         self.showMenuBarAction.setChecked(settings.prefs.showMenuBar)
 
-    def onApplyPrefs(self, changedKeys: set[str]) -> None:
+    def onApplyPrefs(self, changedKeys: set[str], quiet: bool = False) -> None:
+        """
+        quiet: the Settings window made the change. It says in place when a
+        setting needs a restart, and reloads the repositories itself when it
+        closes, so no message box interrupts the user there.
+        """
         if "homeMascot" in changedKeys:
             self.welcomeWidget.mascot.applyPrefs()
 
-        if "showMenuBar" in changedKeys and not settings.prefs.showMenuBar:
+        if "showMenuBar" in changedKeys and not settings.prefs.showMenuBar and not quiet:
             self.showMenuBarHiddenWarning()
 
         if PrefEffects.RebuildMenu & changedKeys:
             self.fillGlobalMenuBar()
 
-        if PrefEffects.RestartApp & changedKeys:
+        if quiet:
+            pass
+        elif PrefEffects.RestartApp & changedKeys:
             showInformation(
                 self,
                 _("Apply Settings"),
