@@ -1179,6 +1179,8 @@ def testSelectingARepoShowsItsReadme(tempDir, mainWindow):
 
 
 def testReadmeIsFoundWhateverItIsCalled(tempDir, mainWindow):
+    from gitfourchette.reposcan import findReadme
+
     root = tempDir.name
     welcome = mainWindow.welcomeWidget
 
@@ -1186,7 +1188,7 @@ def testReadmeIsFoundWhateverItIsCalled(tempDir, mainWindow):
                        ("README", "bare"), ("README.rst", "restructured")]:
         repo = makeRepoAt(root, f"named/{name.replace('.', '_')}")
         writeFile(os.path.join(repo, name), body)
-        assert os.path.basename(welcome.findReadme(repo)) == name
+        assert os.path.basename(findReadme(repo)) == name
         welcome.showReadme(repo)
         assert body in welcome.readmeView.toPlainText()
 
@@ -1254,6 +1256,100 @@ def testReposWithoutAReadmeAreCountedAndFlagged(tempDir, mainWindow):
     assert "2 without a README" in welcome.paneStatus.text()
     assert "No README" in findItem(welcome, bare).toolTip(0)
     assert "No README" not in findItem(welcome, withOne).toolTip(0)
+
+
+def testTreeLooksIntoNoRepoFolderOnTheUiThread(tempDir, mainWindow, monkeypatch):
+    """
+    The tree is laid out on the UI thread, at startup before the window first
+    appears, and again at every batch a scan reports. Looking for each repo's
+    README there listed every repo's folder: behind the macOS privacy prompt
+    for ~/Documents, the window never appeared at all.
+    """
+    root = tempDir.name
+    withOne = makeRepoAt(root, "g/documented")
+    bare = makeRepoAt(root, "g/bare")
+    writeFile(f"{withOne}/README.md", "# Documented")
+
+    settings.history.scanRoots = [root]
+    welcome = mainWindow.welcomeWidget
+    welcome.refresh()
+    waitForScan(welcome)
+
+    realScandir = os.scandir
+    listedOnUiThread = []
+
+    def scandir(path="."):
+        if threading.current_thread() is threading.main_thread():
+            listedOnUiThread.append(os.fspath(path))
+        return realScandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+
+    # The next start: the tree comes from the cache, before any scan
+    welcome.populate([RepoInfo.fromDict(d) for d in settings.history.scannedRepos])
+
+    assert "1 without a README" in welcome.paneStatus.text()
+    assert "No README" in findItem(welcome, bare).toolTip(0)
+    assert "No README" not in findItem(welcome, withOne).toolTip(0)
+    assert [] == listedOnUiThread
+
+
+def testReadmeKnowledgeIsCachedAndAnOlderCacheFlagsNothing(tempDir, mainWindow):
+    root = tempDir.name
+    bare = makeRepoAt(root, "g/bare")
+    welcome = mainWindow.welcomeWidget
+    waitForScan(welcome)  # the one the window started with
+
+    for known in (True, False):
+        settings.history.scannedRepos = [RepoInfo(path=bare, branch="master", hasReadme=known).asDict()]
+        settings.history.setDirty()
+        settings.history.write()
+        reloaded = settings.History()
+        reloaded.load()
+        assert [known] == [RepoInfo.fromDict(d).hasReadme for d in reloaded.scannedRepos]
+
+    # Written before the scan looked for READMEs: not knowing isn't "no README"
+    settings.history.scannedRepos = [{"path": bare, "branch": "master", "dirty": False}]
+    old = RepoInfo.fromDict(settings.history.scannedRepos[0])
+    assert old.hasReadme is None
+    welcome.populate([old])
+    assert "without a README" not in welcome.paneStatus.text()
+    assert "No README" not in findItem(welcome, bare).toolTip(0)
+
+    # ...until the scan has looked
+    settings.history.scanRoots = [root]
+    welcome.rescan(force=True)
+    waitForScan(welcome)
+    assert "1 without a README" in welcome.paneStatus.text()
+    assert "No README" in findItem(welcome, bare).toolTip(0)
+    assert [False] == [d["hasReadme"] for d in settings.history.scannedRepos]
+
+
+def testRecentRepoOutsideTheScanIsStillCheckedForAReadme(tempDir, mainWindow):
+    from gitfourchette.reposcan import RepoScanner
+
+    root = tempDir.name
+    scanned = makeRepoAt(root, "scanned/repo")
+    writeFile(f"{scanned}/README.md", "# Scanned")
+    elsewhere = makeRepoAt(root, ".hidden/bare")  # the walk never enters a hidden folder
+    settings.history.addRepo(elsewhere)
+
+    # Found by the scanner, on its thread; nothing else is read from it
+    scanner = RepoScanner([root], DEFAULT_MAX_DEPTH, recentPaths=[elsewhere])
+    results = []
+    scanner.resultsReady.connect(results.append)
+    scanner.run()
+    [infos] = results
+    assert {scanned: True, elsewhere: False} == {i.path: i.hasReadme for i in infos}
+    assert {scanned: "master", elsewhere: ""} == {i.path: i.branch for i in infos}
+
+    # Home counts and flags it as it always did
+    settings.history.scanRoots = [root]
+    welcome = mainWindow.welcomeWidget
+    welcome.refresh()
+    waitForScan(welcome)
+    assert "1 without a README" in welcome.paneStatus.text()
+    assert "No README" in findItem(welcome, elsewhere).toolTip(0)
 
 
 def testBrokenImagesAreLeftOutOfThePreview(tempDir, mainWindow):

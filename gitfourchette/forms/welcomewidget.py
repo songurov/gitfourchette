@@ -14,7 +14,8 @@ from gitfourchette.forms.ui_welcomewidget import Ui_WelcomeWidget
 from gitfourchette.localization import *
 from gitfourchette.qt import *
 from gitfourchette.reposcan import (
-    DEFAULT_MAX_DEPTH, RepoDetails, RepoInfo, RepoScanner, defaultScanRoots, inspectRepoDetails)
+    DEFAULT_MAX_DEPTH, RepoDetails, RepoInfo, RepoScanner, defaultScanRoots, findReadme,
+    inspectRepoDetails)
 from gitfourchette.toolbox import *
 from gitfourchette.forms.homemascot import HomeMascot
 
@@ -73,7 +74,6 @@ class WelcomeWidget(QFrame):
         self.ui.splitter.setStretchFactor(1, 4)
         self.ui.splitter.setSizes([280, 900])
 
-    README_NAMES = ("README.md", "README.markdown", "README.rst", "README.txt", "README")
     README_SIZE_LIMIT = 512 * 1024
     "A README is meant to be read; anything larger is something else."
 
@@ -161,18 +161,6 @@ class WelcomeWidget(QFrame):
         layout.addWidget(self.repoFacts)
         layout.addWidget(self.repoTabs)
 
-    def findReadme(self, repoPath: str) -> str:
-        """Path of this repo’s README, whatever it chose to call it."""
-        try:
-            entries = {e.name.casefold(): e for e in os.scandir(repoPath) if e.is_file()}
-        except OSError:
-            return ""
-        for name in WelcomeWidget.README_NAMES:
-            entry = entries.get(name.casefold())
-            if entry is not None:
-                return entry.path
-        return ""
-
     @staticmethod
     def dropUnreachableImages(markdown: str, basePath: str) -> str:
         """
@@ -200,8 +188,11 @@ class WelcomeWidget(QFrame):
 
         The left half of this page was empty space; a click in the tree now
         says what the thing actually is, without opening it.
+
+        This reads the disk on the UI thread, but only for the one repo you
+        clicked, with the window already up; the tree never does.
         """
-        readmePath = self.findReadme(repoPath)
+        readmePath = findReadme(repoPath)
         if not readmePath:
             return False
 
@@ -431,6 +422,10 @@ class WelcomeWidget(QFrame):
             return []
         return defaultScanRoots()  # pragma: no cover - APP_TESTMODE takes the branch above
 
+    def recentPaths(self) -> list[str]:
+        return [os.path.normpath(p) for p in
+                settings.history.getRecentRepoPaths(settings.prefs.maxRecentRepos)]
+
     def refresh(self):
         """Show what we already know, then look for more in the background."""
         self.populate([RepoInfo.fromDict(d) for d in settings.history.scannedRepos])
@@ -474,7 +469,8 @@ class WelcomeWidget(QFrame):
         roots = self.scanRoots()
         self.paneStatus.setText(_("Searching {0}…", ", ".join(compactPath(r) for r in roots)))
         self.fetchAllButton.setEnabled(not fetch)
-        self.scanner = RepoScanner(roots, DEFAULT_MAX_DEPTH, fetch=fetch, parent=self)
+        self.scanner = RepoScanner(roots, DEFAULT_MAX_DEPTH, fetch=fetch, parent=self,
+                                   recentPaths=self.recentPaths())
         self.scanner.progress.connect(self.onScanProgress)
         self.scanner.activity.connect(self.onScanActivity)
         self.scanner.resultsReady.connect(self.onScanFinished)
@@ -551,10 +547,15 @@ class WelcomeWidget(QFrame):
     # The tree
 
     def populate(self, repos: list[RepoInfo], scanning: bool = False):
-        """Lay the repos out as the folder tree they live in."""
+        """
+        Lay the repos out as the folder tree they live in.
+
+        This runs on the UI thread before the window first appears, and again
+        at every batch a scan reports, so it goes by what the scan found and
+        never looks into a repo's folder itself.
+        """
         byPath = {os.path.normpath(r.path): r for r in repos}
-        recentPaths = [os.path.normpath(p) for p in
-                       settings.history.getRecentRepoPaths(settings.prefs.maxRecentRepos)]
+        recentPaths = self.recentPaths()
         for path in recentPaths:
             byPath.setdefault(os.path.normpath(path), RepoInfo(path=os.path.normpath(path)))
         paths = list(byPath)
@@ -605,7 +606,7 @@ class WelcomeWidget(QFrame):
 
             info = byPath[path]
             leaf = self._repoTreeItem(info)
-            if not info.unreadable and not self.findReadme(path):
+            if not info.unreadable and info.hasReadme is False:
                 noReadme += 1
             if parent is None:
                 repositoryRoot.addChild(leaf)
@@ -687,7 +688,7 @@ class WelcomeWidget(QFrame):
             lines.append(_("Branch: {0}", info.branch))
         if info.unreadable:
             lines.append(_("This repo couldn’t be read."))
-        elif not self.findReadme(info.path):
+        elif info.hasReadme is False:
             lines.append(_("No README — worth adding one."))
         if info.dirty:
             lines.append(_("Uncommitted changes"))

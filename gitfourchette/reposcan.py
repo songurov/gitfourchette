@@ -93,6 +93,29 @@ def _walk(directory: str, depth: int, maxDepth: int, found: list[str],
         _walk(entry.path, depth + 1, maxDepth, found, seen, isCancelled, onFound)
 
 
+README_NAMES = ("README.md", "README.markdown", "README.rst", "README.txt", "README")
+
+
+def findReadme(repoPath: str) -> str:
+    """
+    Path of this repo’s README, whatever it chose to call it.
+
+    This lists the repo's folder, which can take any amount of time: behind a
+    macOS privacy prompt, on a network volume, on a disk that has to spin up.
+    So the UI thread must never call this for a whole list of repos. The
+    scanner does it on its own thread and reports it as RepoInfo.hasReadme.
+    """
+    try:
+        entries = {e.name.casefold(): e for e in os.scandir(repoPath) if e.is_file()}
+    except OSError:
+        return ""
+    for name in README_NAMES:
+        entry = entries.get(name.casefold())
+        if entry is not None:
+            return entry.path
+    return ""
+
+
 @dataclasses.dataclass
 class RepoInfo:
     """What a repo looks like from the outside, without opening it in a tab."""
@@ -110,6 +133,12 @@ class RepoInfo:
     noUpstream: bool = False
     "The current branch isn't tracking anything, so nothing has been pushed."
     unreadable: bool = False
+    hasReadme: bool | None = None
+    """
+    Whether the workdir has a README, as the scanner found it. None when
+    nothing has looked, as in a cache written before the scanner did: that
+    must not count as having none.
+    """
 
     def asDict(self) -> dict:
         return dataclasses.asdict(self)
@@ -323,6 +352,12 @@ class RepoScanner(QThread):
     can take a while, and a list that stays empty until it finishes looks
     broken. Paths show up first because finding them is cheap; what each repo
     has outstanding costs a 'git status' apiece, so it fills in afterwards.
+
+    Whether a repo has a README is looked up here too, as soon as the repo is
+    found, so that Home never lists a repo's folder on the UI thread. Home also
+    lists the `recentPaths`, wherever they are; those the walk doesn't reach
+    (outside the roots, in a hidden folder) are reported with their README and
+    nothing else, as before: they are neither fetched nor inspected.
     """
 
     progress = Signal(list)
@@ -332,15 +367,17 @@ class RepoScanner(QThread):
     "What the scan is busy with, for the status line. Empty when it's just walking."
 
     resultsReady = Signal(list)
-    "The complete, inspected list. Emitted once, unless cancelled."
+    "The complete list, with every repo the walk found inspected. Emitted once, unless cancelled."
 
     BatchSize = 8
 
-    def __init__(self, roots: list[str], maxDepth: int, fetch: bool = False, parent=None):
+    def __init__(self, roots: list[str], maxDepth: int, fetch: bool = False, parent=None,
+                 recentPaths: list[str] | None = None):
         super().__init__(parent)
         self.roots = roots
         self.maxDepth = maxDepth
         self.fetch = fetch
+        self.recentPaths = list(recentPaths or [])
         self.fetchFailures: list[str] = []
         self._cancelled = False
 
@@ -357,16 +394,29 @@ class RepoScanner(QThread):
 
     def run(self):
         infos: list[RepoInfo] = []
+        found: set[str] = set()
+
+        # Looked up first, so the recent repos the walk hasn't reached yet (or
+        # never will) have their README known from the very first batch
+        recent: list[RepoInfo] = []
+        for path in self.recentPaths:
+            if self._cancelled:
+                return
+            recent.append(RepoInfo(path=path, hasReadme=bool(findReadme(path))))
+
+        def everything() -> list[RepoInfo]:
+            return infos + [info for info in recent if info.path not in found]
 
         def onFound(path: str):
-            infos.append(RepoInfo(path=path))
+            found.add(path)
+            infos.append(RepoInfo(path=path, hasReadme=bool(findReadme(path))))
             if len(infos) % RepoScanner.BatchSize == 0:
-                self.progress.emit(list(infos))
+                self.progress.emit(everything())
 
         findRepos(self.roots, self.maxDepth, lambda: self._cancelled, onFound)
         if self._cancelled:
             return
-        self.progress.emit(list(infos))
+        self.progress.emit(everything())
 
         if self.fetch:
             self._fetchAll(infos)
@@ -376,13 +426,15 @@ class RepoScanner(QThread):
         for i, info in enumerate(infos):
             if self._cancelled:
                 return
-            infos[i] = inspectRepo(info.path, self.isCancelled)
+            inspected = inspectRepo(info.path, self.isCancelled)
+            inspected.hasReadme = info.hasReadme  # 'git status' doesn't say
+            infos[i] = inspected
             if (i + 1) % RepoScanner.BatchSize == 0:
-                self.progress.emit(list(infos))
+                self.progress.emit(everything())
 
         if not self._cancelled:
             self.activity.emit("")
-            self.resultsReady.emit(infos)
+            self.resultsReady.emit(everything())
 
     def _fetchAll(self, infos: list[RepoInfo]):
         """Ask every remote what it has, so 'behind' means something."""
