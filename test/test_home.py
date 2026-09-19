@@ -115,12 +115,25 @@ def testScannerSurvivesUnreadableFoldersAndMissingRoots(tempDir):
 
 
 def testScannerIgnoresSymlinkedFolders(tempDir):
-    root = tempDir.name
+    root = os.path.join(tempDir.name, "root")
     repo = makeRepoAt(root, "real/repo")
+    makeRepoAt(tempDir.name, "outside/elsewhere")
     os.symlink(root, os.path.join(root, "real", "loop"))
+    os.symlink(os.path.join(tempDir.name, "outside"), os.path.join(root, "real", "shortcut"))
 
-    # Symlinked directories are never followed, so a loop can't even start
+    # Symlinked directories are never followed: a loop can't even start, and a
+    # link doesn't drag in a repo that lives outside the folders being searched
     assert [repo] == findRepos([root])
+
+
+def testScannerNamesReposByTheirRealPath(tempDir):
+    repo = makeRepoAt(tempDir.name, "real/repo")
+    link = os.path.join(tempDir.name, "link")
+    os.symlink(os.path.join(tempDir.name, "real"), link)
+
+    # A root may itself be a link. What it leads to is searched, and each repo
+    # goes by its real path: the name libgit2 gives its workdir
+    assert [repo] == findRepos([link])
 
 
 def testScannerVisitsOverlappingRootsOnlyOnce(tempDir):
@@ -358,10 +371,13 @@ def testChoosingAScanFolderThroughTheDialog(tempDir, mainWindow):
     welcome = mainWindow.welcomeWidget
     welcome.fillFoldersMenu()
     triggerMenuAction(welcome.foldersMenu, "add folder")
-    acceptQFileDialog(welcome, "folder to search", elsewhere)
+    # The helper selects the folder by its real path, so that's the path the
+    # dialog hands back: on macOS, /private/var rather than /var
+    picked = acceptQFileDialog(welcome, "folder to search", elsewhere)
     waitForScan(welcome)
 
-    assert [elsewhere] == settings.history.scanRoots
+    assert os.path.samefile(elsewhere, picked)
+    assert [picked] == settings.history.scanRoots
     assert [repo] == leafPaths(welcome)
 
 
@@ -558,6 +574,34 @@ def testAddingASecondFolderKeepsTheFirst(tempDir, mainWindow):
     welcome.onScanRootPicked(second)
     waitForScan(welcome)
     assert [first, second] == settings.history.scanRoots
+
+
+def testARepoSearchedThroughASymlinkIsListedOnce(tempDir, mainWindow):
+    realFolder = os.path.join(tempDir.name, "real")
+    repo = makeRepoAt(realFolder, "project")
+    writeFile(f"{repo}/wip.txt", "work in progress")
+    link = os.path.join(tempDir.name, "link")
+    os.symlink(realFolder, link)
+
+    # Opened through the link, the way File > Open does it, the repo goes into
+    # the recent list under the name libgit2 gives it: its real path
+    mainWindow.openRepo(os.path.join(link, "project"), exactMatch=False)
+    mainWindow.closeAllTabs()
+    assert [repo] == list(settings.history.getRecentRepoPaths(50))
+
+    # The folder searched is only a link to where the repo lives. Forced:
+    # closing the last tab brought Home up, and with it a scan of no roots.
+    settings.history.scanRoots = [link]
+    welcome = mainWindow.welcomeWidget
+    welcome.rescan(force=True)
+    waitForScan(welcome)
+
+    # Once under Recent and once in the tree, not a second time under the link's name
+    assert [repo, repo] == leafPaths(welcome)
+    # ...and the Recent entry is the repo the scan read, so it shows the work in progress
+    recent = welcome.repoTree.topLevelItem(0)
+    assert "Recent" == recent.text(0)
+    assert "●" in recent.child(0).text(0)
 
 
 def testShowingReposDoesntAddThemToRecents(tempDir, mainWindow):
@@ -960,7 +1004,7 @@ def testReadmeOfAVanishedRepo(tempDir, mainWindow):
 def testReposWithoutAReadmeAreCountedAndFlagged(tempDir, mainWindow):
     root = tempDir.name
     withOne = makeRepoAt(root, "g/documented")
-    makeRepoAt(root, "g/bare")
+    bare = makeRepoAt(root, "g/bare")
     makeRepoAt(root, "other/alsobare")
     writeFile(f"{withOne}/README.md", "# Documented")
 
@@ -970,7 +1014,7 @@ def testReposWithoutAReadmeAreCountedAndFlagged(tempDir, mainWindow):
     waitForScan(welcome)
 
     assert "2 without a README" in welcome.paneStatus.text()
-    assert "No README" in findItem(welcome, os.path.join(root, "g", "bare")).toolTip(0)
+    assert "No README" in findItem(welcome, bare).toolTip(0)
     assert "No README" not in findItem(welcome, withOne).toolTip(0)
 
 

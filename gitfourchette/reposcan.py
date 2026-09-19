@@ -39,6 +39,13 @@ def findRepos(roots: list[str], maxDepth: int = DEFAULT_MAX_DEPTH,
     A repo's own subfolders aren't searched: a submodule is reached through its
     superproject, and a nested clone inside a checkout is nobody's project.
 
+    Repos are reported by their real path, symlinks resolved, however the root
+    that led to them was spelled. That is the name libgit2 gives a workdir, so
+    it's the name the recent list, the tabs and the nicknames already use: a
+    root reached through a symlink (a linked folder, or /var and /tmp on macOS)
+    must not list a repo twice under two names. Symlinks *inside* a root are
+    still never followed.
+
     `onFound` is called with each repo as it turns up, so a caller can show
     them while the walk is still going rather than after it ends.
     """
@@ -71,9 +78,9 @@ def _walk(directory: str, depth: int, maxDepth: int, found: list[str],
         return  # unreadable folder: not an error, just not ours
 
     if any(e.name == ".git" for e in entries):
-        found.append(directory)
+        found.append(real)
         if onFound is not None:
-            onFound(directory)
+            onFound(real)
         return  # don't descend into a repo
 
     for entry in entries:
