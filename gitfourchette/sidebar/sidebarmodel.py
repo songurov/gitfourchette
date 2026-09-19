@@ -734,9 +734,12 @@ class SidebarModel(QAbstractItemModel):
                 self.cacheToolTip(index, text)
                 return text
             elif iconKeyRole:
-                webHost = identifyHost(self.repo.remotes[remoteName].url)
-                if webHost is not None and webHost.icon:
-                    return webHost.icon
+                # Deleting or renaming a remote may repaint its row before the
+                # sidebar is rebuilt, when the remote is already gone
+                with suppress(KeyError):
+                    webHost = identifyHost(self.repo.remotes[remoteName].url)
+                    if webHost is not None and webHost.icon:
+                        return webHost.icon
                 return "git-remote"
 
         elif item == SidebarItem.RemoteBranch:

@@ -468,6 +468,19 @@ def testSidebarToolTips(tempDir, mainWindow):
     test(SidebarItem.RefFolder, "refs/tags/folder", r"tag folder")
 
 
+def testRemoteRowRepaintsAfterRemoteVanishes(tempDir, mainWindow):
+    # Deleting or renaming a remote can repaint its row before the sidebar is
+    # rebuilt. The row must still paint, with the generic remote icon.
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+    index = sb.sidebarModel.createIndexFromNode(sb.findNodeByKind(SidebarItem.Remote))
+    assert "host-github" == index.data(SidebarModel.Role.IconKey)
+
+    rw.repo.remotes.delete("origin")
+    assert "git-remote" == index.data(SidebarModel.Role.IconKey)
+
+
 def testSidebarHeadIconAfterSwitchingBranchesPointingToSameCommit(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     shell("git branch other-master", wd)
