@@ -298,7 +298,9 @@ class PrefsDialog(QDialog):
             tip = tip.format(app=qAppName())
             control.setToolTip(tip)
             hintButton = QHintButton(self, tip)
-            hintButton.setMaximumHeight(2 + hintButton.fontMetrics().height())
+            hintButton.makeReachable(stripAccelerators(" ".join(t for t in (caption, suffix) if t)))
+            # Keep rows tight, but never below the smallest clickable size
+            hintButton.setMaximumHeight(max(QHintButton.MinimumHitSize, 2 + hintButton.fontMetrics().height()))
             rowWidgets.append(hintButton)
 
         # Gather what to add to the form as a single item.

@@ -592,3 +592,46 @@ def testPopUpItemsAreSentenceCase(mainWindow):
     assertTranslatedInForkLanguages("Icons only")
     assertTranslatedInForkLanguages("Date, newest first", context="sort refs by date of latest commit, descending")
     assertTranslatedInForkLanguages("Date, oldest first", context="sort refs by date of latest commit, ascending")
+
+
+def testHintButtonsAreReachableFromTheKeyboard(mainWindow):
+    from gitfourchette.toolbox import QHintButton
+
+    dlg = GFApplication.instance().openPrefsDialog()
+    hints: list[QHintButton] = dlg.findChildren(QHintButton)
+    assert len(hints) >= 20
+
+    for page in range(dlg.stackedWidget.count()):
+        dlg.setCategory(page)
+        QTest.qWait(0)
+        for hint in hints:
+            if not hint.isVisible():
+                continue
+            assert hint.focusPolicy() & Qt.FocusPolicy.TabFocus, hint.toolTip()
+            assert hint.accessibleName().startswith("Help: "), hint.toolTip()
+            assert hint.width() >= 20, hint.accessibleName()
+            assert hint.height() >= 20, hint.accessibleName()
+
+    # Each one says which setting it explains
+    names = [hint.accessibleName() for hint in hints]
+    assert "Help: Sort branches & tags by" in names
+    assert "Help: Load up to commits in the history" in names
+
+    # Tab reaches it after its control; Enter shows the hint next to the button, and keeps the dialog open
+    dlg.setCategory(0)
+    refSortHint = next(hint for hint in hints if hint.accessibleName() == "Help: Sort branches & tags by")
+    comboBox = dlg.findChild(QComboBox, "prefctl_refSort")
+    comboBox.setFocus()
+    QTest.keyClick(comboBox, Qt.Key.Key_Tab)
+    assert refSortHint.hasFocus()
+
+    QTest.keyClick(refSortHint, Qt.Key.Key_Return)
+    assert dlg.isVisible()
+    tip = next(w for w in QApplication.topLevelWidgets() if w.inherits("QTipLabel") and w.isVisible())
+    # Right under the button (the screen's edge may push it sideways), not wherever the pointer is
+    buttonBottomLeft = refSortHint.mapToGlobal(refSortHint.rect().bottomLeft())
+    assert tip.geometry().adjusted(-4, -24, 4, 4).contains(buttonBottomLeft)
+    QToolTip.hideText()
+
+    dlg.reject()
+    assertTranslatedInForkLanguages("Help: {setting}")

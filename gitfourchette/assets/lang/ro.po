@@ -6787,6 +6787,11 @@ msgstr "Alege…"
 msgid "Help"
 msgstr "Ajutor"
 
+#: toolbox/qhintbutton.py:36
+#, python-brace-format
+msgid "Help: {setting}"
+msgstr "Ajutor: {setting}"
+
 #: toolbox/qtabwidget2.py:242
 msgid "List all tabs"
 msgstr "Listează toate filele"
