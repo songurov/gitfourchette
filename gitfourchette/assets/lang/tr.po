@@ -8951,3 +8951,59 @@ msgid "{0} settled; {n} file still has conflicts."
 msgid_plural "{0} settled; {n} files still have conflicts."
 msgstr[0] "{0} çözüldü; {n} dosyada hâlâ çakışma var."
 msgstr[1] "{0} çözüldü; {n} dosyada hâlâ çakışma var."
+
+#: mergeview/mergeinspector.py
+msgid "What merge {0} decided"
+msgstr "{0} birleştirmesinde ne kararlaştırıldı"
+
+#: mergeview/mergeinspector.py
+msgid "See both versions"
+msgstr "Her iki sürümü gör"
+
+#: mergeview/mergeinspector.py
+msgid "This commit isn’t a merge, so nothing had to be decided."
+msgstr "Bu işleme bir birleştirme değil, karar verilecek bir şey yoktu."
+
+#: mergeview/mergeinspector.py
+msgid "Every file in this merge came straight from one side: nobody had to decide anything."
+msgstr "Bu birleştirmedeki her dosya doğrudan bir taraftan geldi: kimsenin karar vermesi gerekmedi."
+
+#: mergeview/mergeinspector.py
+msgid "Merge of {0}"
+msgstr "{0} birleştirmesi"
+
+#: mergeview/mergeinspector.py
+msgid "Kept in the merge"
+msgstr "Birleştirmede tutulan"
+
+#: mergeview/mergeinspector.py
+msgid "Decide again"
+msgstr "Yeniden karar ver"
+
+#: mergeview/mergeinspector.py
+msgid "Go through this file’s conflicts again, starting from the two versions above."
+msgstr "Bu dosyanın çakışmalarını yukarıdaki iki sürümden başlayarak yeniden geç."
+
+#: mergeview/mergeinspector.py
+msgid "Inspect merge resolution"
+msgstr "Birleştirme çözümünü incele"
+
+#: mergeview/mergeinspector.py
+msgid "&Inspect Merge Resolution…"
+msgstr "Birleştirme çözümünü &incele…"
+
+#: mergeview/mergeinspector.py
+msgid "{n} file in this merge matches neither side: somebody decided what it would say."
+msgid_plural "{n} files in this merge match neither side: somebody decided what they would say."
+msgstr[0] "Bu birleştirmedeki {n} dosya iki tarafa da uymuyor: içeriğine biri karar verdi."
+msgstr[1] "Bu birleştirmedeki {n} dosya iki tarafa da uymuyor: içeriklerine biri karar verdi."
+
+#: mergeview/mergeinspector.py
+msgid "{n} conflict was settled here"
+msgid_plural "{n} conflicts were settled here"
+msgstr[0] "Burada {n} çakışma çözüldü"
+msgstr[1] "Burada {n} çakışma çözüldü"
+
+#: forms/commitdetailview.py
+msgid "See what was decided"
+msgstr "Nelere karar verildiğini gör"

@@ -9043,3 +9043,61 @@ msgid_plural "{0} settled; {n} files still have conflicts."
 msgstr[0] "{0} rezolvat; {n} fișier mai are conflicte."
 msgstr[1] "{0} rezolvat; {n} fișiere mai au conflicte."
 msgstr[2] "{0} rezolvat; {n} de fișiere mai au conflicte."
+
+#: mergeview/mergeinspector.py
+msgid "What merge {0} decided"
+msgstr "Ce a decis merge-ul {0}"
+
+#: mergeview/mergeinspector.py
+msgid "See both versions"
+msgstr "Vezi ambele versiuni"
+
+#: mergeview/mergeinspector.py
+msgid "This commit isn’t a merge, so nothing had to be decided."
+msgstr "Acest commit nu este un merge, deci nu a fost nimic de decis."
+
+#: mergeview/mergeinspector.py
+msgid "Every file in this merge came straight from one side: nobody had to decide anything."
+msgstr "Fiecare fișier din acest merge a venit direct de pe o parte: nu a decis nimeni nimic."
+
+#: mergeview/mergeinspector.py
+msgid "Merge of {0}"
+msgstr "Merge-ul lui {0}"
+
+#: mergeview/mergeinspector.py
+msgid "Kept in the merge"
+msgstr "Păstrat în merge"
+
+#: mergeview/mergeinspector.py
+msgid "Decide again"
+msgstr "Decide din nou"
+
+#: mergeview/mergeinspector.py
+msgid "Go through this file’s conflicts again, starting from the two versions above."
+msgstr "Reia conflictele acestui fișier, pornind de la cele două versiuni de mai sus."
+
+#: mergeview/mergeinspector.py
+msgid "Inspect merge resolution"
+msgstr "Inspectează rezolvarea merge-ului"
+
+#: mergeview/mergeinspector.py
+msgid "&Inspect Merge Resolution…"
+msgstr "&Inspectează rezolvarea merge-ului…"
+
+#: mergeview/mergeinspector.py
+msgid "{n} file in this merge matches neither side: somebody decided what it would say."
+msgid_plural "{n} files in this merge match neither side: somebody decided what they would say."
+msgstr[0] "{n} fișier din acest merge nu seamănă cu niciuna dintre părți: cineva a decis ce scrie în el."
+msgstr[1] "{n} fișiere din acest merge nu seamănă cu niciuna dintre părți: cineva a decis ce scrie în ele."
+msgstr[2] "{n} de fișiere din acest merge nu seamănă cu niciuna dintre părți: cineva a decis ce scrie în ele."
+
+#: mergeview/mergeinspector.py
+msgid "{n} conflict was settled here"
+msgid_plural "{n} conflicts were settled here"
+msgstr[0] "{n} conflict a fost rezolvat aici"
+msgstr[1] "{n} conflicte au fost rezolvate aici"
+msgstr[2] "{n} de conflicte au fost rezolvate aici"
+
+#: forms/commitdetailview.py
+msgid "See what was decided"
+msgstr "Vezi ce s-a decis"

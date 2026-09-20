@@ -87,6 +87,7 @@ from gitfourchette.tasks.indextasks import (
     HardSolveConflicts,
     OpenMergeTool,
     ResolveConflictHere,
+    InspectMergeResolution,
     ApplyPatchData,
     StageFiles,
     UnstageFiles,

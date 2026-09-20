@@ -5,6 +5,8 @@
 # -----------------------------------------------------------------------------
 
 from gitfourchette.codeview.codewindow import CodeWindow
+from gitfourchette.tasks import InspectMergeResolution
+from gitfourchette.toolbox import ActionDef
 from gitfourchette.gitdriver import GitConflictSides
 from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
@@ -740,3 +742,53 @@ def testResolveHereMovesOnToTheNextConflictedFile(tempDir, mainWindow):
     assert rw.navLocator.path == "a/a2.txt"
     assert "still have conflicts" in mainWindow.statusBar2.currentMessage() \
         or "still has conflicts" in mainWindow.statusBar2.currentMessage()
+
+
+def testInspectWhatAMergeDecided(tempDir, mainWindow):
+    """A merge in history: which files somebody decided, and what was kept."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+    from gitfourchette.mergeview.mergeinspector import MergeInspector
+
+    wd = unpackRepo(tempDir, "testrepoformerging")
+    shell("""
+        git merge branch-conflicts || true
+        printf 'decided by hand\\n' > .gitignore
+        git add .gitignore
+        git commit --no-edit
+    """, directory=wd)
+
+    rw = mainWindow.openRepo(wd)
+    mergeId = rw.repo.head_commit_id
+    assert len(rw.repo.peel_commit(mergeId).parent_ids) == 2
+
+    rw.jump(NavLocator.inCommit(mergeId, ".gitignore"), check=True)
+
+    # The menu offers it on a merge commit, and only there
+    menu = ActionDef.makeQMenu(rw.graphView, rw.graphView._contextMenuActions1Commit())
+    assert any("Inspect Merge" in a.text() for a in menu.actions())
+    menu.deleteLater()
+
+    # And the Commit panel says so where you can see it
+    assert "See what was decided" in rw.diffArea.commitDetailView.toPlainText()
+
+    InspectMergeResolution.invoke(rw, mergeId)
+
+    inspector = findQDialog(rw, "decided", MergeInspector)
+    assert ".gitignore" in [inspector.fileList.item(i).text() for i in range(inspector.fileList.count())]
+    assert "1 file" in inspector.findChildren(QLabel)[1].text()
+
+    inspector.openButton.click()
+    editor = findQDialog(rw, "merge of", MergeEditor)
+
+    # Both versions that met here, and what was kept instead of either
+    assert "decided by hand" in editor.outputPane.toPlainText()
+    assert "decided by hand" not in editor.oursPane.toPlainText()
+    assert "decided by hand" not in editor.theirsPane.toPlainText()
+    assert editor.conflicts, "the conflict git ran into is shown again"
+    assert "Decide again" in editor.resolveButton.text()
+
+    # Asking to decide again brings the choices back
+    editor.resolveButton.click()
+    assert "Mark as resolved" in editor.resolveButton.text()
+    assert all(button.isEnabled() for button, _choice in editor.choiceButtons)
+    editor.reject()

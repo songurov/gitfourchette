@@ -461,6 +461,79 @@ class ResolveConflictHere(RepoTask):
             self.epilog.status = _("Merge conflict resolved in {0}.", tquo(path))
 
 
+class InspectMergeResolution(RepoTask):
+    """Look at what a merge in history decided, file by file."""
+
+    def flow(self, oid: Oid):
+        import tempfile
+
+        from gitfourchette.mergeview.mergeinspector import MergeInspector
+        from gitfourchette.mergeview.mergeeditor import MergeEditor
+
+        commit = self.repo.peel_commit(oid)
+        parents = list(commit.parent_ids)
+        if len(parents) < 2:
+            raise AbortTask(_("This commit isn’t a merge, so nothing had to be decided."),
+                            icon="information")
+
+        # A combined diff only lists a file when the result matches no parent:
+        # everything else came straight from one side, with nothing to decide.
+        driver = yield from self.flowCallGit("show", "--cc", "--name-only", "--format=", str(oid))
+        paths = [line.strip() for line in driver.stdoutScrollback().splitlines() if line.strip()]
+
+        if not paths:
+            raise AbortTask(_("Every file in this merge came straight from one side: "
+                              "nobody had to decide anything."), icon="information")
+
+        subject = commit.message.split("\n", 1)[0]
+        oursName = shortHash(parents[0])
+        theirsName = shortHash(parents[1])
+        base = self.repo.merge_base(parents[0], parents[1])
+
+        inspector = MergeInspector(subject, shortHash(oid), paths, parent=self.parentWidget())
+        inspector.fileChosen.connect(inspector.accept)
+        inspector.resize(560, 420)
+        yield from self.flowDialog(inspector)
+        path = inspector.currentPath()
+        inspector.deleteLater()
+        if not path:
+            return
+
+
+        ours = self.blobText(parents[0], path)
+        theirs = self.blobText(parents[1], path)
+        ancestor = self.blobText(base, path) if base else ""
+        committed = self.blobText(oid, path)
+
+        # Rebuild the conflict the merge ran into, the way git wrote it
+        with tempfile.TemporaryDirectory(dir=qTempDir()) as scratch:
+            names = []
+            for label, text in (("ours", ours), ("base", ancestor), ("theirs", theirs)):
+                name = str(Path(scratch, label))
+                Path(name).write_text(text, "utf-8")
+                names.append(name)
+            driver = yield from self.flowCallGit(
+                "merge-file", "-p", "--diff3",
+                f"-L{oursName}", f"-L{_p('merge editor', 'common ancestor')}", f"-L{theirsName}",
+                *names, autoFail=False)
+            conflicted = driver.stdoutScrollback()
+
+        editor = MergeEditor(path, conflicted, parent=self.parentWidget(),
+                             committed=committed, labels=(oursName, theirsName))
+        editor.resize(900, 700)
+        yield from self.flowDialog(editor, abortTaskIfRejected=False)
+        editor.deleteLater()
+
+    def blobText(self, commitId: Oid, path: str) -> str:
+        """The file as of that commit, or nothing if it wasn't there."""
+        try:
+            tree = self.repo.peel_commit(commitId).tree
+            blob = self.repo[tree[path].id]
+            return blob.data.decode("utf-8", errors="replace")
+        except (KeyError, AttributeError, ValueError):
+            return ""
+
+
 class OpenMergeTool(RepoTask):
     def flow(self, conflict: GitConflict, reopenWorkInProgress: bool):
         mergeDriver = MergeDriver.findOngoingMerge(conflict)

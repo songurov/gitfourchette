@@ -8966,3 +8966,59 @@ msgid "{0} settled; {n} file still has conflicts."
 msgid_plural "{0} settled; {n} files still have conflicts."
 msgstr[0] ""
 msgstr[1] ""
+
+#: mergeview/mergeinspector.py
+msgid "What merge {0} decided"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "See both versions"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "This commit isn’t a merge, so nothing had to be decided."
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Every file in this merge came straight from one side: nobody had to decide anything."
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Merge of {0}"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Kept in the merge"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Decide again"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Go through this file’s conflicts again, starting from the two versions above."
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "Inspect merge resolution"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "&Inspect Merge Resolution…"
+msgstr ""
+
+#: mergeview/mergeinspector.py
+msgid "{n} file in this merge matches neither side: somebody decided what it would say."
+msgid_plural "{n} files in this merge match neither side: somebody decided what they would say."
+msgstr[0] ""
+msgstr[1] ""
+
+#: mergeview/mergeinspector.py
+msgid "{n} conflict was settled here"
+msgid_plural "{n} conflicts were settled here"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/commitdetailview.py
+msgid "See what was decided"
+msgstr ""

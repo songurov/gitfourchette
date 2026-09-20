@@ -13,6 +13,7 @@ from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.repomodel import UC_FAKEREF
+from gitfourchette.tasks import InspectMergeResolution
 from gitfourchette.toolbox import *
 
 AVATAR_PIXELS = 44
@@ -72,6 +73,12 @@ class CommitDetailView(QTextBrowser):
         parents = ", ".join(self._commitLink(parentId) for parentId in commit.parent_ids)
         if parents:
             rows.append((_n("Parent", "Parents", len(commit.parent_ids)), parents))
+
+        # A merge is where somebody had to choose; offer to see what they chose
+        if len(commit.parent_ids) >= 2:
+            oid = commit.id
+            link = self.links.new(lambda: InspectMergeResolution.invoke(self, oid))
+            rows.append((_("Merge"), f"<a href='{link}'>" + _("See what was decided") + "</a>"))
 
         if commit.author != commit.committer:
             rows.append((_("Committer"), self._person(commit.committer)))

@@ -51,15 +51,24 @@ class MergeEditor(QDialog):
     directory, markers and all, and hands back what the person settled on.
     """
 
-    def __init__(self, path: str, text: str, parent=None):
+    def __init__(self, path: str, text: str, parent=None, committed: str = "", labels=()):
+        """
+        `text` is the file as git left it, markers and all. Pass `committed`
+        to look at a merge that is already in history: the result pane then
+        shows what was committed, until the person asks to decide again.
+        """
         super().__init__(parent)
         self.setObjectName("MergeEditor")
         self.path = path
         self.regions = parseConflicts(text)
         self.currentConflict = 0
         self.manualEdit = False
+        self.committed = committed
+        self.inspecting = bool(committed)
+        self.labels = labels
 
-        self.setWindowTitle(_("Resolve conflict in {0}", Path(path).name))
+        self.setWindowTitle(_("Merge of {0}", Path(path).name) if self.inspecting
+                            else _("Resolve conflict in {0}", Path(path).name))
 
         # -- Header: which file, which conflict, and the way through them
         self.pathLabel = QLabel(escape(path), self)
@@ -189,6 +198,38 @@ class MergeEditor(QDialog):
 
         self.applyFont()
         self.fillPanes()
+        if self.inspecting:
+            self.enterInspection()
+        self.refresh()
+        self.goToConflict(0)
+
+    def enterInspection(self):
+        """
+        Looking at a merge from history: show what was committed, and keep
+        every decision out of the way until the person asks for them.
+        """
+        self.outputHeader.setText(_("Kept in the merge"))
+        self.outputPane.setPlainText(self.committed)
+        self.resolveButton.setText(_("Decide again"))
+        self.resolveButton.setToolTip(
+            _("Go through this file's conflicts again, starting from the two versions above."))
+        self.resolveButton.clicked.disconnect()
+        self.resolveButton.clicked.connect(self.leaveInspection)
+        self.manualButton.setVisible(False)
+        for button, _choice in self.choiceButtons:
+            button.setEnabled(False)
+        self.allOursButton.setEnabled(False)
+        self.allTheirsButton.setEnabled(False)
+
+    def leaveInspection(self):
+        """Take the decisions back: the result is built from the conflicts again."""
+        self.inspecting = False
+        self.outputHeader.setText(_("Result"))
+        self.resolveButton.setText(_("Mark as resolved"))
+        self.resolveButton.setToolTip("")
+        self.resolveButton.clicked.disconnect()
+        self.resolveButton.clicked.connect(self.finish)
+        self.manualButton.setVisible(True)
         self.refresh()
         self.goToConflict(0)
 
@@ -234,12 +275,20 @@ class MergeEditor(QDialog):
             pane.setPlainText("\n".join(lines))
             pane.blockRanges = ranges
 
-        labels = next(((r.oursLabel, r.theirsLabel) for r in self.conflicts), ("", ""))
+        labels = self.labels or next(((r.oursLabel, r.theirsLabel) for r in self.conflicts), ("", ""))
         self.oursHeader.setText(_("Ours — {0}", labels[0]) if labels[0] else _("Ours"))
         self.theirsHeader.setText(_("Theirs — {0}", labels[1]) if labels[1] else _("Theirs"))
 
     def refresh(self):
         """Put the result, the counter and the buttons back in step with the choices."""
+        if self.inspecting:
+            conflicts = self.conflicts
+            self.counterLabel.setText(
+                _("Conflict {0} of {1}", self.currentConflict + 1, len(conflicts)) if conflicts else "")
+            self.summaryLabel.setText(_n("{n} conflict was settled here",
+                                         "{n} conflicts were settled here", len(conflicts)))
+            self.highlightCurrent()
+            return
         if not self.manualEdit:
             self.outputPane.setPlainText(renderResolution(self.regions))
 

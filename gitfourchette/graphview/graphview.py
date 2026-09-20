@@ -565,6 +565,8 @@ class GraphView(QListView):
             TaskBook.action(self, MergeBranch, _("&Merge into {0}…", myRef), taskArgs=(mergeWhat,)),
             TaskBook.action(self, ResetHead, _("&Reset {0} to Here…", myRef), taskArgs=oid),
             ActionDef.SEPARATOR,
+            *([TaskBook.action(self, InspectMergeResolution, _("&Inspect Merge Resolution…"), taskArgs=oid)]
+              if len(gpgLookAtCommit.parent_ids) >= 2 else []),
             TaskBook.action(self, CherrypickCommit, _("Cherry &Pick…"), taskArgs=oid),
             TaskBook.action(self, RevertCommit, _("Re&vert…"), taskArgs=oid),
             TaskBook.action(self, ExportCommitAsPatch, _("E&xport As Patch…"), taskArgs=oid),

@@ -9083,3 +9083,61 @@ msgid_plural "{0} settled; {n} files still have conflicts."
 msgstr[0] "{0} разрешён; конфликты остались ещё в {n} файле."
 msgstr[1] "{0} разрешён; конфликты остались ещё в {n} файлах."
 msgstr[2] "{0} разрешён; конфликты остались ещё в {n} файлах."
+
+#: mergeview/mergeinspector.py
+msgid "What merge {0} decided"
+msgstr "Что решил мердж {0}"
+
+#: mergeview/mergeinspector.py
+msgid "See both versions"
+msgstr "Показать обе версии"
+
+#: mergeview/mergeinspector.py
+msgid "This commit isn’t a merge, so nothing had to be decided."
+msgstr "Этот коммит — не слияние, решать было нечего."
+
+#: mergeview/mergeinspector.py
+msgid "Every file in this merge came straight from one side: nobody had to decide anything."
+msgstr "Каждый файл этого слияния взят целиком с одной стороны: решать никому не пришлось."
+
+#: mergeview/mergeinspector.py
+msgid "Merge of {0}"
+msgstr "Слияние {0}"
+
+#: mergeview/mergeinspector.py
+msgid "Kept in the merge"
+msgstr "Оставлено при слиянии"
+
+#: mergeview/mergeinspector.py
+msgid "Decide again"
+msgstr "Решить заново"
+
+#: mergeview/mergeinspector.py
+msgid "Go through this file’s conflicts again, starting from the two versions above."
+msgstr "Пройти конфликты этого файла заново, начиная с двух версий выше."
+
+#: mergeview/mergeinspector.py
+msgid "Inspect merge resolution"
+msgstr "Разбор разрешения слияния"
+
+#: mergeview/mergeinspector.py
+msgid "&Inspect Merge Resolution…"
+msgstr "&Разобрать разрешение слияния…"
+
+#: mergeview/mergeinspector.py
+msgid "{n} file in this merge matches neither side: somebody decided what it would say."
+msgid_plural "{n} files in this merge match neither side: somebody decided what they would say."
+msgstr[0] "{n} файл в этом слиянии не совпадает ни с одной стороной: кто-то решил, что в нём будет."
+msgstr[1] "{n} файла в этом слиянии не совпадают ни с одной стороной: кто-то решил, что в них будет."
+msgstr[2] "{n} файлов в этом слиянии не совпадают ни с одной стороной: кто-то решил, что в них будет."
+
+#: mergeview/mergeinspector.py
+msgid "{n} conflict was settled here"
+msgid_plural "{n} conflicts were settled here"
+msgstr[0] "Здесь был решён {n} конфликт"
+msgstr[1] "Здесь были решены {n} конфликта"
+msgstr[2] "Здесь были решены {n} конфликтов"
+
+#: forms/commitdetailview.py
+msgid "See what was decided"
+msgstr "Показать, что решили"
