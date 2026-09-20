@@ -13,6 +13,7 @@ from gitfourchette import trtables
 from gitfourchette import porcelain
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
+from gitfourchette.branchdrop import BRANCH_MIME_TYPE, branchDragMimeData, draggedBranch
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.localization import *
@@ -32,7 +33,6 @@ from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost, identifyHost
 
 INVALID_MOUSEPRESS = (-1, SidebarClickZone.Invalid)
-BRANCH_MIME_TYPE = "application/x-gitfourchette-branch"
 
 
 class Sidebar(QTreeView):
@@ -98,6 +98,13 @@ class Sidebar(QTreeView):
         makeWidgetShortcut(self, self.onDeleteShortcut, "Delete")
         makeWidgetShortcut(self, self.onRenameShortcut, "F2")
         makeWidgetShortcut(self, self.searchBar.hideOrBeep, "Escape")
+
+    @property
+    def repoModel(self) -> RepoModel:
+        """The repo this sidebar stands for, named as the graph names it, so
+        that a drag can tell whether it started on the other side of the same
+        window."""
+        return self.sidebarModel.repoModel
 
     def filterIndexToNode(self, index: QModelIndex) -> SidebarNode:
         assert index.isValid()
@@ -970,19 +977,15 @@ class Sidebar(QTreeView):
             if (event.position().toPoint() - start).manhattanLength() >= QApplication.startDragDistance():
                 self.branchDragStart = None
                 self.mousePressCache = INVALID_MOUSEPRESS
-                mime = QMimeData()
-                mime.setData(BRANCH_MIME_TYPE, ref.encode())
                 drag = QDrag(self)
-                drag.setMimeData(mime)
+                drag.setMimeData(branchDragMimeData(ref))
                 drag.exec(Qt.DropAction.CopyAction)
                 self.statusMessage.emit("")
                 return
         QAbstractItemView.mouseMoveEvent(self, event)
 
     def branchDropTarget(self, mime, pos):
-        if not mime.hasFormat(BRANCH_MIME_TYPE):
-            return None
-        source = bytes(mime.data(BRANCH_MIME_TYPE)).decode("utf-8", errors="replace")
+        source = draggedBranch(mime)
         sourceNode = self.sidebarModel.nodesByRef.get(source)
         index = self.indexAt(pos)
         if sourceNode is None or not sourceNode.isLeafBranchKind() or not index.isValid():

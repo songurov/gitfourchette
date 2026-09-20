@@ -4,6 +4,7 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+import ast
 import dataclasses
 
 import pytest
@@ -24,7 +25,7 @@ from gitfourchette.settings import GraphLaneWidth, GraphRefBoxWidth, GraphRowLay
 from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.themes import ThemeName, formatStyle
 from gitfourchette.tasks import QueryCommitsTouchingPath
-from gitfourchette.toolbox import contrastRatio
+from gitfourchette.toolbox import contrastRatio, shortHash
 from .util import *
 from .test_prefs import assertTranslatedInForkLanguages
 
@@ -2289,3 +2290,333 @@ def testUnpushedCommitsHaveAnArrowBeforeTheirHash(tempDir, mainWindow, monkeypat
 
     _commit, arrows, hashRuns = arrowAndHash("origin/master")
     assert hashRuns and not arrows, "nothing before a pushed commit's hash"
+
+
+# -----------------------------------------------------------------------------
+# Dragging a branch off a ref chip, and dropping one on a row
+
+
+MASTER_TIP = Oid(hex="c9ed7bf12c73de26422b7c5a44d74cfce5a8993b")
+NO_PARENT_TIP = Oid(hex="42e4e7c5e507e113ebbb7801b16b52cf867b7ce1")
+
+
+def refChipsOnRow(graphView: GraphView, oid: Oid) -> dict[str, int]:
+    """Scan a painted row: which ref each x belongs to, per the delegate's hit test."""
+    index = graphView.getFilterIndexForCommit(oid)
+    graphView.scrollTo(index)
+    QTest.qWait(0)
+    graphView.viewport().repaint()
+
+    rect = graphView.visualRect(index)
+    spans: dict[str, list[int]] = {}
+    for x in range(rect.left(), rect.right() + 1):
+        ref = graphView.clDelegate.refAt(index, x)
+        if ref:
+            spans.setdefault(ref, []).append(x)
+    return {ref: xs[len(xs) // 2] for ref, xs in spans.items()}
+
+
+def chipPoint(graphView: GraphView, oid: Oid, ref: str) -> QPoint:
+    chips = refChipsOnRow(graphView, oid)
+    assert ref in chips, f"no chip for {ref} on the row of {shortHash(oid)}: {sorted(chips)}"
+    index = graphView.getFilterIndexForCommit(oid)
+    return QPoint(chips[ref], graphView.visualRect(index).center().y())
+
+
+def branchDropEvent(eventType, mime: QMimeData, pos: QPoint, dragSource: QWidget):
+    base = QDropEvent if eventType == QEvent.Type.Drop else QDragMoveEvent
+
+    class BranchDropEvent(base):
+        def source(self):
+            return dragSource
+
+    where = QPointF(pos) if base is QDropEvent else pos
+    return BranchDropEvent(where, Qt.DropAction.CopyAction, mime,
+                           Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+
+
+def dropBranchOnGraph(graphView: GraphView, source: str, oid: Oid, ref: str, dragSource=None):
+    from gitfourchette.branchdrop import branchDragMimeData
+    mime = branchDragMimeData(source)
+    pos = chipPoint(graphView, oid, ref) if ref else graphView.visualRect(
+        graphView.getFilterIndexForCommit(oid)).center()
+    event = branchDropEvent(QEvent.Type.Drop, mime, pos, dragSource or graphView)
+    graphView.dropEvent(event)
+    return event
+
+
+def dropMenuOperations(menu: QMenu) -> dict[str, bool]:
+    return {a.objectName(): a.isEnabled() for a in menu.actions() if a.objectName()}
+
+
+def testDragBranchOffRefChipInGraph(tempDir, mainWindow):
+    from gitfourchette.branchdrop import BRANCH_MIME_TYPE
+
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    graphView = rw.graphView
+
+    # Qt delivers drops to the viewport, not to the view we set them up on
+    assert graphView.viewport().acceptDrops()
+
+    # Every chip on a row answers for itself, clustered ones included
+    assert set(refChipsOnRow(graphView, NO_PARENT_TIP)) == {
+        "refs/heads/no-parent", "refs/remotes/origin/no-parent"}
+
+    # Pressing a chip and pulling away takes that branch with you
+    drags = []
+    graphView.beginBranchDrag = lambda ref: drags.append(graphView.makeBranchDrag(ref))
+
+    start = chipPoint(graphView, NO_PARENT_TIP, "refs/heads/no-parent")
+    graphView.mousePressEvent(QMouseEvent(
+        QEvent.Type.MouseButtonPress, QPointF(start), Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+    assert graphView.branchDragStart is not None
+
+    far = QPointF(start + QPoint(0, 10 * QApplication.startDragDistance()))
+    graphView.mouseMoveEvent(QMouseEvent(
+        QEvent.Type.MouseMove, far, Qt.MouseButton.NoButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+
+    assert len(drags) == 1
+    assert bytes(drags[0].mimeData().data(BRANCH_MIME_TYPE)).decode() == "refs/heads/no-parent"
+
+
+def testDragBranchOverGraphMarksTargetRow(tempDir, mainWindow):
+    from gitfourchette.branchdrop import branchDragMimeData
+
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    graphView = rw.graphView
+
+    hints = []
+    graphView.statusMessage.connect(hints.append)
+
+    mime = branchDragMimeData("refs/heads/master")
+    pos = chipPoint(graphView, NO_PARENT_TIP, "refs/heads/no-parent")
+    event = branchDropEvent(QEvent.Type.DragMove, mime, pos, graphView)
+    graphView.dragMoveEvent(event)
+
+    assert event.isAccepted()
+    assert graphView.dropTargetRow == graphView.getFilterIndexForCommit(NO_PARENT_TIP).row()
+    assert "master" in hints[-1] and "no-parent" in hints[-1]
+
+    graphView.dragLeaveEvent(QDragLeaveEvent())
+    assert graphView.dropTargetRow == -1
+    assert hints[-1] == ""
+
+
+def branchDropMsgids() -> list[str]:
+    """Every string branchdrop.py hands to _(), read from the source itself so
+    that a message added there later can't slip past the catalogs."""
+    import gitfourchette
+    tree = ast.parse((Path(gitfourchette.__file__).parent / "branchdrop.py").read_text(encoding="utf-8"))
+    msgids = [
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
+        and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
+    ]
+    return list(dict.fromkeys(msgids))
+
+
+def testBranchDropIsTranslatedInForkLanguages(qapp):
+    msgids = branchDropMsgids()
+    assert len(msgids) >= 11  # the extraction found the code's strings
+
+    assertTranslatedInForkLanguages(*msgids)
+
+    # The template carries them too, for upstream's translators
+    template = Path(QFile("assets:lang/gitfourchette.pot").fileName()).read_text(encoding="utf-8")
+    for msgid in msgids:
+        assert f'msgid "{msgid}"' in template, f"not in the .pot: {msgid!r}"
+
+
+@pytest.mark.parametrize("source,targetOid,targetRef,expected", [
+    ("refs/heads/master", NO_PARENT_TIP, "refs/heads/no-parent",
+     {"MergeBranch": True, "CherrypickCommit": False, "ResetHead": False,
+      "FastForwardBranch": False, "NewBranchFromCommit": True}),
+
+    ("refs/remotes/origin/master", MASTER_TIP, "refs/heads/master",
+     {"MergeBranch": True, "CherrypickCommit": True, "ResetHead": True,
+      "FastForwardBranch": True, "NewBranchFromCommit": True}),
+
+    # A row with no local branch on it: only the commit is there to act on
+    ("refs/heads/master", Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664"), "",
+     {"MergeBranch": False, "CherrypickCommit": False, "ResetHead": False,
+      "FastForwardBranch": False, "NewBranchFromCommit": True}),
+])
+def testGraphDropOffersOperationsThatApply(tempDir, mainWindow, source, targetOid, targetRef, expected):
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    graphView = rw.graphView
+
+    event = dropBranchOnGraph(graphView, source, targetOid, targetRef)
+    assert event.isAccepted()
+
+    menu = waitForVisibleMenu("BranchDropMenu")
+    assert dropMenuOperations(menu) == expected
+
+    # Whatever doesn't apply says why, instead of leaving you guessing
+    for action in menu.actions():
+        if action.objectName() and not action.isEnabled():
+            assert action.toolTip()
+
+    menu.close()
+
+
+def testGraphDropOnBranchMergesIntoIt(tempDir, mainWindow):
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    original = rw.repo.head.target
+
+    # Dragged out of the sidebar, dropped in the graph
+    event = dropBranchOnGraph(rw.graphView, "refs/heads/master", NO_PARENT_TIP,
+                              "refs/heads/no-parent", dragSource=rw.sidebar)
+    assert event.isAccepted()
+
+    menu = waitForVisibleMenu("BranchDropMenu")
+    triggerMenuAction(menu, r"merge.+master.+into.+no-parent")
+    menu.close()
+
+    acceptQMessageBox(rw, "merge.+master.+into.+no-parent")
+    acceptQMessageBox(rw, "can .*fast.forward")
+    waitUntilTrue(lambda: rw.repo.references["refs/heads/no-parent"].target == original)
+    assert rw.repo.head.name == "refs/heads/no-parent"
+    assert rw.repo.references["refs/heads/master"].target == original
+
+
+def testGraphDropOnBranchResetsIt(tempDir, mainWindow):
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    upstreamTip = rw.repo.references["refs/remotes/origin/master"].target
+
+    event = dropBranchOnGraph(rw.graphView, "refs/remotes/origin/master", MASTER_TIP, "refs/heads/master")
+    assert event.isAccepted()
+
+    menu = waitForVisibleMenu("BranchDropMenu")
+    triggerMenuAction(menu, r"reset.+master.+to.+origin")
+    menu.close()
+
+    dialog = findQDialog(rw, "reset")
+    dialog.accept()
+    waitUntilTrue(lambda: rw.repo.head.target == upstreamTip)
+
+
+def testGraphDropOnSelfDoesNothing(tempDir, mainWindow):
+    from gitfourchette.branchdrop import branchDragMimeData
+
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    graphView = rw.graphView
+
+    mime = branchDragMimeData("refs/heads/master")
+    pos = chipPoint(graphView, MASTER_TIP, "refs/heads/master")
+    assert graphView.branchDropTarget(mime, pos) is None
+
+    event = branchDropEvent(QEvent.Type.Drop, mime, pos, graphView)
+    graphView.dropEvent(event)
+    assert not event.isAccepted()
+    QTest.qWait(0)
+    assert getVisibleMenu("BranchDropMenu") is None
+
+
+def testGraphDropWithDetachedHeadCannotReset(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    shell("git checkout --detach", wd)
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(wd)
+
+    event = dropBranchOnGraph(rw.graphView, "refs/heads/master", NO_PARENT_TIP, "refs/heads/no-parent")
+    assert event.isAccepted()
+
+    menu = waitForVisibleMenu("BranchDropMenu")
+    operations = dropMenuOperations(menu)
+    assert operations["MergeBranch"]
+    assert not operations["ResetHead"]
+    assert re.search("check out a branch", findMenuAction(menu, "reset").toolTip(), re.I)
+    menu.close()
+
+
+def testGraphDropCherrypicksOnlyOntoTheCheckedOutBranch(tempDir, mainWindow):
+    """
+    A cherry-pick applies the commit to the working directory, so the only
+    target it can honour is the branch that's checked out. Anywhere else it
+    would quietly ignore the row you dropped on.
+    """
+    wd = unpackRepo(tempDir)
+    shell("git checkout -q -b topic && "
+          "echo cherry > cherry.txt && git add cherry.txt && git commit -qm 'Add cherry.txt' && "
+          "git checkout -q master", wd)
+
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(wd)
+    assert rw.repo.head.name == "refs/heads/master"
+    topicTip = rw.repo.references["refs/heads/topic"].target
+
+    # Dropped on a branch that isn't checked out: offered, but refused, and it says how to enable it
+    event = dropBranchOnGraph(rw.graphView, "refs/heads/topic", NO_PARENT_TIP, "refs/heads/no-parent")
+    assert event.isAccepted()
+    menu = waitForVisibleMenu("BranchDropMenu")
+    action = findMenuAction(menu, "cherry.pick")
+    assert not action.isEnabled()
+    assert "no-parent" in action.toolTip()
+    menu.close()
+    QTest.qWait(0)
+
+    # Dropped on the checked-out branch, it does apply the dragged branch's tip
+    event = dropBranchOnGraph(rw.graphView, "refs/heads/topic", MASTER_TIP, "refs/heads/master")
+    assert event.isAccepted()
+    menu = waitForVisibleMenu("BranchDropMenu")
+    assert findMenuAction(menu, "cherry.pick").isEnabled()
+    triggerMenuAction(menu, "cherry.pick")
+    menu.close()
+
+    acceptQMessageBox(rw, f"do you want to apply.+changes from.+{shortHash(topicTip)}")
+    waitUntilTrue(lambda: rw.repo.status() == {"cherry.txt": FileStatus.INDEX_NEW})
+
+
+def testGraphDropSkipsHiddenBranchOnTargetRow(tempDir, mainWindow):
+    """
+    A branch the user hid draws no chip, so it can't be what they aimed at:
+    the drop falls through to the commit instead of merging into something
+    that isn't on screen.
+    """
+    from gitfourchette.branchdrop import branchDragMimeData
+
+    mainWindow.resize(1200, 600)
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    graphView = rw.graphView
+
+    mime = branchDragMimeData("refs/heads/master")
+    index = graphView.getFilterIndexForCommit(NO_PARENT_TIP)
+    center = graphView.visualRect(index).center()
+
+    source, target = graphView.branchDropTarget(mime, center)
+    assert source == "refs/heads/master"
+    assert target.ref == "refs/heads/no-parent"
+
+    # origin/no-parent keeps the row on screen, but the local branch is gone from it
+    rw.toggleHideRefPattern("refs/heads/no-parent")
+    assert "refs/heads/no-parent" in rw.repoModel.hiddenRefs
+    index = graphView.getFilterIndexForCommit(NO_PARENT_TIP)
+    graphView.scrollTo(index)
+    QTest.qWait(0)
+    graphView.viewport().repaint()
+    assert "refs/heads/no-parent" not in refChipsOnRow(graphView, NO_PARENT_TIP)
+
+    center = graphView.visualRect(index).center()
+    source, target = graphView.branchDropTarget(mime, center)
+    assert source == "refs/heads/master"
+    assert target.ref == ""
+    assert target.oid == NO_PARENT_TIP
+
+    # And the menu treats it as a bare commit: nothing to merge into
+    event = branchDropEvent(QEvent.Type.Drop, mime, center, graphView)
+    graphView.dropEvent(event)
+    assert event.isAccepted()
+    menu = waitForVisibleMenu("BranchDropMenu")
+    operations = dropMenuOperations(menu)
+    assert not operations["MergeBranch"]
+    assert operations["NewBranchFromCommit"]
+    menu.close()

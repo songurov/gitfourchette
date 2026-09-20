@@ -9185,3 +9185,51 @@ msgstr "Bizimki onlarınkinin üstünde"
 #: mergeview/mergeeditor.py
 msgid "Ours over theirs — {0} over {1}"
 msgstr "Bizimki onlarınkinin üstünde — {0}, {1} üstünde"
+
+#: branchdrop.py
+msgid "Drop {0} on {1} to pick an operation"
+msgstr "Bir işlem seçmek için {0} ögesini {1} üzerine bırakın"
+
+#: branchdrop.py
+msgid "Drop on a local branch to merge into it."
+msgstr "Birleştirmek için yerel bir dalın üzerine bırakın."
+
+#: branchdrop.py
+msgid "Check out {0} to cherry-pick onto it."
+msgstr "Üzerine cherry-pick yapmak için {0} dalına geçin."
+
+#: branchdrop.py
+msgid "Drop on the checked-out branch to cherry-pick onto it."
+msgstr "Cherry-pick yapmak için üzerinde bulunduğunuz dala bırakın."
+
+#: branchdrop.py
+msgid "Check out a branch to reset it."
+msgstr "Sıfırlamak için önce bir dala geçin."
+
+#: branchdrop.py
+msgid "Only the checked-out branch can be reset. Drop on {0} instead."
+msgstr "Yalnızca üzerinde bulunduğunuz dal sıfırlanabilir. Bunun yerine {0} üzerine bırakın."
+
+#: branchdrop.py
+msgid "Drop on a local branch to fast-forward it."
+msgstr "İleri sarmak için yerel bir dalın üzerine bırakın."
+
+#: branchdrop.py
+msgid "{0} doesn’t track {1}."
+msgstr "{0}, {1} dalını izlemiyor."
+
+#: branchdrop.py
+msgid "&Merge {0} into {1}…"
+msgstr "{0} Dalını {1} Dalına &Birleştir…"
+
+#: branchdrop.py
+msgid "Cherry-&pick {0}…"
+msgstr "{0} İçin &Cherry-pick…"
+
+#: branchdrop.py
+msgid "&Reset {0} to {1}…"
+msgstr "{0} Dalını {1} Konumuna &Sıfırla…"
+
+#: branchdrop.py
+msgid "&Fast-forward {0} to {1}…"
+msgstr "{0} Dalını {1} Konumuna İ&leri Sar…"

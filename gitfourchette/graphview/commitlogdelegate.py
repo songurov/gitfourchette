@@ -1052,7 +1052,9 @@ class CommitLogDelegate(QStyledItemDelegate):
             toolTipText = forceToolTip or refName
             if aheadToolTip:
                 toolTipText += "\n" + aheadToolTip
-            zone = CommitToolTipZone(rect.left(), boxRect.right(), "ref", toolTipText)
+            # Fake refs (working directory, A/B, mount) aren't refs you can act on
+            ref = refName if refName.startswith("refs/") else ""
+            zone = CommitToolTipZone(rect.left(), boxRect.right(), "ref", toolTipText, ref)
             self.newToolTipZone(zone)
 
         # Advance caller rectangle
@@ -1190,6 +1192,18 @@ class CommitLogDelegate(QStyledItemDelegate):
             summary = messageSummary(commit.message, "")[0] if hasattr(commit, "message") else ""
             metrics = QFontMetrics(self.activeCommitFont if self.isBold(oid) else painter.font())
             self._paintRefboxes(painter, rect, refsHere, metrics.horizontalAdvance(summary))
+
+    def refAt(self, index: QModelIndex, x: int) -> str:
+        """
+        Which ref's chip sits at `x` on this row (viewport coordinates), if any.
+        The chips are laid out as the row is painted, so this answers for the
+        row as it currently looks on screen.
+        """
+        zones = index.data(CommitLogModel.Role.ToolTipZones) or []
+        for zone in reversed(zones):
+            if zone.ref and zone.left <= x <= zone.right:
+                return zone.ref
+        return ""
 
     def _paintGraphColumn(self, painter: QPainter, rect: QRect, oid: Oid | None):
         """

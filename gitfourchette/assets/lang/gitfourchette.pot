@@ -9199,3 +9199,51 @@ msgstr ""
 #: mergeview/mergeeditor.py
 msgid "Ours over theirs — {0} over {1}"
 msgstr ""
+
+#: branchdrop.py
+msgid "Drop {0} on {1} to pick an operation"
+msgstr ""
+
+#: branchdrop.py
+msgid "Drop on a local branch to merge into it."
+msgstr ""
+
+#: branchdrop.py
+msgid "Check out {0} to cherry-pick onto it."
+msgstr ""
+
+#: branchdrop.py
+msgid "Drop on the checked-out branch to cherry-pick onto it."
+msgstr ""
+
+#: branchdrop.py
+msgid "Check out a branch to reset it."
+msgstr ""
+
+#: branchdrop.py
+msgid "Only the checked-out branch can be reset. Drop on {0} instead."
+msgstr ""
+
+#: branchdrop.py
+msgid "Drop on a local branch to fast-forward it."
+msgstr ""
+
+#: branchdrop.py
+msgid "{0} doesn’t track {1}."
+msgstr ""
+
+#: branchdrop.py
+msgid "&Merge {0} into {1}…"
+msgstr ""
+
+#: branchdrop.py
+msgid "Cherry-&pick {0}…"
+msgstr ""
+
+#: branchdrop.py
+msgid "&Reset {0} to {1}…"
+msgstr ""
+
+#: branchdrop.py
+msgid "&Fast-forward {0} to {1}…"
+msgstr ""

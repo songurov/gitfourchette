@@ -63,7 +63,7 @@ def testCurrentBranchCannotSwitchOrMerge(tempDir, mainWindow):
     ("refs/heads/missing", "refs/heads/master", False),
 ])
 def testBranchDropTargets(tempDir, mainWindow, source, target, allowed):
-    from gitfourchette.sidebar.sidebar import BRANCH_MIME_TYPE
+    from gitfourchette.branchdrop import BRANCH_MIME_TYPE
     rw = mainWindow.openRepo(unpackRepo(tempDir))
     sb = rw.sidebar
     index = sb.nodeToFilterIndex(sb.findNodeByRef(target))
@@ -76,7 +76,7 @@ def testBranchDropTargets(tempDir, mainWindow, source, target, allowed):
 
 @pytest.mark.parametrize("cancel", [False, True])
 def testBranchDropMergeDestination(tempDir, mainWindow, cancel):
-    from gitfourchette.sidebar.sidebar import BRANCH_MIME_TYPE
+    from gitfourchette.branchdrop import BRANCH_MIME_TYPE
     rw = mainWindow.openRepo(unpackRepo(tempDir))
     original = rw.repo.head.target
     destinationBefore = rw.repo.references["refs/heads/no-parent"].target

@@ -8,6 +8,9 @@ from contextlib import suppress
 
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
+from gitfourchette.branchdrop import (
+    DRAGGABLE_PREFIXES, BranchDropTarget, branchDragMimeData, branchDropHint,
+    draggedBranch, isBranchDrag, openBranchDropMenu)
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.graphview.commitlogdelegate import CommitLogDelegate
@@ -70,6 +73,12 @@ class GraphView(QListView):
 
         self.repoWidget = parent
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # A ref chip is a drag handle, and any row can take the drop
+        self.setAcceptDrops(True)
+        self.branchDragStart: tuple[QPoint, str] | None = None
+        self.dropTargetRow = -1
+
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)  # prevents double-clicking to edit row text
 
         # Know which row is under the pointer (its details come forward) whatever
@@ -125,21 +134,158 @@ class GraphView(QListView):
         self.copyMessageShortcut = makeWidgetShortcut(self, self.copyCommitMessageToClipboard, "Ctrl+Shift+C")
         self.getInfoShortcut = makeWidgetShortcut(self, self.getInfoOnCurrentCommit, "Space")
 
+    def mousePressEvent(self, event: QMouseEvent):
+        pos = event.position().toPoint()
+        self.branchDragStart = None
+        if event.button() == Qt.MouseButton.LeftButton:
+            ref = self.refAt(pos)
+            if ref.startswith(DRAGGABLE_PREFIXES):
+                self.branchDragStart = (pos, ref)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self.branchDragStart = None
+        super().mouseReleaseEvent(event)
+
     def mouseMoveEvent(self, event: QMouseEvent):
         """
         By default, ExtendedSelection lets the user select multiple items by
         holding down LMB and dragging. This event handler enforces single-item
         selection unless the user holds down Shift or Ctrl.
+
+        Dragging off a ref chip means something else entirely: it takes the
+        branch elsewhere.
         """
         isLMB = bool(event.buttons() & Qt.MouseButton.LeftButton)
         isShift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
         isCtrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+
+        if isLMB and self.branchDragStart is not None:
+            start, ref = self.branchDragStart
+            if (event.position().toPoint() - start).manhattanLength() >= QApplication.startDragDistance():
+                self.branchDragStart = None
+                self.beginBranchDrag(ref)
+            return
 
         if isLMB and not isShift and not isCtrl:
             self.mousePressEvent(event)  # re-route event as if it were a click event
             self.scrollTo(self.indexAt(event.pos()))  # mousePressEvent won't scroll to the item on its own
         else:
             super().mouseMoveEvent(event)
+
+    # -------------------------------------------------------------------------
+    # Branch drag and drop
+
+    def refAt(self, pos: QPoint) -> str:
+        """The ref whose chip sits under `pos` in the viewport, if any."""
+        index = self.indexAt(pos)
+        if not index.isValid():
+            return ""
+        return self.clDelegate.refAt(index, pos.x())
+
+    def makeBranchDrag(self, ref: str) -> QDrag:
+        drag = QDrag(self)
+        drag.setMimeData(branchDragMimeData(ref))
+        return drag
+
+    def beginBranchDrag(self, ref: str):
+        self.makeBranchDrag(ref).exec(Qt.DropAction.CopyAction)
+        self.statusMessage.emit("")
+
+    def branchDropTarget(self, mime: QMimeData, pos: QPoint) -> tuple[str, BranchDropTarget] | None:
+        """
+        What a drop at `pos` would act on: the branch of the row under the
+        pointer, or, if that row carries none, the commit itself.
+        """
+        source = draggedBranch(mime)
+        sourceTip = self.repoModel.refs.get(source, None)
+        if not source.startswith(DRAGGABLE_PREFIXES) or sourceTip is None:
+            return None
+
+        index = self.indexAt(pos)
+        if not index.isValid():
+            return None
+        oid = index.data(CommitLogModel.Role.Oid)
+        if oid is None or oid == UC_FAKEID:
+            return None
+
+        # A ref the user hid draws no chip, so it can't be what they aimed at
+        hiddenRefs = self.repoModel.hiddenRefs
+
+        ref = self.clDelegate.refAt(index, pos.x())
+        if ref == source:  # dropped on itself
+            return None
+        if not ref.startswith(RefPrefix.HEADS) or ref in hiddenRefs:
+            refsHere = self.repoModel.refsAt.get(oid, [])
+            ref = next((r for r in refsHere
+                        if r.startswith(RefPrefix.HEADS) and r != source and r not in hiddenRefs), "")
+        if not ref and oid == sourceTip:  # the branch's own tip, with nothing else on it
+            return None
+
+        return source, BranchDropTarget(oid, ref)
+
+    def markDropTarget(self, row: int):
+        if row != self.dropTargetRow:
+            self.dropTargetRow = row
+            self.viewport().update()
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if isBranchDrag(event, self.repoModel):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent):
+        pos = event.position().toPoint()
+        pair = self.branchDropTarget(event.mimeData(), pos) if isBranchDrag(event, self.repoModel) else None
+        if pair:
+            self.markDropTarget(self.indexAt(pos).row())
+            self.statusMessage.emit(branchDropHint(*pair))
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+        else:
+            self.markDropTarget(-1)
+            self.statusMessage.emit("")
+            event.ignore()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent):
+        self.markDropTarget(-1)
+        self.statusMessage.emit("")
+        event.accept()
+
+    def dropEvent(self, event: QDropEvent):
+        self.markDropTarget(-1)
+        self.statusMessage.emit("")
+        pos = event.position().toPoint()
+        pair = self.branchDropTarget(event.mimeData(), pos) if isBranchDrag(event, self.repoModel) else None
+        if not pair:
+            event.ignore()
+            return
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        openBranchDropMenu(self, self.repoModel, *pair, self.viewport().mapToGlobal(pos))
+
+    def paintEvent(self, event: QPaintEvent):
+        super().paintEvent(event)
+
+        if self.dropTargetRow < 0:
+            return
+        index = self.model().index(self.dropTargetRow, 0)
+        rect = self.visualRect(index)
+        if rect.isEmpty():
+            return
+
+        # The accent outlines the row a drop would act on. On the selection,
+        # which is already painted in the accent, the outline takes the
+        # selection's text color instead, as the ref chips do.
+        selected = self.selectionModel().isSelected(index)
+        role = QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Highlight
+        painter = QPainter(self.viewport())
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(self.palette().color(role), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QRectF(rect).adjusted(1, 1, -1, -1), 4, 4)
 
     def armDayChangeTimer(self):
         now = QDateTime.currentDateTime()

@@ -24,6 +24,10 @@ class CommitToolTipZone:
     right: int
     kind: Literal['ref', 'author', 'date', 'message', 'pathspec', 'unpushed']
     data: str = ""
+    ref: str = ""
+    """The ref this zone belongs to, if it's the chip of a real one. The
+    layout of the chips is only known once a row is painted, so the paint is
+    what tells the view which chip the pointer is on."""
 
 
 class SpecialRow(enum.IntEnum):
@@ -141,6 +145,9 @@ class CommitLogModel(QAbstractListModel):
                 return "AB"[i]
             except (IndexError, AttributeError, ValueError):
                 return ""
+
+        elif role == CommitLogModel.Role.ToolTipZones:
+            return self._toolTipZones.get(row, [])
 
         elif role == Qt.ItemDataRole.ToolTipRole:
             tip = ""

@@ -780,20 +780,25 @@ def postMouseWheelEvent(target: QWidget, angleDelta: int, point=QPoint_zero, mod
     QApplication.instance().postEvent(target, fakeWheelEvent)
 
 
-def summonContextMenu(target: QWidget, localPoint=QPoint_zero):
-    def getVisibleContextMenu():
-        for tlw in QApplication.topLevelWidgets():
-            if isinstance(tlw, QMenu) and tlw.isVisible():
-                return tlw
-        return None
+def getVisibleMenu(objectName: str = "") -> QMenu | None:
+    for tlw in QApplication.topLevelWidgets():
+        if isinstance(tlw, QMenu) and tlw.isVisible() and (not objectName or tlw.objectName() == objectName):
+            return tlw
+    return None
 
+
+def waitForVisibleMenu(objectName: str = "") -> QMenu:
+    return waitUntilTrue(lambda: getVisibleMenu(objectName))
+
+
+def summonContextMenu(target: QWidget, localPoint=QPoint_zero):
     # No context menu should be visible at the beginning
-    assert not getVisibleContextMenu()
+    assert not getVisibleMenu()
 
     QTest.qWait(0)
     event = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, localPoint, target.mapToGlobal(localPoint))
     QApplication.instance().postEvent(target, event)
-    return waitUntilTrue(getVisibleContextMenu)
+    return waitUntilTrue(getVisibleMenu)
 
 
 def summonToolTip(target: QWidget, localPoint=QPoint_zero):
