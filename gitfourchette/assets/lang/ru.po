@@ -9257,3 +9257,39 @@ msgstr "Дорожки"
 #: trtables.py
 msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
 msgstr "Широкие дорожки рисуются толще, с более крупными точками коммитов. Графу всегда остаётся место минимум под три дорожки."
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Compact"
+msgstr "Компактный"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Comfortable"
+msgstr "Просторный"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Vivid"
+msgstr "Яркий"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Custom"
+msgstr "Свой"
+
+#: trtables.py
+msgid "Look"
+msgstr "Вид"
+
+#: trtables.py
+msgid "A look sets the row spacing, the lanes, the branch labels, the avatars and the row backgrounds. Nothing else moves, and you can tune any of them afterwards."
+msgstr "Вид задаёт межстрочный интервал, дорожки, метки веток, аватары и фон строк. Больше ничего не меняется, и потом всё это можно подстроить."
+
+#: trtables.py
+msgid "Fade the chip in a run of commits by one author"
+msgstr "Приглушать значок в череде коммитов одного автора"
+
+#: trtables.py
+msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
+msgstr "В череде коммитов одного человека его значок показан в полную силу лишь один раз, поэтому смена автора бросается в глаза. Выключите, чтобы лицо было в каждой строке."

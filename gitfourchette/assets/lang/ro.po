@@ -9217,3 +9217,39 @@ msgstr "Benzi"
 #: trtables.py
 msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
 msgstr "Benzile late sunt desenate mai groase, cu puncte de commit mai mari. Graful nu primește niciodată mai puțin spațiu decât trei benzi."
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Compact"
+msgstr "Compact"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Comfortable"
+msgstr "Comod"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Vivid"
+msgstr "Viu"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Custom"
+msgstr "Personalizat"
+
+#: trtables.py
+msgid "Look"
+msgstr "Aspect"
+
+#: trtables.py
+msgid "A look sets the row spacing, the lanes, the branch labels, the avatars and the row backgrounds. Nothing else moves, and you can tune any of them afterwards."
+msgstr "Un aspect stabilește spațierea rândurilor, benzile, etichetele de ramuri, avatarurile și fundalurile rândurilor. Nimic altceva nu se schimbă și le poți ajusta oricând după aceea."
+
+#: trtables.py
+msgid "Fade the chip in a run of commits by one author"
+msgstr "Estompează jetonul într-o serie de commit-uri ale aceluiași autor"
+
+#: trtables.py
+msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
+msgstr "O serie de commit-uri ale aceleiași persoane îi arată jetonul o singură dată la intensitate maximă, așa că schimbarea autorului sare în ochi. Oprește-l pentru o față pe fiecare rând."

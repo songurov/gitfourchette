@@ -170,6 +170,7 @@ PANES: list[Pane] = [
         ),
         _section(
             "graphLook",
+            Row("graphPreset", note="graphPreset_note"),
             Row("graphRowHeight"),
             Row("graphLaneWidth", note="graphLaneWidth_note"),
         ),
@@ -186,6 +187,7 @@ PANES: list[Pane] = [
             Row("refBoxMaxWidth"),
             Row("authorDisplayStyle"),
             Row("showAvatars"),
+            Row("fadeRepeatedAvatars", parent="showAvatars"),
             Row("downloadAvatars", parent="showAvatars", note="downloadAvatars_note"),
             Row("shortTimeFormat"),
             Row("shortHashChars"),

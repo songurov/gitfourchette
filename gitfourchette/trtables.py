@@ -114,6 +114,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         CommitFormPlacement,
         FileListClick,
         GraphLaneWidth,
+        GraphPreset,
         GraphRefBoxWidth,
         GraphRowHeight,
         GraphRowLayout,
@@ -191,6 +192,13 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         GpgStatus.RevokedKey: _("Good signature; Key revoked"),
         GpgStatus.Bad: _("Bad signature"),
         GpgStatus.ProcessError: _("Failed to start verification process"),
+    }
+
+    table[GraphPreset] = {
+        GraphPreset.Compact: _p("graph look", "Compact"),
+        GraphPreset.Comfortable: _p("graph look", "Comfortable"),
+        GraphPreset.Vivid: _p("graph look", "Vivid"),
+        GraphPreset.Custom: _p("graph look", "Custom"),
     }
 
     table[GraphLaneWidth] = {
@@ -496,6 +504,10 @@ def _prefKeyTable() -> dict[str, str]:
               "line up no matter how busy the graph is on any given row. Branch labels lead the "
               "message column, and the hash moves to the right, next to the author."),
         ),
+        "graphPreset": _("Look"),
+        "graphPreset_note": _("A look sets the row spacing, the lanes, the branch labels, the avatars "
+                              "and the row backgrounds. Nothing else moves, and you can tune any of "
+                              "them afterwards."),
         "graphRowHeight": _("Row spacing"),
         "graphLaneWidth": _("Lanes"),
         "graphLaneWidth_note": _("Wider lanes are drawn thicker, with bigger commit dots. "
@@ -518,6 +530,10 @@ def _prefKeyTable() -> dict[str, str]:
             _("Your own commits get a gray chip, so that other people’s stand out, "
               "and a run of commits by one author shows their color once."),
         ),
+        "fadeRepeatedAvatars": _("Fade the chip in a run of commits by one author"),
+        "fadeRepeatedAvatars_help": _(
+            "A run of commits by the same person shows their chip once at full strength, "
+            "so a change of author catches the eye. Turn it off for a face on every row."),
         "downloadAvatars": _("Download pictures from GitHub and Gravatar"),
         "downloadAvatars_note": _("Sends authors’ email addresses to these services."),
         "downloadAvatars_help": _(

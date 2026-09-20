@@ -19,7 +19,9 @@ from gitfourchette.gitdriver import GitDriver
 from gitfourchette.localization import *
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
-from gitfourchette.settings import CONTEXT_LINES_RANGE, SHORT_DATE_PRESETS, PrefEffects, prefs
+from gitfourchette.settings import (
+    CONTEXT_LINES_RANGE, GRAPH_PRESET_KEYS, GRAPH_PRESETS, SHORT_DATE_PRESETS,
+    GraphPreset, PrefEffects, prefs)
 from gitfourchette.syntax import ColorScheme, PygmentsPresets
 from gitfourchette.themes import (
     StyleParts, ThemeAccent, ThemeColors, ThemeName, ThemeVariant, formatStyle, parseStyle)
@@ -97,6 +99,19 @@ class _GridBuilder:
     def addStretch(self):
         self.grid.setRowStretch(self.row, 1)
         self.row += 1
+
+
+def comboIndexOfValue(control: QComboBox, value) -> int:
+    """
+    Index of the item holding this pref value, or -1. The values are wrapped
+    in a tuple to survive PySide6 (see enumControl), and Qt's own findData
+    won't look inside one, so walk the items.
+    """
+    for index in range(control.count()):
+        data = control.itemData(index)
+        if data is not None and data[0] == value:
+            return index
+    return -1
 
 
 def availableLocaleCodes() -> list[str]:
@@ -214,6 +229,12 @@ class PrefsDialog(QDialog):
 
         self.restartNotes: dict[str, QLabel] = {}
         "Notes saying a change needs a restart, per pref key."
+
+        self.refreshers: dict[str, Callable[[Any], None]] = {}
+        "How to put a control back in step with a pref that another control set."
+
+        self.applyingPreset = False
+        "True while a preset writes the settings it names, so they don't read as hand-tuning."
 
         self.debounceTimer = QTimer(self)
         self.debounceTimer.setSingleShot(True)
@@ -817,6 +838,41 @@ class PrefsDialog(QDialog):
     # -------------------------------------------------------------------------
     # Applying changes as they're made
 
+    def applyGraphPreset(self, preset: GraphPreset):
+        """
+        Put the graph on a named look: the settings the preset names move, and
+        the rows showing them follow. Everything else is left where it is, so
+        the look is a starting point rather than a reset.
+        """
+        self.applyingPreset = True
+        try:
+            for key, value in GRAPH_PRESETS[preset].items():
+                self.assign(key, value)
+                self.showAssignedValue(key, value)
+        finally:
+            self.applyingPreset = False
+        self.assign("graphPreset", preset)
+
+    def syncGraphPreset(self, k: str, v: Any):
+        """
+        A setting a preset names was changed by hand: the Look row now names
+        whatever the settings add up to. Usually that is Custom — but put them
+        all back the way a look has them and its name comes back with them, so
+        a change made and undone doesn't leave the row calling the graph
+        something it isn't.
+        """
+        values = {key: prefs.__dict__[key] for key in GRAPH_PRESET_KEYS}
+        values[k] = v
+        preset = settings.graphPresetOf(values)
+        self.assign("graphPreset", preset)
+        self.showAssignedValue("graphPreset", preset)
+
+    def showAssignedValue(self, k: str, v: Any):
+        """Show a value that something other than this row's own control set."""
+        refresher = self.refreshers.get(k)
+        if refresher is not None:
+            refresher(v)
+
     def assign(self, k: str, v: Any):
         """
         A control changed a pref. Most changes apply right away; counts, formats
@@ -829,6 +885,9 @@ class PrefsDialog(QDialog):
         else:
             self.prefDiff[k] = v
         logger.debug(f"Assign {k} {v} ({type(v)})")
+
+        if k in GRAPH_PRESET_KEYS and not self.applyingPreset:
+            self.syncGraphPreset(k, v)
 
         if k in self.commitKeys:
             self.pending[k] = v
@@ -962,6 +1021,8 @@ class PrefsDialog(QDialog):
             return self.qtStyleControl(key, value)
         elif key == "font":
             return self.fontControl(key)
+        elif key == "graphPreset":
+            return self.graphPresetControl(key, value)
         elif key == "shortTimeFormat":
             return self.dateFormatControl(key, value, SHORT_DATE_PRESETS)
         elif key == "pathDisplayStyle":
@@ -1184,6 +1245,37 @@ class PrefsDialog(QDialog):
         control = QCheckBox(caption, self)
         control.setChecked(prefValue)
         control.checkStateChanged.connect(lambda state, k=prefKey: self.assign(k, state == Qt.CheckState.Checked))
+        self.refreshers[prefKey] = control.setChecked
+        return control
+
+    def graphPresetControl(self, prefKey: str, prefValue) -> QComboBox:
+        """
+        The graph's named looks. Picking one writes the handful of settings it
+        names — the note under it says which — and the rows below then show
+        what it did, ready to be tuned. "Custom" is not a look to pick: it is
+        what the row reads once the settings match none of them.
+        """
+        control = QComboBox(self)
+        for preset in GraphPreset:
+            control.addItem(trtables.enum(preset), (preset,))
+
+        itemModel = control.model()
+        assert isinstance(itemModel, QStandardItemModel)
+        customItem: QStandardItem = itemModel.item(comboIndexOfValue(control, GraphPreset.Custom))
+        customItem.setFlags(customItem.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+
+        # Which look this is gets read off the graph settings, not off the
+        # stored name: a graph tuned before the looks existed, or by hand, was
+        # never any of them, and mustn't be announced as the one that happens
+        # to be the default. Make that what OK saves, so the row and the file
+        # agree from here on.
+        inEffect = settings.graphPresetOf({key: prefs.__dict__[key] for key in GRAPH_PRESET_KEYS})
+        control.setCurrentIndex(max(0, comboIndexOfValue(control, inEffect)))
+        if inEffect != prefValue:
+            self.assign(prefKey, inEffect)
+
+        control.activated.connect(lambda i: self.applyGraphPreset(control.itemData(i)[0]))
+        self.refreshers[prefKey] = lambda v: control.setCurrentIndex(max(0, comboIndexOfValue(control, v)))
         return control
 
     def radioChoices(self, prefKey: str, prefValue) -> list[tuple[str, Any, str]]:
@@ -1306,6 +1398,7 @@ class PrefsDialog(QDialog):
                 control.insertSeparator(control.count())
 
         control.activated.connect(lambda i: self.assign(prefKey, control.itemData(i)[0]))  # unpack the tuple!
+        self.refreshers[prefKey] = lambda v: control.setCurrentIndex(max(0, comboIndexOfValue(control, v)))
 
         return control
 

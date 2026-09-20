@@ -1101,8 +1101,11 @@ class CommitLogDelegate(QStyledItemDelegate):
         """
         True if the row above is by the same author and on screen, so this
         row's chip can step back. The first row on screen always shows it.
+        Off with fadeRepeatedAvatars: then every row wears its face in full.
         """
-        if not settings.prefs.showAvatars or option.rect.top() <= 0:
+        if not settings.prefs.showAvatars or not settings.prefs.fadeRepeatedAvatars:
+            return False
+        if option.rect.top() <= 0:
             return False
         above = index.siblingAtRow(index.row() - 1).data(CommitLogModel.Role.Commit)
         aboveAuthor = getattr(above, "author", None)

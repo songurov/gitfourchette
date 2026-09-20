@@ -1936,6 +1936,36 @@ def testYourOwnAuthorChipIsNeutralAndRepeatsStepBack(tempDir, mainWindow, monkey
                                     "and a run of commits by one author shows their color once.")
 
 
+def testEveryRowCanWearItsFace(tempDir, mainWindow, monkeypatch):
+    """Without the fading, a run of commits by one author shows a chip per row."""
+    wd = unpackRepo(tempDir)
+    someoneElse = Signature("Someone Else", "else@example.com", TEST_SIGNATURE.time, 0)
+    shell("""
+        git commit --allow-empty -m 'By someone else'
+        git commit --allow-empty -m 'By someone else, again'
+        git commit --allow-empty -m 'And once more'
+    """, wd, authorSig=someoneElse)
+    GFApplication.applyPrefs(showAvatars=True, fadeRepeatedAvatars=True)
+    mainWindow.resize(1500, 600)
+    rw = mainWindow.openRepo(wd)
+    graphView = rw.graphView
+    run = [commit.id for commit in rw.repoModel.commitSequence[1:4]]
+
+    painted = spyOnAuthorChips(graphView, monkeypatch)
+    pointerAway(graphView)
+    graphView.viewport().repaint()
+    assert painted[run[0]].opacity == 1, "the run opens at full strength"
+    assert [painted[oid].opacity < .5 for oid in run[1:]] == [True, True]
+
+    GFApplication.applyPrefs(fadeRepeatedAvatars=False)
+    QTest.qWait(0)
+    painted.clear()
+    graphView.viewport().repaint()
+    assert [painted[oid].opacity for oid in run] == [1, 1, 1], "a face on every row"
+
+    assertTranslatedInForkLanguages("Fade the chip in a run of commits by one author")
+
+
 def chipCalls(graphView: GraphView, monkeypatch, oid: Oid) -> tuple[list[DrawnRun], list[QColor], list[str]]:
     """Repaint the graph; return the chip text drawn on a commit's row, the chip fills, and the chip icons."""
     rowRect = QRectF(graphView.visualRect(graphView.getFilterIndexForCommit(oid)))

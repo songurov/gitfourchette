@@ -15,7 +15,7 @@ import pytest
 
 from gitfourchette import prefsschema, settings, trtables
 from gitfourchette.exttools.toolcommands import ToolCommands
-from gitfourchette.forms.prefsdialog import PrefsDialog
+from gitfourchette.forms.prefsdialog import PrefsDialog, comboIndexOfValue
 from gitfourchette.nav import NavLocator
 from gitfourchette.toolbox.fontpicker import FontPicker
 from .util import *
@@ -791,6 +791,157 @@ def testPrefsFileWithTheRetiredRememberPassphrasesKeyStillLoads(mainWindow):
         assert oldPrefs.load()
         assert oldPrefs.tabSpaces == 8
         assert not hasattr(oldPrefs, "rememberPassphrases")
+    finally:
+        path.unlink()
+
+
+def testGraphPresetsWriteWhatTheyNameAndNothingElse():
+    """A look is a handful of named settings, not a wholesale reset."""
+    from gitfourchette.settings import GRAPH_PRESET_KEYS, GRAPH_PRESETS, GraphPreset
+
+    defaults = {field.name: field.default for field in dataclasses.fields(settings.Prefs)}
+    assert set(GRAPH_PRESET_KEYS) <= set(defaults)
+    assert set(GRAPH_PRESETS) == set(GraphPreset), "every look says what it does"
+
+    for preset, values in GRAPH_PRESETS.items():
+        assert set(values) <= set(GRAPH_PRESET_KEYS), preset
+        for key, value in values.items():
+            assert type(value) is type(defaults[key]), (preset, key)
+
+    # Compact is the app's own look, written out rather than implied
+    assert GRAPH_PRESETS[GraphPreset.Compact] == {k: defaults[k] for k in GRAPH_PRESET_KEYS}
+    assert settings.Prefs.__dataclass_fields__["graphPreset"].default == GraphPreset.Compact
+
+    # Custom is where hand-tuning lands: it writes nothing
+    assert GRAPH_PRESETS[GraphPreset.Custom] == {}
+
+    # The other looks are complete, and each is a look of its own
+    written = []
+    for preset in (GraphPreset.Comfortable, GraphPreset.Vivid):
+        assert set(GRAPH_PRESETS[preset]) == set(GRAPH_PRESET_KEYS), preset
+        written.append(GRAPH_PRESETS[preset])
+    assert written[0] != written[1] != GRAPH_PRESETS[GraphPreset.Compact] != written[0]
+
+
+def testPickingAGraphLookLeavesEverythingElseAlone(mainWindow):
+    from gitfourchette.settings import GRAPH_PRESETS, GraphPreset, GraphRowLayout
+
+    # Two settings no look names, set by hand before picking one
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.HashFirst, maxCommits=1234,
+                             graphPreset=GraphPreset.Compact)
+
+    dlg = GFApplication.instance().openPrefsDialog("graphPreset")
+    combo: QComboBox = dlg.findChild(QComboBox, "prefctl_graphPreset")
+    assert combo.currentData()[0] == GraphPreset.Compact
+    combo.setCurrentIndex(comboIndexOfValue(combo, GraphPreset.Vivid))
+    combo.activated.emit(combo.currentIndex())
+    dlg.accept()
+
+    for key, value in GRAPH_PRESETS[GraphPreset.Vivid].items():
+        assert getattr(settings.prefs, key) == value, key
+    assert settings.prefs.graphPreset == GraphPreset.Vivid
+    assert settings.prefs.graphRowLayout == GraphRowLayout.HashFirst, "a look doesn't touch the row layout"
+    assert settings.prefs.maxCommits == 1234, "nor how many commits to load"
+
+    assertTranslatedInForkLanguages("Look")
+    assertTranslatedInForkLanguages("Compact", "Comfortable", "Vivid", "Custom", context="graph look")
+
+
+def testTheRowsFollowTheLookAndTuningOneLeavesIt(mainWindow):
+    """A look is a starting point: the rows below show what it did, and stay editable."""
+    from gitfourchette.settings import GraphPreset, GraphRowHeight
+
+    GFApplication.applyPrefs(graphPreset=GraphPreset.Compact, **settings.GRAPH_PRESETS[GraphPreset.Compact])
+
+    dlg = GFApplication.instance().openPrefsDialog("graphPreset")
+    combo: QComboBox = dlg.findChild(QComboBox, "prefctl_graphPreset")
+    rowHeight: QComboBox = dlg.findChild(QComboBox, "prefctl_graphRowHeight")
+    banding: QCheckBox = dlg.findChild(QCheckBox, "prefctl_alternatingRowColors")
+    assert banding.isChecked()
+
+    combo.setCurrentIndex(comboIndexOfValue(combo, GraphPreset.Vivid))
+    combo.activated.emit(combo.currentIndex())
+
+    # The rows it wrote say so, right there
+    assert rowHeight.currentData()[0] == GraphRowHeight.Spacious
+    assert not banding.isChecked()
+
+    # Tuning one of them by hand keeps the tuning and leaves the look behind
+    banding.setChecked(True)
+    assert combo.currentData()[0] == GraphPreset.Custom
+    dlg.accept()
+
+    assert settings.prefs.graphPreset == GraphPreset.Custom
+    assert settings.prefs.alternatingRowColors, "the hand-made change sticks"
+    assert settings.prefs.graphRowHeight == GraphRowHeight.Spacious, "and the rest of the look stays"
+
+
+def testTheLookRowNamesTheGraphItActuallyHas(mainWindow):
+    """A graph tuned before there were looks isn't Compact just because the stored name says so."""
+    from gitfourchette.settings import GRAPH_PRESETS, GraphPreset, GraphRefBoxWidth, GraphRowHeight
+
+    # An existing user's prefs: the graph tuned by hand, and a look nobody ever
+    # picked sitting at the default it was born with
+    GFApplication.applyPrefs(graphRowHeight=GraphRowHeight.Spacious,
+                             refBoxMaxWidth=GraphRefBoxWidth.Wide,
+                             alternatingRowColors=False)
+    assert settings.prefs.graphPreset == GraphPreset.Compact
+
+    dlg = GFApplication.instance().openPrefsDialog("graphPreset")
+    combo: QComboBox = dlg.findChild(QComboBox, "prefctl_graphPreset")
+    assert combo.currentData()[0] == GraphPreset.Custom, "this graph is none of the looks"
+    customItem = combo.model().item(comboIndexOfValue(combo, GraphPreset.Custom))
+    assert not customItem.isEnabled(), "Custom is where tuning lands, not a look to pick"
+    dlg.accept()
+    assert settings.prefs.graphPreset == GraphPreset.Custom, "and the file says so from now on"
+
+    # Settings that do add up to a look are named as that look, whatever is stored
+    GFApplication.applyPrefs(graphPreset=GraphPreset.Custom, **GRAPH_PRESETS[GraphPreset.Comfortable])
+    dlg = GFApplication.instance().openPrefsDialog("graphPreset")
+    combo = dlg.findChild(QComboBox, "prefctl_graphPreset")
+    assert combo.currentData()[0] == GraphPreset.Comfortable
+    dlg.accept()
+    assert settings.prefs.graphPreset == GraphPreset.Comfortable
+
+
+def testUndoingAGraphSettingBringsItsLookBack(mainWindow):
+    """A change made and taken back in the same visit leaves the look where it was."""
+    from gitfourchette.settings import GRAPH_PRESETS, GraphPreset
+
+    GFApplication.applyPrefs(graphPreset=GraphPreset.Compact, **GRAPH_PRESETS[GraphPreset.Compact])
+
+    dlg = GFApplication.instance().openPrefsDialog("graphPreset")
+    combo: QComboBox = dlg.findChild(QComboBox, "prefctl_graphPreset")
+    banding: QCheckBox = dlg.findChild(QCheckBox, "prefctl_alternatingRowColors")
+
+    banding.setChecked(False)
+    assert combo.currentData()[0] == GraphPreset.Custom, "tuned away from the look"
+    banding.setChecked(True)
+    assert combo.currentData()[0] == GraphPreset.Compact, "and back onto it"
+
+    dlg.accept()
+    assert settings.prefs.alternatingRowColors, "nothing ended up changing"
+    assert settings.prefs.graphPreset == GraphPreset.Compact, "so neither did the look"
+
+
+def testGraphLookSurvivesARestart(mainWindow):
+    """The look and its settings go to disk, and come back as they were."""
+    from gitfourchette.settings import GraphLaneWidth, GraphPreset, Prefs
+
+    class RoundTripPrefs(Prefs):
+        _filename = "prefs-graphlook-test.json"
+
+    written = RoundTripPrefs()
+    written.graphPreset = GraphPreset.Vivid
+    written.graphLaneWidth = GraphLaneWidth.Wide
+    written.fadeRepeatedAvatars = False
+    path = Path(written.write())
+    try:
+        reloaded = RoundTripPrefs()
+        assert reloaded.load()
+        assert reloaded.graphPreset == GraphPreset.Vivid
+        assert reloaded.graphLaneWidth == GraphLaneWidth.Wide
+        assert reloaded.fadeRepeatedAvatars is False
     finally:
         path.unlink()
 

@@ -9135,3 +9135,39 @@ msgstr ""
 #: trtables.py
 msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
 msgstr ""
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Compact"
+msgstr ""
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Comfortable"
+msgstr ""
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Vivid"
+msgstr ""
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Custom"
+msgstr ""
+
+#: trtables.py
+msgid "Look"
+msgstr ""
+
+#: trtables.py
+msgid "A look sets the row spacing, the lanes, the branch labels, the avatars and the row backgrounds. Nothing else moves, and you can tune any of them afterwards."
+msgstr ""
+
+#: trtables.py
+msgid "Fade the chip in a run of commits by one author"
+msgstr ""
+
+#: trtables.py
+msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
+msgstr ""

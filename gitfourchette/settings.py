@@ -10,7 +10,7 @@ import logging
 import os
 from collections.abc import Iterator
 from contextlib import suppress
-from typing import TypedDict, ClassVar
+from typing import Any, TypedDict, ClassVar
 
 from gitfourchette import colors
 from gitfourchette.exttools.toolcommands import ToolCommands
@@ -56,6 +56,15 @@ class GraphRowHeight(enum.IntEnum):
     Spacious = 175
 
 
+class GraphPreset(enum.StrEnum):
+    """A named starting point for the way the history is drawn."""
+
+    Compact = "compact"
+    Comfortable = "comfortable"
+    Vivid = "vivid"
+    Custom = "custom"
+
+
 class GraphLaneWidth(enum.IntEnum):
     """Room between two lanes of the graph, in pixels at 1x."""
 
@@ -68,6 +77,72 @@ class GraphRefBoxWidth(enum.IntEnum):
     IconsOnly = 0
     Standard = 120
     Wide = 1000
+
+
+GRAPH_PRESET_KEYS = (
+    "graphRowHeight",
+    "graphLaneWidth",
+    "refBoxMaxWidth",
+    "showAvatars",
+    "fadeRepeatedAvatars",
+    "alternatingRowColors",
+)
+"""The settings a graph preset writes. Everything else about the history —
+the row layout, the sorting, the date format, how many commits to load — is
+left exactly where the user put it."""
+
+GRAPH_PRESETS: dict["GraphPreset", dict[str, Any]] = {
+    # What the app has always drawn, spelled out rather than implied, so that
+    # picking it again is a way back and not a guess.
+    GraphPreset.Compact: {
+        "graphRowHeight": GraphRowHeight.Relaxed,
+        "graphLaneWidth": GraphLaneWidth.Slim,
+        "refBoxMaxWidth": GraphRefBoxWidth.Standard,
+        "showAvatars": True,
+        "fadeRepeatedAvatars": True,
+        "alternatingRowColors": True,
+    },
+
+    # Room to breathe: a lane you can follow across a merge, and rows your
+    # eye doesn't have to aim at.
+    GraphPreset.Comfortable: {
+        "graphRowHeight": GraphRowHeight.Roomy,
+        "graphLaneWidth": GraphLaneWidth.Medium,
+        "refBoxMaxWidth": GraphRefBoxWidth.Standard,
+        "showAvatars": True,
+        "fadeRepeatedAvatars": True,
+        "alternatingRowColors": True,
+    },
+
+    # The graph as the headline: thick lanes, big dots, branch names in full,
+    # a face on every row, and no banding competing with the lane colors.
+    GraphPreset.Vivid: {
+        "graphRowHeight": GraphRowHeight.Spacious,
+        "graphLaneWidth": GraphLaneWidth.Wide,
+        "refBoxMaxWidth": GraphRefBoxWidth.Wide,
+        "showAvatars": True,
+        "fadeRepeatedAvatars": False,
+        "alternatingRowColors": False,
+    },
+
+    # Whatever the user has made of it. Writes nothing.
+    GraphPreset.Custom: {},
+}
+"""What each named look sets. A preset is a starting point: it writes these
+keys and stops, and the first hand-tuned one moves the look to Custom."""
+
+
+def graphPresetOf(values: dict[str, Any]) -> "GraphPreset":
+    """
+    The look a set of graph settings adds up to, read off the settings
+    themselves rather than off whatever was picked last. A graph nobody has
+    tuned still matches the table it came from; one that has been tuned
+    matches none of them, and that is what Custom means.
+    """
+    for preset, table in GRAPH_PRESETS.items():
+        if table and all(values[key] == value for key, value in table.items()):
+            return preset
+    return GraphPreset.Custom
 
 
 class GraphRowLayout(enum.IntEnum):
@@ -189,6 +264,13 @@ class Prefs(PrefsFile):
     metadataNearMessage         : bool                  = False
     """In a wide window, author, hash and date sit a set distance past the
     commit messages instead of at the far right, 900 px away from them."""
+    graphPreset                 : GraphPreset           = GraphPreset.Compact
+    """Which named look the graph is on (see GRAPH_PRESETS). Tuning one of the
+    settings a preset writes moves this to Custom: a preset is where a look
+    starts, never a lock on what follows. It records what the settings say, so
+    Settings reads it back from them (graphPresetOf) rather than trusting it —
+    a graph tuned before there were looks, or by hand-editing the file, is not
+    whatever this happens to hold."""
     graphRowHeight              : GraphRowHeight        = GraphRowHeight.Relaxed
     graphLaneWidth              : GraphLaneWidth        = GraphLaneWidth.Slim
     """How far apart the graph's lanes sit, which also sets how thick they are
@@ -197,6 +279,9 @@ class Prefs(PrefsFile):
     refBoxMaxWidth              : GraphRefBoxWidth      = GraphRefBoxWidth.Standard
     authorDisplayStyle          : AuthorDisplayStyle    = AuthorDisplayStyle.FullName
     showAvatars                 : bool                  = True
+    fadeRepeatedAvatars         : bool                  = True
+    """A run of commits by one author shows their chip once at full strength.
+    Turn it off for a face on every row."""
     downloadAvatars             : bool                  = False
     shortTimeFormat             : str                   = SHORT_DATE_DEFAULT_PRESET
     maxCommits                  : int                   = 10000

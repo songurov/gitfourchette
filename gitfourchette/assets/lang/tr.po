@@ -9121,3 +9121,39 @@ msgstr "Şeritler"
 #: trtables.py
 msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
 msgstr "Geniş şeritler daha kalın çizilir ve commit noktaları büyür. Grafiğe hiçbir zaman üç şeritten az yer kalmaz."
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Compact"
+msgstr "Sıkışık"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Comfortable"
+msgstr "Rahat"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Vivid"
+msgstr "Canlı"
+
+#: trtables.py
+msgctxt "graph look"
+msgid "Custom"
+msgstr "Özel"
+
+#: trtables.py
+msgid "Look"
+msgstr "Görünüm"
+
+#: trtables.py
+msgid "A look sets the row spacing, the lanes, the branch labels, the avatars and the row backgrounds. Nothing else moves, and you can tune any of them afterwards."
+msgstr "Bir görünüm satır aralığını, şeritleri, dal etiketlerini, avatarları ve satır arka planlarını ayarlar. Başka hiçbir şey değişmez ve hepsini sonradan ince ayar yapabilirsin."
+
+#: trtables.py
+msgid "Fade the chip in a run of commits by one author"
+msgstr "Aynı yazarın ardışık commit’lerinde rozeti soluklaştır"
+
+#: trtables.py
+msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
+msgstr "Aynı kişinin ardışık commit’lerinde rozeti tam güçte yalnızca bir kez görünür, böylece yazar değişimi göze çarpar. Her satırda bir yüz için bunu kapat."
