@@ -509,3 +509,21 @@ def testStatusLineTimesTheRequest(aiDialog, monkeypatch):
     aiDialog.status.setText("Ready")
     assert "took" in aiDialog.status.text()
     assert "2 min 5 s" in aiDialog.status.text()
+
+
+def testImagesReachBothClis(tmp_path):
+    # Codex takes images as files; Claude Code is told where to find them
+    shot = tmp_path / "crash.png"
+    shot.write_bytes(b"\x89PNG\r\n")
+
+    codex = aichat.cliArguments("codex", images=[shot])
+    assert codex[codex.index("--image") + 1] == str(shot)
+    assert codex[-1] == "-", "the prompt still comes in on stdin"
+
+    claude = aichat.cliArguments("claude", images=[shot])
+    assert "--image" not in claude, "Claude Code has no such flag"
+
+    instructions = aichat.imageInstructions([shot])
+    assert str(shot) in instructions
+    assert "Read each of them" in instructions
+    assert aichat.imageInstructions([]) == ""

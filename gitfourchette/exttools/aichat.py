@@ -55,7 +55,7 @@ def configuredModel(provider):
         return ""
 
 
-def cliArguments(provider, model=""):
+def cliArguments(provider, model="", images=()):
     if provider == "codex":
         args = ["exec", "--json", "--color", "never", "--sandbox", "read-only",
                 "-c", 'approval_policy="never"', "--ephemeral"]
@@ -67,8 +67,25 @@ def cliArguments(provider, model=""):
     if model:
         args += ["--model", model]
     if provider == "codex":
+        # Codex takes images on the command line; Claude Code reads the paths
+        # out of the prompt with its own Read tool (see imageInstructions)
+        for path in images:
+            args += ["--image", str(path)]
         args += ["-"]
     return args
+
+
+def imageInstructions(images) -> str:
+    """
+    Tell the assistant about the pictures the user attached. Codex is handed
+    them as files; Claude Code is told where they are and opens them itself.
+    """
+    if not images:
+        return ""
+    paths = "\n".join(str(path) for path in images)
+    return ("\n\nThe user attached these images (screenshots, diagrams or error messages). "
+            "Read each of them before answering, and treat what they show as part of the question:\n"
+            + paths)
 
 
 def modelChoices(provider):
