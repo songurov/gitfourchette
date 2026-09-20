@@ -451,9 +451,9 @@ def testWorktreesSectionSitsAboveBranches(tempDir, mainWindow):
     rootNode = rw.sidebar.sidebarModel.rootNode
     kinds = [n.kind for n in rootNode.children if n.kind != SidebarItem.Spacer]
 
-    # Worktrees are working context, so they belong next to the workdir -
+    # Worktrees are working context, so they belong next to the nav rows -
     # not at the bottom with the rarely-touched sections.
-    assert kinds.index(SidebarItem.WorktreesHeader) == kinds.index(SidebarItem.UncommittedChanges) + 1
+    assert kinds.index(SidebarItem.WorktreesHeader) == kinds.index(SidebarItem.AllCommits) + 1
     assert kinds.index(SidebarItem.WorktreesHeader) < kinds.index(SidebarItem.LocalBranchesHeader)
 
 
@@ -465,8 +465,9 @@ def testWorktreesSectionOpensTheSourceList(tempDir, mainWindow):
     try:
         rw = mainWindow.openRepo(wd)
         kinds = [n.kind for n in rw.sidebar.sidebarModel.rootNode.children]
-        assert kinds[:5] == [
-            SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges, SidebarItem.Spacer,
+        assert kinds[:6] == [
+            SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges, SidebarItem.AllCommits,
+            SidebarItem.Spacer,
             SidebarItem.WorktreesHeader, SidebarItem.LocalBranchesHeader]
         assert kinds.count(SidebarItem.Spacer) == 1
     finally:

@@ -9279,3 +9279,20 @@ msgid "{n} commit to pull from {0}"
 msgid_plural "{n} commits to pull from {0}"
 msgstr[0] ""
 msgstr[1] ""
+msgctxt "SidebarModel"
+msgid "Local Changes|Changes"
+msgstr ""
+
+#: trtables.py
+msgctxt "SidebarModel"
+msgid "All Commits"
+msgstr ""
+
+#: sidebar/sidebarmodel.py
+msgid "Go to the commit history"
+msgstr ""
+
+#: trtables.py
+msgctxt "SidebarModel"
+msgid "Branches"
+msgstr ""

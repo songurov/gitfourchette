@@ -8,6 +8,7 @@
 Manage proprietary settings in a repository's .git/config and .git/gitfourchette.json.
 """
 
+import enum
 from dataclasses import dataclass, field
 
 from gitfourchette.appconsts import *
@@ -15,6 +16,23 @@ from gitfourchette.forms.signatureform import SignatureOverride
 from gitfourchette.porcelain import *
 from gitfourchette.settings import RefSort
 from gitfourchette.prefsfile import PrefsFile
+
+
+class ViewMode(enum.IntEnum):
+    """
+    Which of the sidebar's two nav rows the repo is parked on.
+
+    A repo you're writing code in and a repo you're reading the history of
+    want different windows, so each row gets one: All Commits keeps the graph
+    on top of the diff, Local Changes gives the whole height to the files you
+    are about to commit.
+    """
+
+    AllCommits = 0
+    "The graph over the diff: what every repo opens in, and always did."
+
+    LocalChanges = 1
+    "The working directory alone - no graph, no commit header."
 
 
 @dataclass
@@ -38,6 +56,7 @@ class RepoPrefs(PrefsFile):
     sortTags: RefSort = RefSort.UseGlobalPref
     refSortClearTimestamp: int = 0
     customKeyFile: str = ""
+    viewMode: ViewMode = ViewMode.AllCommits
 
     @classmethod
     def initForRepo(cls, repo: Repo):

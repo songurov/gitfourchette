@@ -41,6 +41,7 @@ class SidebarItem(enum.IntEnum):
     Spacer = 0
     WorkdirHeader = enum.auto()
     UncommittedChanges = enum.auto()
+    AllCommits = enum.auto()
     LocalBranchesHeader = enum.auto()
     StashesHeader = enum.auto()
     RemotesHeader = enum.auto()
@@ -63,6 +64,7 @@ class SidebarLayout:
     NavItems: ClassVar = [
         SidebarItem.WorkdirHeader,
         SidebarItem.UncommittedChanges,
+        SidebarItem.AllCommits,
     ]
 
     Sections: ClassVar = [
@@ -124,9 +126,10 @@ class SidebarLayout:
     }
 
     SourceListIndentItems: ClassVar = {
-        # In a source list, the working directory row sits under the repo's
-        # name like the rows of a section do under their header.
+        # In a source list, the two nav rows sit under the repo's name like
+        # the rows of a section do under their header.
         SidebarItem.UncommittedChanges: 1,
+        SidebarItem.AllCommits: 1,
     }
 
     HideableItems: ClassVar = sorted([
@@ -918,13 +921,26 @@ class SidebarModel(QAbstractItemModel):
                 # Return fake ref so we can select Uncommitted Changes from elsewhere
                 return UC_FAKEREF
             elif iconKeyRole:
-                return "git-workdir"
+                return "sidebar-local-changes"
             elif toolTipRole:
                 text = _("Go to Working Directory")
                 text = appendShortcutToToolTipText(text, QKeySequence("Ctrl+G"))
                 if self.repoModel.numUncommittedChanges >= 0:
                     text += "\n" + _n("({n} uncommitted change)", "({n} uncommitted changes)",
                                      self.repoModel.numUncommittedChanges)
+                self.cacheToolTip(index, text)
+                return text
+
+        elif item == SidebarItem.AllCommits:
+            if displayRole:
+                return trtables.enum(SidebarItem.AllCommits)
+            elif refRole:
+                return ""
+            elif iconKeyRole:
+                return "sidebar-all-commits"
+            elif toolTipRole:
+                text = _("Go to the commit history")
+                text = appendShortcutToToolTipText(text, QKeySequence("Ctrl+H"))
                 self.cacheToolTip(index, text)
                 return text
 

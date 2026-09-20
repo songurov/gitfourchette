@@ -23,6 +23,7 @@ PE_COLLAPSED = QStyle.PrimitiveElement.PE_IndicatorArrowRight
 EXPAND_TRIANGLE_WIDTH = 6
 PADDING = 4
 EYE_WIDTH = 16
+MENU_WIDTH = 16
 
 # Source-list metrics (see ThemeColors.sidebarSourceList), in the proportions
 # of a macOS source list: headers' text 30 px from the sidebar's edge (the
@@ -46,6 +47,7 @@ class SidebarClickZone(enum.IntEnum):
     Select = 1
     Expand = 2
     Hide = 3
+    Menu = 4
 
 
 class SidebarDelegate(QStyledItemDelegate):
@@ -83,9 +85,32 @@ class SidebarDelegate(QStyledItemDelegate):
                       viewport.width() - PILL_INSET_LEFT - PILL_INSET_RIGHT, row.height() - 2)
 
     @staticmethod
-    def getClickZone(node: SidebarNode, rect: QRect, x: int):
+    def hasMenuButton(node: SidebarNode, sourceList: bool):
+        """
+        The repo's name is the one row that wears its menu in the open: a
+        source list gives no hint that a row can be right-clicked, so the menu
+        the header would pop up sits at the end of the row.
+        """
+        return sourceList and node.kind == SidebarItem.WorkdirHeader
+
+    @staticmethod
+    def menuRect(row: QRect) -> QRect:
+        """
+        Where the repo header draws its menu button, given the row's rect as
+        Sidebar.visualRect hands it out (already unindented).
+        """
+        r = QRect(row)
+        r.adjust(PADDING, 0, -PADDING, 0)
+        r.setLeft(r.right() - MENU_WIDTH + 1)
+        return r
+
+    @staticmethod
+    def getClickZone(node: SidebarNode, rect: QRect, x: int, sourceList: bool = False):
         if node.kind == SidebarItem.Spacer:
             return SidebarClickZone.Invalid
+        elif (SidebarDelegate.hasMenuButton(node, sourceList)
+              and x >= SidebarDelegate.menuRect(rect).left()):
+            return SidebarClickZone.Menu
         elif node.mayHaveChildren() and x < rect.left():
             return SidebarClickZone.Expand
         elif node.canBeHidden() and x > rect.right() - EYE_WIDTH - PADDING:
@@ -107,6 +132,8 @@ class SidebarDelegate(QStyledItemDelegate):
         isSelected = bool(option.state & QStyle.StateFlag.State_Selected)
         mouseOver = bool(option.state & QStyle.StateFlag.State_Enabled) and bool(option.state & QStyle.StateFlag.State_MouseOver)
         colorGroup = QPalette.ColorGroup.Active if isActive else QPalette.ColorGroup.Inactive
+
+        makeRoomForMenu = SidebarDelegate.hasMenuButton(node, sourceList)
 
         isExplicitlyShown = False
         isExplicitlyHidden = False
@@ -161,7 +188,8 @@ class SidebarDelegate(QStyledItemDelegate):
         if isSelected:
             penColor = option.palette.color(colorGroup, QPalette.ColorRole.HighlightedText)
             iconMode = QIcon.Mode.Selected if isActive else QIcon.Mode.SelectedInactive  # type: ignore[attr-defined]
-        elif not node.parent.parent and node.kind != SidebarItem.UncommittedChanges and not sourceList:
+        elif (not node.parent.parent and not sourceList
+              and node.kind not in (SidebarItem.UncommittedChanges, SidebarItem.AllCommits)):
             penColor = option.palette.color(colorGroup, QPalette.ColorRole.WindowText)
             penColor.setAlphaF(.66)
         else:
@@ -230,6 +258,8 @@ class SidebarDelegate(QStyledItemDelegate):
         textRect = QRect(option.rect)
         if makeRoomForEye:
             textRect.adjust(0, 0, -EYE_WIDTH, 0)
+        if makeRoomForMenu:
+            textRect.adjust(0, 0, -(MENU_WIDTH + PADDING), 0)
 
         font: QFont = index.data(Qt.ItemDataRole.FontRole) or option.font
         baseFontSize = font.pointSizeF()
@@ -300,5 +330,11 @@ class SidebarDelegate(QStyledItemDelegate):
                 eyeIconName = "view-visible"
             unpluggedIcon = stockIcon(eyeIconName)
             unpluggedIcon.paint(painter, r, mode=iconMode)
+
+        # Draw the repo header's menu button
+        if makeRoomForMenu:
+            r = QRect(option.rect)
+            r.setLeft(option.rect.right() - MENU_WIDTH + 1)
+            stockIcon("more-circle").paint(painter, r, mode=iconMode)
 
         painter.restore()

@@ -13,6 +13,7 @@ from gitfourchette.sidebar.sidebardelegate import PADDING, EYE_WIDTH
 from gitfourchette.sidebar.sidebarmodel import SidebarItem, SidebarModel
 from gitfourchette.themes import NEUTRAL_DARK
 from gitfourchette.toolbox import naturalSort
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
 NEUTRAL_DARK_STYLE = "gitfourchette-builtin,dark,neutral"
@@ -137,7 +138,7 @@ def testSidebarSelectionSync(tempDir, mainWindow):
     assert sb.selectedIndexes()[0].data() == "master"
 
     rw.jump(NavLocator.inWorkdir())
-    assert "workdir" in sb.selectedIndexes()[0].data().lower()
+    assert "changes" in sb.selectedIndexes()[0].data().lower()
 
     rw.jump(NavLocator.inRef("refs/remotes/origin/first-merge"))
     assert sb.selectedIndexes()[0].data() == "first-merge"
@@ -854,7 +855,7 @@ def testNeutralSidebarIsASourceList(tempDir, mainWindow, restoreTheme, live):
     sb = rw.sidebar
 
     classicKinds = [
-        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges,
+        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges, SidebarItem.AllCommits,
         SidebarItem.Spacer, SidebarItem.LocalBranchesHeader,
         SidebarItem.Spacer, SidebarItem.RemotesHeader,
         SidebarItem.Spacer, SidebarItem.TagsHeader,
@@ -862,7 +863,7 @@ def testNeutralSidebarIsASourceList(tempDir, mainWindow, restoreTheme, live):
         SidebarItem.Spacer, SidebarItem.SubmodulesHeader,
     ]
     sourceListKinds = [
-        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges,
+        SidebarItem.WorkdirHeader, SidebarItem.UncommittedChanges, SidebarItem.AllCommits,
         SidebarItem.Spacer,
         SidebarItem.LocalBranchesHeader, SidebarItem.RemotesHeader, SidebarItem.TagsHeader,
         SidebarItem.StashesHeader, SidebarItem.SubmodulesHeader,
@@ -1041,3 +1042,71 @@ def testNeutralKeepsTheFilterUnderTheSidebar(tempDir, mainWindow):
         GFApplication.applyPrefs(qtStyle="")
 
     assert not searchBar.isVisibleTo(rw)
+
+
+def testBranchesSectionIsCalledBranches(tempDir, mainWindow):
+    """
+    "Local Branches" spelled out what "Remotes" leaves implied, and it was the
+    widest header in the tree. Fork just says Branches; so do we.
+    """
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    sb = rw.sidebar
+    header = sb.nodeToFilterIndex(sb.findNodeByKind(SidebarItem.LocalBranchesHeader))
+    assert header.data(Qt.ItemDataRole.DisplayRole) == "Branches"
+    assertTranslatedInForkLanguages("Branches", context="SidebarModel")
+
+
+def testNeutralRepoHeaderWearsItsMenu(tempDir, mainWindow, restoreTheme):
+    """
+    A source list gives no hint that a row can be right-clicked, so the repo's
+    name carries its menu at the end of the row, as Fork's does.
+    """
+    def visibleMenu():
+        return next((w for w in QApplication.topLevelWidgets()
+                     if isinstance(w, QMenu) and w.isVisible()), None)
+
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(qtStyle=NEUTRAL_DARK_STYLE)
+    rw = mainWindow.openRepo(wd)
+    sb = rw.sidebar
+    viewport = sb.viewport()
+    index = sb.nodeToFilterIndex(sb.findNodeByKind(SidebarItem.WorkdirHeader))
+
+    # Clicking the button leaves the selection where it was: it's a menu, not a row
+    sb.selectNode(sb.findNodeByRef("refs/heads/no-parent"))
+
+    # A 16 px box at the right end of the repo's row, inside the selection pill
+    row = sb.visualRect(index)
+    button = QRect(row.right() - PADDING - 15, row.top(), 16, row.height())
+    assert button.right() < viewport.width() - PILL_RIGHT
+
+    # Something is drawn in it, and the repo's name stays clear of it
+    image = viewport.grab().toImage()
+    assert any(image.pixelColor(x, y).name() != NEUTRAL_DARK.bg
+               for x in range(button.left(), button.right() + 1)
+               for y in range(button.top(), button.bottom() + 1)), "no menu button drawn"
+    assert all(image.pixelColor(x, y).name() == NEUTRAL_DARK.bg
+               for x in range(button.left() - PADDING, button.left())
+               for y in range(button.top(), button.bottom() + 1)), "repo name runs into the button"
+
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=button.center())
+    menu = waitUntilTrue(visibleMenu)
+    assert findMenuAction(menu, "rename")
+    menu.close()
+    waitUntilTrue(lambda: visibleMenu() is None)
+    assert sb.selectedNode().data == "refs/heads/no-parent"
+
+    # The zone stops at the button: the rest of the row is an ordinary click
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton,
+                     pos=QPoint(button.left() - 1, row.center().y()))
+    QTest.qWait(0)
+    assert visibleMenu() is None
+
+    # The classic sidebar has no such button: its rows are right-clicked
+    GFApplication.applyPrefs(qtStyle=MODERN_DARK_STYLE)
+    index = sb.nodeToFilterIndex(sb.findNodeByKind(SidebarItem.WorkdirHeader))
+    row = sb.visualRect(index)
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton,
+                     pos=QPoint(row.right() - PADDING - 8, row.center().y()))
+    QTest.qWait(0)
+    assert visibleMenu() is None

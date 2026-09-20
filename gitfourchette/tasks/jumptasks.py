@@ -27,6 +27,8 @@ from gitfourchette.nav import NavLocator, NavContext, NavFlags
 from gitfourchette.porcelain import NULL_OID, Oid, commit_diff_pair
 from gitfourchette.qt import *
 from gitfourchette.repomodel import UC_FAKEREF, UC_FAKEID
+from gitfourchette.repoprefs import ViewMode
+from gitfourchette.sidebar.sidebarmodel import SidebarItem
 from gitfourchette.tasks import TaskPrereqs
 from gitfourchette.tasks.loadtasks import LoadPatch, TAbstractDiffDocument
 from gitfourchette.tasks.repotask import AbortTask, RepoTask, TaskEffects, RepoGoneError
@@ -375,6 +377,9 @@ class Jump(RepoTask):
         rw = self.rw
         locale = QLocale()
 
+        # Every special row belongs to the graph, so bring the graph back
+        rw.setViewMode(ViewMode.AllCommits)
+
         with QSignalBlockerContext(rw.sidebar, rw.committedFiles):
             rw.sidebar.clearSelection()
             rw.diffArea.committedFiles.clear()
@@ -437,6 +442,10 @@ class Jump(RepoTask):
         area = rw.diffArea
         assert locator.context == NavContext.COMMITTED
 
+        # You can't look at a commit in Local Changes, where there's no graph
+        # and no room for a commit's header. Any jump to one brings it back.
+        rw.setViewMode(ViewMode.AllCommits)
+
         # If it's a ref, look it up
         if locator.ref:
             assert locator.commit == NULL_OID
@@ -463,7 +472,12 @@ class Jump(RepoTask):
             QSignalBlockerContext(rw.sidebar),  # Don't emit jump signals
             QScrollBackupContext(rw.sidebar),  # Stabilize scroll bar value
         ):
-            if isStash:
+            if locator.hasFlags(NavFlags.SelectNavRow):
+                # The All Commits row asked for this jump, so it keeps the
+                # selection: you picked the view, not the branch that happens
+                # to sit on HEAD.
+                rw.sidebar.selectNavRow(SidebarItem.AllCommits)
+            elif isStash:
                 rw.sidebar.selectAnyRef(f"stash@{{{stashIndex}}}")
             else:
                 refCandidates = rw.repoModel.refsAt.get(locator.commit, [])
@@ -718,7 +732,9 @@ class JumpToHEAD(RepoTask):
         return TaskPrereqs.NoUnborn
 
     def flow(self):
-        locator = NavLocator.inRef("HEAD")
+        # Go to HEAD Commit is what the All Commits row does, so it lands the
+        # same way: on the row, not on the branch that happens to be checked out
+        locator = NavLocator.inRef("HEAD").withExtraFlags(NavFlags.SelectNavRow)
         yield from self.flowSubtask(Jump, locator)
 
 

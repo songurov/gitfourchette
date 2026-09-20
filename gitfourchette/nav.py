@@ -46,9 +46,16 @@ class NavFlags(enum.IntFlag):
     FuzzyPath = enum.auto()
     "The path may contain wildcards and should be expanded with fnmatch."
 
+    SelectNavRow = enum.auto()
+    """
+    This jump was asked for by one of the sidebar's nav rows (or by the menu
+    entry that row stands for), so leave the selection on the row instead of
+    hunting for a ref that happens to sit at the destination.
+    """
+
     DefaultFlags = 0
 
-    KeepFlagsOnRefresh = AllowWriteIndex | AllowLargeFiles
+    KeepFlagsOnRefresh = AllowWriteIndex | AllowLargeFiles | SelectNavRow
     """
     Flags that should be honored again by the Jump task after refreshing the
     RepoWidget on the same NavLocator.

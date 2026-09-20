@@ -19,11 +19,11 @@ from gitfourchette.branchdrop import (
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.localization import *
-from gitfourchette.nav import NavLocator
+from gitfourchette.nav import NavFlags, NavLocator
 from gitfourchette.porcelain import Oid, RefPrefix, Repo, WorktreeInfo
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEREF
-from gitfourchette.repoprefs import RefSort
+from gitfourchette.repoprefs import RefSort, ViewMode
 from gitfourchette.sidebar.sidebardelegate import SidebarDelegate, SidebarClickZone, SOURCE_LIST_INDENT
 from gitfourchette.sidebar.sidebarfilter import SidebarFilter
 from gitfourchette.sidebar.sidebarmodel import SidebarModel, SidebarNode, SidebarItem
@@ -35,6 +35,7 @@ from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost, identifyHost
 
 INVALID_MOUSEPRESS = (-1, SidebarClickZone.Invalid)
+NAV_MODE_ITEMS = (SidebarItem.UncommittedChanges, SidebarItem.AllCommits)
 
 
 class Sidebar(QTreeView):
@@ -694,11 +695,13 @@ class Sidebar(QTreeView):
                 return
 
         node = self.filterIndexToNode(index)
-        menu = self.makeNodeMenu(node)
+        self.popUpNodeMenu(node, self.mapToGlobal(point))
 
+    def popUpNodeMenu(self, node: SidebarNode, globalPoint: QPoint):
+        menu = self.makeNodeMenu(node)
         if menu:
             menu.aboutToHide.connect(menu.deleteLater)
-            menu.popup(self.mapToGlobal(point))
+            menu.popup(globalPoint)
 
     def refresh(self, repoModel: RepoModel):
         self.sidebarModel.rebuild(repoModel)
@@ -769,7 +772,19 @@ class Sidebar(QTreeView):
         item = node.kind
 
         if item == SidebarItem.UncommittedChanges:
+            # The nav rows are the two views: picking one is picking a window
+            # on the repo, not just a place to jump to.
+            self.repoWidget.setViewMode(ViewMode.LocalChanges)
             locator = NavLocator.inWorkdir()
+        elif item == SidebarItem.AllCommits:
+            self.repoWidget.setViewMode(ViewMode.AllCommits)
+            if self.sidebarModel.repo.head_is_unborn:
+                # Nothing committed yet, so there is no history to go to -
+                # showing the empty graph is all this row can do.
+                return
+            # The row keeps the selection: the jump lands on HEAD, but you
+            # asked for the view, not for whichever branch happens to be there.
+            locator = NavLocator.inRef("HEAD").withExtraFlags(NavFlags.SelectNavRow)
         elif item == SidebarItem.UnbornHead:
             locator = NavLocator.inWorkdir()
         elif item == SidebarItem.DetachedHead:
@@ -812,6 +827,9 @@ class Sidebar(QTreeView):
 
         elif item == SidebarItem.UncommittedChanges:
             NewCommit.invoke(self)
+
+        elif item == SidebarItem.AllCommits:
+            JumpToHEAD.invoke(self)
 
         elif item == SidebarItem.Submodule:
             self.openSubmoduleRepo.emit(node.data)
@@ -963,7 +981,7 @@ class Sidebar(QTreeView):
         if index.isValid():
             rect = self.visualRect(index)
             node = self.filterIndexToNode(index)
-            zone = SidebarDelegate.getClickZone(node, rect, pos.x())
+            zone = SidebarDelegate.getClickZone(node, rect, pos.x(), self.sourceList)
         else:
             node = None
             zone = SidebarClickZone.Invalid
@@ -1052,6 +1070,12 @@ class Sidebar(QTreeView):
             return
 
         if zone == SidebarClickZone.Select:
+            if _node is not None and _node.kind in NAV_MODE_ITEMS and index == self.currentIndex():
+                # Going to the working directory from the graph leaves the
+                # Local Changes row selected, so clicking it wouldn't move the
+                # selection - and a row that can't be re-picked is a view you
+                # can't get to.
+                self.wantSelectNode(_node)
             self.setCurrentIndex(index)
 
         event.accept()
@@ -1074,7 +1098,12 @@ class Sidebar(QTreeView):
             super().mouseReleaseEvent(event)
             return
 
-        if zone == SidebarClickZone.Hide:
+        if zone == SidebarClickZone.Menu:
+            # Drop the menu from under the button, like a toolbar's would
+            button = SidebarDelegate.menuRect(self.visualRect(index))
+            self.popUpNodeMenu(node, self.viewport().mapToGlobal(button.bottomLeft()))
+            event.accept()
+        elif zone == SidebarClickZone.Hide:
             allButThis = event.button() == Qt.MouseButton.MiddleButton or self.sidebarModel.isHideAllButThisMode()
             self.wantHideNode(node, allButThis)
             event.accept()
@@ -1154,6 +1183,10 @@ class Sidebar(QTreeView):
         index = self.nodeToFilterIndex(node)
         self.setCurrentIndex(index)
         return index
+
+    def selectNavRow(self, kind: SidebarItem) -> QModelIndex:
+        """Light up one of the nav rows: it's a view, and you're looking at it."""
+        return self.selectNode(self.sidebarModel.rootNode.findChild(kind))
 
     def selectAnyRef(self, *refs: str) -> QModelIndex | None:
         # Early out if any candidate ref is already selected

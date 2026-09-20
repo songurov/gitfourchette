@@ -28,6 +28,7 @@ from gitfourchette.nav import NavHistory, NavLocator, NavContext
 from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel, UC_FAKEID
+from gitfourchette.repoprefs import ViewMode
 from gitfourchette.sidebar.sidebar import Sidebar
 from gitfourchette.syntax import LexJobCache
 from gitfourchette.tasks import RepoTaskRunner, TaskEffects, TaskBook, gitflowtasks
@@ -67,6 +68,8 @@ class RepoWidget(QWidget):
 
     splittersToSave: list[QSplitter]
     centralSplitSizesBackup: list[int]
+    viewModeSplitSizes: list[int]
+    "Heights of the graph and the diff while Local Changes has the graph put away."
 
     @property
     def repo(self) -> Repo:
@@ -111,6 +114,7 @@ class RepoWidget(QWidget):
         self.navHistory = NavHistory()
 
         self.centralSplitSizesBackup = []
+        self.viewModeSplitSizes = []
 
         # ----------------------------------
         # Splitters
@@ -294,6 +298,7 @@ class RepoWidget(QWidget):
         layout.addWidget(graphView)
 
         self.graphView = graphView
+        self.graphContainer = container
         return container
 
     def _makeSidebarContainer(self):
@@ -357,7 +362,54 @@ class RepoWidget(QWidget):
             if names is None or name in names:
                 restoreDefaultSplitterSizes(splitter, themeDefaults.get(name))
         self.centralSplitSizesBackup = self.centralSplitter.sizes()
+        self.viewModeSplitSizes = []
         self.syncDiffAreaMaximizeButton()
+
+    # -------------------------------------------------------------------------
+    # View mode
+
+    @property
+    def viewMode(self) -> ViewMode:
+        return self.repoModel.prefs.viewMode
+
+    def setViewMode(self, mode: ViewMode):
+        """
+        Park this repo on one of the sidebar's two nav rows, and remember it:
+        reopen the repo tomorrow and it comes back the way you left it.
+        """
+        prefs = self.repoModel.prefs
+        if prefs.viewMode != mode:
+            prefs.viewMode = mode
+            prefs.setDirty()
+        self.applyViewMode()
+
+    def applyViewMode(self):
+        """
+        Show or hide the graph to match the mode. The graph's height is put
+        aside while it's away, so coming back finds the panes where you left
+        them - including a maximized diff area.
+        """
+        localChanges = self.viewMode == ViewMode.LocalChanges
+        if self.graphContainer.isHidden() == localChanges:
+            return
+
+        if localChanges:
+            sizes = self.centralSplitter.sizes()
+            if sum(sizes) > 0:  # a fresh tab hasn't been laid out yet
+                self.viewModeSplitSizes = sizes
+            self.graphContainer.hide()
+        else:
+            self.graphContainer.show()
+            if self.viewModeSplitSizes:
+                self.centralSplitter.setSizes(self.viewModeSplitSizes)
+                self.viewModeSplitSizes = []
+            self.syncDiffAreaMaximizeButton()
+
+        # Nothing to say about the context when the working directory is all
+        # there is to look at - and no graph to maximize over.
+        self.diffArea.contextHeader.setVisible(not localChanges)
+
+    # -------------------------------------------------------------------------
 
     def isDiffAreaMaximized(self):
         sizes = self.centralSplitter.sizes()
@@ -492,6 +544,7 @@ class RepoWidget(QWidget):
 
     def showEvent(self, event: QShowEvent):
         super().showEvent(event)
+        self.applyViewMode()
         self.becameVisible.emit()
 
     def prepareForDeletion(self):
@@ -650,8 +703,11 @@ class RepoWidget(QWidget):
             if sink.isVisibleTo(self) and (focus is sink or focus is searchBar.lineEdit):
                 break
         else:
-            # Fall back to searching GraphView if nothing has focus
-            searchBar = self.graphView.searchBar
+            # Fall back to searching GraphView if nothing has focus - unless
+            # Local Changes has put it away, in which case the unstaged files
+            # are the only list on screen worth searching.
+            searchBar = (self.graphView.searchBar if self.viewMode == ViewMode.AllCommits
+                         else self.diffArea.dirtyFiles.searchBar)
 
         # Kick off search
         searchBar.popUp(op)

@@ -304,8 +304,9 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
     }
 
     table[SidebarItem] = {
-        SidebarItem.UncommittedChanges: toLengthVariants(_p("SidebarModel", "Working Directory|Workdir")),
-        SidebarItem.LocalBranchesHeader: toLengthVariants(_p("SidebarModel", "Local Branches|Branches")),
+        SidebarItem.UncommittedChanges: toLengthVariants(_p("SidebarModel", "Local Changes|Changes")),
+        SidebarItem.AllCommits: _p("SidebarModel", "All Commits"),
+        SidebarItem.LocalBranchesHeader: _p("SidebarModel", "Branches"),
         SidebarItem.StashesHeader: _p("SidebarModel", "Stashes"),
         SidebarItem.RemotesHeader: _p("SidebarModel", "Remotes"),
         SidebarItem.TagsHeader: _p("SidebarModel", "Tags"),

@@ -9364,3 +9364,20 @@ msgid_plural "{n} commits to pull from {0}"
 msgstr[0] "{n} commit de adus din {0}"
 msgstr[1] "{n} commit-uri de adus din {0}"
 msgstr[2] "{n} de commit-uri de adus din {0}"
+msgctxt "SidebarModel"
+msgid "Local Changes|Changes"
+msgstr "Modificări locale|Modificări"
+
+#: trtables.py
+msgctxt "SidebarModel"
+msgid "All Commits"
+msgstr "Toate commit-urile"
+
+#: sidebar/sidebarmodel.py
+msgid "Go to the commit history"
+msgstr "Mergi la istoricul commit-urilor"
+
+#: trtables.py
+msgctxt "SidebarModel"
+msgid "Branches"
+msgstr "Ramuri"
