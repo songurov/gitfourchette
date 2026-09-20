@@ -539,6 +539,17 @@ class DiffDocument:
         cursor.endEditBlock()
 
 
+def doppelgangerRanges(oldText: str, newText: str) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """
+    The character ranges in which a line and its doppelganger differ, on the
+    old side and on the new side. These are the words that actually changed,
+    so that a reader doesn't have to go over the whole line to find them.
+    """
+    blocks = difflib.SequenceMatcher(a=oldText, b=newText).get_matching_blocks()
+    return (list(_invertMatchingBlocks(blocks, useA=True)),
+            list(_invertMatchingBlocks(blocks, useA=False)))
+
+
 def _invertMatchingBlocks(blockList: list[difflib.Match], useA: bool) -> Iterator[tuple[int, int]]:
     px = 0
 

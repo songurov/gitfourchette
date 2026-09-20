@@ -5,8 +5,9 @@
 
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
-from gitfourchette.diffview.diffdocument import DiffDocument, DiffTextFormats, LineData
+from gitfourchette.diffview.diffdocument import DiffDocument, DiffTextFormats, LineData, doppelgangerRanges
 from gitfourchette.qt import *
+from gitfourchette.toolbox import qstringLength
 
 
 class SideBySideDiffView(QWidget):
@@ -75,9 +76,19 @@ class SideBySideDiffView(QWidget):
             document.setDefaultTextOption(option)
 
     @staticmethod
-    def _row(text: str, lineNo: int, origin: str, fmt: QTextBlockFormat | None = None):
+    def _row(text: str, lineNo: int, origin: str, fmt: QTextBlockFormat | None = None,
+             ranges: list[tuple[int, int]] = ()):
+        """
+        One row of a pane: its text, its block format, and the character ranges
+        that tell what changed inside the line, in the row's own coordinates.
+        """
         prefix = "" if lineNo < 0 else str(lineNo)
-        return f"{prefix:>6} {origin or ' '} {text.removesuffix(chr(10))}", fmt
+        head = f"{prefix:>6} {origin or ' '} "
+        body = text.removesuffix("\n")
+        emphasis = DiffTextFormats.doppelgangerDelCF if origin == "-" else DiffTextFormats.doppelgangerAddCF
+        spans = [(len(head) + start, len(head) + min(end, len(body)), emphasis)
+                 for start, end in ranges if start < len(body)]
+        return head + body, fmt, spans
 
     @classmethod
     def _alignedRows(cls, lines: list[LineData]):
@@ -103,20 +114,29 @@ class SideBySideDiffView(QWidget):
             clumpID = line.clumpID
             while i < len(lines) and lines[i].clumpID == clumpID:
                 item = lines[i]
-                (additions if item.origin == "+" else deletions).append(item)
+                (additions if item.origin == "+" else deletions).append((i, item))
                 i += 1
             # Rows with nothing across from them are filler, drawn as such if the theme says how
             hasFillerColor = DiffTextFormats.fillerBF.background().style() != Qt.BrushStyle.NoBrush
-            filler = ("", DiffTextFormats.fillerBF if hasFillerColor else None)
+            filler = ("", DiffTextFormats.fillerBF if hasFillerColor else None, [])
             for n in range(max(len(deletions), len(additions))):
-                if n < len(deletions):
-                    item = deletions[n]
-                    oldRows.append(cls._row(item.text, item.oldLineNo, "-", DiffTextFormats.delBF))
+                deletion = deletions[n] if n < len(deletions) else None
+                addition = additions[n] if n < len(additions) else None
+
+                # A line that faces its own old self: say which words changed
+                delRanges = addRanges = ()
+                if deletion is not None and addition is not None and deletion[1].doppelganger == addition[0]:
+                    delRanges, addRanges = doppelgangerRanges(
+                        deletion[1].text.removesuffix("\n"), addition[1].text.removesuffix("\n"))
+
+                if deletion is not None:
+                    item = deletion[1]
+                    oldRows.append(cls._row(item.text, item.oldLineNo, "-", DiffTextFormats.delBF, delRanges))
                 else:
                     oldRows.append(filler)
-                if n < len(additions):
-                    item = additions[n]
-                    newRows.append(cls._row(item.text, item.newLineNo, "+", DiffTextFormats.addBF))
+                if addition is not None:
+                    item = addition[1]
+                    newRows.append(cls._row(item.text, item.newLineNo, "+", DiffTextFormats.addBF, addRanges))
                 else:
                     newRows.append(filler)
         return oldRows, newRows
@@ -126,22 +146,31 @@ class SideBySideDiffView(QWidget):
         # Put all the text in at once, then format only the blocks that need it,
         # in one edit block. Inserting row by row relaid the document out after
         # every line: seconds for a long diff.
-        view.setPlainText("\n".join(text for text, _blockFormat in rows))
+        view.setPlainText("\n".join(text for text, _blockFormat, _spans in rows))
         cls._paint(view.document(), rows)
         view.moveCursor(QTextCursor.MoveOperation.Start)
 
     @staticmethod
     def _paint(document: QTextDocument, rows, plainFormat: QTextBlockFormat | None = None):
-        """Set the rows' block formats; rows without one get plainFormat, if given."""
+        """
+        Set the rows' block formats and the emphasis on the words that changed
+        inside a line; rows without a block format get plainFormat, if given.
+        """
         cursor = QTextCursor(document)
         cursor.beginEditBlock()
         block = document.firstBlock()
-        for _text, blockFormat in rows:
+        for text, blockFormat, spans in rows:
             if blockFormat is None:
                 blockFormat = plainFormat
             if blockFormat is not None:
                 cursor.setPosition(block.position())
                 cursor.setBlockFormat(blockFormat)
+            for start, end, charFormat in spans:
+                # Qt counts UTF-16 units, Python counts characters
+                cursor.setPosition(block.position() + qstringLength(text[:start]))
+                cursor.setPosition(block.position() + qstringLength(text[:end]),
+                                   QTextCursor.MoveMode.KeepAnchor)
+                cursor.setCharFormat(charFormat)
             block = block.next()
         cursor.endEditBlock()
 

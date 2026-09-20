@@ -211,6 +211,44 @@ def testSideBySideDiffUsesTheCodeFont(tempDir, mainWindow):
         assert view.font().pointSize() == unified.font().pointSize()
 
 
+def testSideBySideDiffMarksWhatChangedInsideTheLine(tempDir, mainWindow):
+    # A line facing its own old self is nearly all unchanged text. The words
+    # that did change carry a stronger tint, so the eye doesn't reread the line.
+    from gitfourchette.diffview.diffdocument import DiffTextFormats
+
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/duck.py", 'def quack(self):\n    return "quack"\n\nwaddle()\n')
+    with RepoContext(wd) as repo:
+        repo.index.add("duck.py")
+        repo.index.write()
+    writeFile(f"{wd}/duck.py", 'def quack(self):\n    return "moo"\n\nwaddle()\n')
+
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("duck.py"), check=True)
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    side = rw.diffArea.sideBySideDiffView
+
+    def emphasized(view, needle):
+        """The text of every run painted in the doppelganger color."""
+        block = view.document().find(needle).block()
+        strong = DiffTextFormats.doppelgangerDelCF if view is side.oldView else DiffTextFormats.doppelgangerAddCF
+        runs = []
+        fragments = block.begin()
+        while not fragments.atEnd():
+            fragment = fragments.fragment()
+            if fragment.charFormat().background() == strong.background():
+                runs.append(fragment.text())
+            fragments += 1
+        return runs
+
+    # Only the word that changed is emphasized, not the whole line
+    assert emphasized(side.oldView, 'return "quack"') == ["quack"]
+    assert emphasized(side.newView, 'return "moo"') == ["moo"]
+
+    # The line that didn't change carries no emphasis at all
+    assert emphasized(side.newView, "def quack") == []
+
+
 def testSideBySideDiffMarksWhitespaceWhenAsked(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
     writeFile(F"{wd}/SideBySide.txt", "new  line A\n")
