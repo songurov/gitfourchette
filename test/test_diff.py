@@ -264,6 +264,13 @@ def testSideBySideDiffMarksWhitespaceWhenAsked(tempDir, mainWindow):
     assert side.newView.document().defaultTextOption().flags() & marks
     assert side.oldView.document().defaultTextOption().flags() & marks
 
+    # The line numbers in front of the code are padded with a space Qt never
+    # marks, so the marks stay on the code they belong to
+    row = side.newView.document().find("new  line A").block().text()
+    gutter, code = row[:row.index("new")], row[row.index("new"):]
+    assert " " not in gutter and " " not in gutter and "\t" not in gutter
+    assert code == "new  line A"
+
 
 @pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with this test, but Qt 6 is fine")
 def testDiffViewStageAllLinesThenJumpToNextFile(tempDir, mainWindow):

@@ -10,6 +10,15 @@ from gitfourchette.qt import *
 from gitfourchette.toolbox import qstringLength
 
 
+GUTTER_SPACE = " "
+"""
+Figure space: as wide as a digit, which in a fixed-pitch font is as wide as
+anything else, and no whitespace mark is ever drawn on it. The line numbers
+in front of the code are padded with it so that turning the marks on doesn't
+fill the numbers with dots that belong to no line of code.
+"""
+
+
 class SideBySideDiffView(QWidget):
     """Aligned old/new presentation of a unified DiffDocument."""
 
@@ -83,7 +92,7 @@ class SideBySideDiffView(QWidget):
         that tell what changed inside the line, in the row's own coordinates.
         """
         prefix = "" if lineNo < 0 else str(lineNo)
-        head = f"{prefix:>6} {origin or ' '} "
+        head = f"{prefix:>6} {origin or ' '} ".replace(" ", GUTTER_SPACE)
         body = text.removesuffix("\n")
         emphasis = DiffTextFormats.doppelgangerDelCF if origin == "-" else DiffTextFormats.doppelgangerAddCF
         spans = [(len(head) + start, len(head) + min(end, len(body)), emphasis)
