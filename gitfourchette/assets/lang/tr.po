@@ -9007,3 +9007,19 @@ msgstr[1] "Burada {n} çakışma çözüldü"
 #: forms/commitdetailview.py
 msgid "See what was decided"
 msgstr "Nelere karar verildiğini gör"
+
+#: tasks/indextasks.py
+msgid "Settle this file again"
+msgstr "Bu dosyayı yeniden çöz"
+
+#: tasks/indextasks.py
+msgid "Put your version of {0} in the working directory? The merge itself stays as it is."
+msgstr "{0} dosyasının sizin sürümünüz çalışma dizinine konsun mu? Birleştirmenin kendisi olduğu gibi kalır."
+
+#: tasks/indextasks.py
+msgid "Write file"
+msgstr "Dosyayı yaz"
+
+#: tasks/indextasks.py
+msgid "{0} settled again; the change is in your working directory."
+msgstr "{0} yeniden çözüldü; değişiklik çalışma dizininizde."

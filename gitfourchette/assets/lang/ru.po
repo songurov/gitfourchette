@@ -9141,3 +9141,19 @@ msgstr[2] "Здесь были решены {n} конфликтов"
 #: forms/commitdetailview.py
 msgid "See what was decided"
 msgstr "Показать, что решили"
+
+#: tasks/indextasks.py
+msgid "Settle this file again"
+msgstr "Решить этот файл заново"
+
+#: tasks/indextasks.py
+msgid "Put your version of {0} in the working directory? The merge itself stays as it is."
+msgstr "Положить вашу версию {0} в рабочий каталог? Само слияние останется как есть."
+
+#: tasks/indextasks.py
+msgid "Write file"
+msgstr "Записать файл"
+
+#: tasks/indextasks.py
+msgid "{0} settled again; the change is in your working directory."
+msgstr "{0} решён заново; изменение — в рабочем каталоге."

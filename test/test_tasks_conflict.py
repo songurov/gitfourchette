@@ -791,4 +791,13 @@ def testInspectWhatAMergeDecided(tempDir, mainWindow):
     editor.resolveButton.click()
     assert "Mark as resolved" in editor.resolveButton.text()
     assert all(button.isEnabled() for button, _choice in editor.choiceButtons)
-    editor.reject()
+
+    # A new decision lands in the working directory; the merge itself is untouched
+    next(b for b, choice in editor.choiceButtons if b.text() == "Theirs").click()
+    theirVersion = editor.outputPane.toPlainText()
+    editor.resolveButton.click()
+    acceptQMessageBox(rw, "working directory")
+
+    assert readTextFile(f"{wd}/.gitignore") == theirVersion
+    assert rw.repo.head_commit_id == mergeId, "history is left alone"
+    assert "settled again" in mainWindow.statusBar2.currentMessage()

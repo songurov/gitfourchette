@@ -522,7 +522,27 @@ class InspectMergeResolution(RepoTask):
                              committed=committed, labels=(oursName, theirsName))
         editor.resize(900, 700)
         yield from self.flowDialog(editor, abortTaskIfRejected=False)
+        decidedAgain = not editor.inspecting
+        resolution = editor.resolution()
         editor.deleteLater()
+
+        if not decidedAgain or resolution == committed:
+            return
+
+        # History stays as it is: a new decision goes into the working
+        # directory, where it can be looked at and committed like any change.
+        target = self.repo.in_workdir(path)
+        yield from self.flowConfirm(
+            _("Settle this file again"),
+            _("Put your version of {0} in the working directory? "
+              "The merge itself stays as it is.", bquo(path)),
+            verb=_("Write file"))
+
+        self.epilog.effects |= TaskEffects.Workdir
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        Path(target).write_text(resolution, "utf-8")
+        self.epilog.jumpTo = NavLocator.inUnstaged(path)
+        self.epilog.status = _("{0} settled again; the change is in your working directory.", tquo(path))
 
     def blobText(self, commitId: Oid, path: str) -> str:
         """The file as of that commit, or nothing if it wasn't there."""

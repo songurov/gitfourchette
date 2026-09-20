@@ -9101,3 +9101,19 @@ msgstr[2] "{n} de conflicte au fost rezolvate aici"
 #: forms/commitdetailview.py
 msgid "See what was decided"
 msgstr "Vezi ce s-a decis"
+
+#: tasks/indextasks.py
+msgid "Settle this file again"
+msgstr "Rezolvă din nou acest fișier"
+
+#: tasks/indextasks.py
+msgid "Put your version of {0} in the working directory? The merge itself stays as it is."
+msgstr "Pun versiunea ta a {0} în directorul de lucru? Merge-ul rămâne neatins."
+
+#: tasks/indextasks.py
+msgid "Write file"
+msgstr "Scrie fișierul"
+
+#: tasks/indextasks.py
+msgid "{0} settled again; the change is in your working directory."
+msgstr "{0} rezolvat din nou; modificarea este în directorul de lucru."
