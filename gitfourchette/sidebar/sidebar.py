@@ -715,6 +715,11 @@ class Sidebar(QTreeView):
 
         self.clearSelectionBackup()
 
+    def prepareForDeletion(self):
+        """Stop taking app-wide refreshes: this sidebar is on its way out."""
+        GFApplication.instance().prefsChanged.disconnect(self.refreshPrefs)
+        self.repoWidget = None
+
     def refreshPrefs(self):
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         self.setAnimated(settings.prefs.animations)

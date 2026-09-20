@@ -622,5 +622,8 @@ def testThemeSwitchAfterClosingATabRaisesNothing(tempDir, mainWindow):
         mainWindow.closeAllTabs()
         GFApplication.applyPrefs(qtStyle=f"{BUILTIN},light,neutral")
         QTest.qWait(0)
+        # And back out of Neutral, which is where the sidebar puts its filter away
+        GFApplication.applyPrefs(qtStyle=f"{BUILTIN},light")
+        QTest.qWait(0)
     finally:
         GFApplication.applyPrefs(qtStyle="")
