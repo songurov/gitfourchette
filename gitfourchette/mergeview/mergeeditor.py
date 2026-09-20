@@ -176,6 +176,17 @@ class MergeEditor(QDialog):
         layout.addLayout(choices)
         layout.addLayout(footer)
 
+        # From the keyboard: walk the conflicts, and settle the file. The
+        # shortcuts work wherever the focus is in the editor, panes included.
+        inEditor = Qt.ShortcutContext.WidgetWithChildrenShortcut
+        makeWidgetShortcut(self, lambda: self.goToConflict(self.currentConflict + 1),
+                           "Alt+Down", "F8", context=inEditor)
+        makeWidgetShortcut(self, lambda: self.goToConflict(self.currentConflict - 1),
+                           "Alt+Up", "Shift+F8", context=inEditor)
+        makeWidgetShortcut(self, lambda: self.chooseHere((Side.Ours,)), "Alt+1", context=inEditor)
+        makeWidgetShortcut(self, lambda: self.chooseHere((Side.Theirs,)), "Alt+2", context=inEditor)
+        makeWidgetShortcut(self, self.finish, "Ctrl+Return", "Ctrl+Enter", context=inEditor)
+
         self.applyFont()
         self.fillPanes()
         self.refresh()

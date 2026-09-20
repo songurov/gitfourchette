@@ -685,6 +685,12 @@ def testResolveConflictInTheApp(tempDir, mainWindow):
     # Until a decision is made, the result keeps git's markers: no side is lost
     assert "<<<<<<<" in editor.outputPane.toPlainText()
 
+    # The keyboard reaches the decisions from anywhere in the editor
+    keys = {shortcut.key().toString() for shortcut in editor.findChildren(QShortcut)}
+    assert {"Alt+1", "Alt+2", "Alt+Down", "Alt+Up"} <= keys
+    assert all(shortcut.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+               for shortcut in editor.findChildren(QShortcut))
+
     theirsButton = next(b for b, choice in editor.choiceButtons if b.text() == "Theirs")
     theirsButton.click()
     output = editor.outputPane.toPlainText()
