@@ -2,7 +2,6 @@
 
 import json
 import os
-import shutil
 import tomllib
 from pathlib import Path
 
@@ -38,7 +37,10 @@ PRESETS = {
 
 
 def availableProviders():
-    return {name: path for name in ("codex", "claude") if (path := shutil.which(name))}
+    # ToolCommands.which, not shutil.which: a CLI installed in the user's own
+    # bin directory isn't on the PATH that a desktop launcher hands us.
+    from gitfourchette.exttools.toolcommands import ToolCommands
+    return {name: path for name in ("codex", "claude") if (path := ToolCommands.which(name))}
 
 
 def configuredModel(provider):

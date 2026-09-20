@@ -26,6 +26,7 @@ _logger = logging.getLogger(__name__)
 _placeholderPattern = re.compile(r"\$[_a-zA-Z0-9]+")
 
 _whichPath = None
+_loginShellPath = None
 
 
 class ToolCommands:
@@ -339,7 +340,45 @@ class ToolCommands:
         if FLATPAK and _whichPath is None:
             # Cache host's $PATH
             _whichPath = cls.runSync("sh", "-c", "echo $PATH").rstrip()
-        return shutil.which(name, path=_whichPath)
+        found = shutil.which(name, path=_whichPath)
+        if found is None and not FLATPAK:
+            shellPath = cls.loginShellPath()
+            found = shutil.which(name, path=shellPath)
+            if found is not None:
+                cls.adoptLoginShellPath(shellPath)
+        return found
+
+    @classmethod
+    def adoptLoginShellPath(cls, shellPath: str):
+        """
+        Put the directories the login shell looks in on our own PATH, so that
+        the tools we launch inherit them: a program found there often calls
+        others that were installed beside it.
+        """
+        ours = os.environ.get("PATH", "").split(os.pathsep)
+        extra = [directory for directory in shellPath.split(os.pathsep)
+                 if directory and directory not in ours]
+        if extra:
+            os.environ["PATH"] = os.pathsep.join(ours + extra)
+
+    @classmethod
+    def loginShellPath(cls) -> str:
+        """
+        The PATH that a terminal would have, looked up once.
+
+        A tool installed in the user's own bin directory is on that PATH but
+        not necessarily on ours: a desktop launcher (launchd on macOS) hands
+        the app a bare PATH that owes nothing to the shell profile. So when a
+        tool isn't where we can see it, ask the login shell where it looks.
+        """
+        global _loginShellPath
+        if _loginShellPath is None:
+            _loginShellPath = ""
+            shell = os.environ.get("SHELL", "")
+            if shell and not WINDOWS:
+                with suppress(OSError):
+                    _loginShellPath = cls.runSync(shell, "-l", "-c", "echo $PATH", timeoutMsec=5000).strip()
+        return _loginShellPath
 
     @classmethod
     def makeTerminalScript(cls, workdir: str, commandTokens: list[str]) -> str:

@@ -1,10 +1,13 @@
+import os
+import shutil
 import sys
 import time
 from pygit2 import Signature
 
 import pytest
 
-from gitfourchette.exttools import aichat
+from gitfourchette.exttools import aichat, toolcommands
+from gitfourchette.exttools.toolcommands import ToolCommands
 from gitfourchette.forms import aichatdialog
 from gitfourchette.forms.aichatdialog import AiChatDialog
 from gitfourchette.nav import NavLocator
@@ -38,8 +41,39 @@ def testCliArguments():
 
 
 def testProviderDetection(monkeypatch):
-    monkeypatch.setattr(aichat.shutil, "which", lambda name: "/bin/claude" if name == "claude" else None)
+    monkeypatch.setattr(ToolCommands, "which", lambda name: "/bin/claude" if name == "claude" else None)
     assert aichat.availableProviders() == {"claude": "/bin/claude"}
+
+
+@pytest.mark.skipif(WINDOWS, reason="no login shell on Windows")
+def testToolFoundOnTheLoginShellPath(tmp_path, monkeypatch):
+    # A desktop launcher hands us a PATH that owes nothing to the shell
+    # profile, so a CLI in the user's own bin directory is invisible until we
+    # ask the login shell where it looks (see ToolCommands.loginShellPath)
+    userBin = tmp_path / "bin"
+    userBin.mkdir()
+    tool = userBin / "make-believe-cli"
+    tool.write_text("#!/bin/sh\necho hi\n")
+    tool.chmod(0o755)
+
+    fakeShell = tmp_path / "fakeshell"
+    fakeShell.write_text(f"#!/bin/sh\necho {userBin}\n")
+    fakeShell.chmod(0o755)
+
+    monkeypatch.setattr(toolcommands, "_loginShellPath", None)
+    monkeypatch.setenv("PATH", "/nonexistent")
+    assert shutil.which("make-believe-cli") is None
+
+    monkeypatch.setenv("SHELL", str(fakeShell))
+    assert ToolCommands.which("make-believe-cli") == str(tool)
+
+    # The shell is asked once, not on every lookup
+    monkeypatch.setenv("SHELL", "/nonexistent/shell")
+    assert ToolCommands.which("make-believe-cli") == str(tool)
+
+    # A tool found there may call others installed beside it, so our own
+    # children get those directories too
+    assert str(userBin) in os.environ["PATH"].split(os.pathsep)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude"])
