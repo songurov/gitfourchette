@@ -73,3 +73,14 @@ def testEachMessageIsNamedAndSeparated(qapp):
     assert "<b>Assistant</b>" in html
     assert "<hr" in html
     assert html.index("You") < html.index("Assistant")
+
+
+def testDefaultsToTheSchemeTheDiffsUse(mainWindow):
+    # transcriptHtml with no scheme asks the app for the one the diffs are read in
+    html = transcriptHtml([{"role": "assistant", "content": "```python\nx = 1\n```"}],
+                          lambda role: "Assistant")
+    assert "<table" in html
+    # The code is there, colored token by token by the app's own scheme
+    plain = QTextDocumentFragment.fromHtml(html).toPlainText()
+    assert "x = 1" in plain
+    assert html.count("<span style=\"color:") >= 2
