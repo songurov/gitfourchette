@@ -610,3 +610,17 @@ def testFreshPrefsStartInNeutralFollowingTheSystem(mainWindow, monkeypatch):
 def testToolbarDarkFromANativeStyleAdoptsNeutral():
     assert withThemeMode("", True) == f"{BUILTIN},dark,neutral"
     assert withThemeMode("Fusion", False) == f"{BUILTIN},light,neutral"
+
+
+def testThemeSwitchAfterClosingATabRaisesNothing(tempDir, mainWindow):
+    # A closed tab's diff view gives up its gutter but lives on until Qt
+    # deletes it: an app-wide restyle must not reach it
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},dark,neutral")
+    try:
+        rw = mainWindow.openRepo(unpackRepo(tempDir))
+        rw.jump(NavLocator.inCommit(Oid(hex="83834a7afdaa1a1260568567f6ad90020389f664"), "a/a1.txt"), check=True)
+        mainWindow.closeAllTabs()
+        GFApplication.applyPrefs(qtStyle=f"{BUILTIN},light,neutral")
+        QTest.qWait(0)
+    finally:
+        GFApplication.applyPrefs(qtStyle="")

@@ -108,6 +108,15 @@ class CodeView(QPlainTextEdit):
         makeWidgetShortcut(self, lambda: self.window().close(), QKeySequence.StandardKey.Close,
                            context=Qt.ShortcutContext.WindowShortcut)
 
+    def prepareForDeletion(self):
+        # Let go of the gutter to help the garbage collector. Stop listening to
+        # the app first: a view on its way out must not be asked to restyle
+        # itself while Qt is still holding on to it.
+        app = GFApplication.instance()
+        app.restyle.disconnect(self.refreshPrefs)
+        app.prefsChanged.disconnect(self.refreshPrefs)
+        self.gutter = None
+
     # ---------------------------------------------
     # Qt events
 

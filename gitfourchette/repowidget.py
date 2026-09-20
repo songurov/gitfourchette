@@ -513,7 +513,7 @@ class RepoWidget(QWidget):
         # GC help
 
         # Detangle cross-references to help out garbage collector
-        self.diffView.gutter = None
+        self.diffView.prepareForDeletion()
         self.sidebar.repoWidget = None
         self.graphView.repoWidget = None
         for searchBar in self.findChildren(SearchBar):  # Help collect FileLists, GraphView, DiffView
