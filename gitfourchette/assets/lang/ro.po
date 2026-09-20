@@ -9253,3 +9253,31 @@ msgstr "Estompează jetonul într-o serie de commit-uri ale aceluiași autor"
 #: trtables.py
 msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
 msgstr "O serie de commit-uri ale aceleiași persoane îi arată jetonul o singură dată la intensitate maximă, așa că schimbarea autorului sare în ochi. Oprește-l pentru o față pe fiecare rând."
+
+#: mergeview/mergeeditor.py
+msgid "Stacked"
+msgstr "Suprapus"
+
+#: mergeview/mergeeditor.py
+msgid "One column"
+msgstr "O singură coloană"
+
+#: mergeview/mergeeditor.py
+msgid "Our version and theirs next to each other, the result underneath"
+msgstr "Versiunea noastră și a lor una lângă alta, rezultatul dedesubt"
+
+#: mergeview/mergeeditor.py
+msgid "Our version above theirs, the result underneath"
+msgstr "Versiunea noastră deasupra celei a lor, rezultatul dedesubt"
+
+#: mergeview/mergeeditor.py
+msgid "One column, where each conflict shows our version over theirs"
+msgstr "O singură coloană, în care fiecare conflict arată versiunea noastră deasupra celei a lor"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs"
+msgstr "A noastră peste a lor"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs — {0} over {1}"
+msgstr "A noastră peste a lor — {0} peste {1}"

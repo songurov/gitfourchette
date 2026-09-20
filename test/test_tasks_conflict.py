@@ -6,6 +6,7 @@
 
 from pathlib import Path
 
+from gitfourchette import settings
 from gitfourchette.codeview.codewindow import CodeWindow
 from gitfourchette.tasks import InspectMergeResolution
 from gitfourchette.toolbox import ActionDef
@@ -13,6 +14,7 @@ from gitfourchette.gitdriver import GitConflictSides
 from gitfourchette.nav import NavLocator
 from gitfourchette.porcelain import *
 from . import reposcenario
+from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
 
 
@@ -857,3 +859,142 @@ def testSettlingAFileKeepsItsLineEndings(tempDir, mainWindow):
 
     written = Path(f"{wd}/crlf.txt").read_bytes()
     assert written == b"one\r\nours\r\nthree", written
+
+
+CONFLICTED_SAMPLE = """\
+hello
+<<<<<<< HEAD
+our line
+our second line
+=======
+their line
+>>>>>>> feature/x
+goodbye"""
+
+
+def testMergeEditorLaysItselfOutThreeWays(tempDir, mainWindow):
+    """Side by side, stacked, or one column — with every decision still on the table."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+    from gitfourchette.settings import MergeLayout
+
+    wd = unpackRepo(tempDir, "testrepoformerging")
+    rw = mainWindow.openRepo(wd)
+
+    node = rw.sidebar.findNodeByRef("refs/heads/branch-conflicts")
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), "merge into.+master")
+    acceptQMessageBox(rw, "branch-conflicts.+into.+master.+may cause conflicts")
+    rw.jump(NavLocator.inUnstaged(".gitignore"), check=True)
+    rw.conflictView.resolveHereButton.click()
+    editor = findQDialog(rw, "resolve conflict", MergeEditor)
+
+    def layoutButton(mode: MergeLayout) -> QToolButton:
+        return editor.findChild(QToolButton, f"MergeEditorLayout_{mode.name}")
+
+    # Side by side to begin with: two panes, level with each other
+    assert editor.layoutMode == MergeLayout.SideBySide
+    assert layoutButton(MergeLayout.SideBySide).isChecked()
+    assert editor.sides.orientation() == Qt.Orientation.Horizontal
+    assert editor.theirsColumn.isVisible()
+    assert editor.oursPane.blockCount() == editor.theirsPane.blockCount()
+
+    # Settle the conflict, then move the panes around it
+    next(b for b, choice in editor.choiceButtons if b.text() == "Ours").click()
+    settled = editor.outputPane.toPlainText()
+    assert "<<<<<<<" not in settled
+
+    # Stacked: our version above theirs, both still there
+    layoutButton(MergeLayout.Stacked).click()
+    assert editor.layoutMode == MergeLayout.Stacked
+    assert editor.sides.orientation() == Qt.Orientation.Vertical
+    assert editor.theirsColumn.isVisible()
+    assert editor.oursPane.blockCount() == editor.theirsPane.blockCount()
+    assert editor.outputPane.toPlainText() == settled, "the decision survives the move"
+    assert all(button.isEnabled() for button, _choice in editor.choiceButtons)
+
+    # One column: our version over theirs in the same pane, the other one folded away
+    layoutButton(MergeLayout.OneColumn).click()
+    assert editor.layoutMode == MergeLayout.OneColumn
+    assert not editor.theirsColumn.isVisible()
+    assert editor.theirsPane.toPlainText() == ""
+    region = next(r for r in editor.regions if r.conflicted)
+    column = editor.oursPane.toPlainText().splitlines()
+    (ourFirst, ourLast), (theirFirst, theirLast) = editor.oursPane.sideRanges[0]
+    assert column[ourFirst:ourLast + 1] == region.ours
+    assert column[theirFirst:theirLast + 1] == region.theirs
+    assert ourLast < theirFirst, "ours over theirs"
+    assert editor.outputPane.toPlainText() == settled
+
+    # And the decisions still decide, in this arrangement too
+    next(b for b, choice in editor.choiceButtons if b.text() == "Theirs").click()
+    theirs = editor.outputPane.toPlainText()
+    assert theirs != settled
+    assert "<<<<<<<" not in theirs
+    editor.resolveButton.click()
+    assert not rw.repo.index.conflicts
+    assert readTextFile(f"{wd}/.gitignore") == theirs
+
+    assertTranslatedInForkLanguages("Side by side", "Stacked", "One column", "Ours over theirs")
+
+
+def testMergeEditorRemembersItsLayout(tempDir, mainWindow):
+    """The arrangement is remembered, and comes back after a restart."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+    from gitfourchette.settings import MergeLayout, Prefs
+
+    editor = MergeEditor("spam.txt", CONFLICTED_SAMPLE, mainWindow)
+    assert editor.layoutMode == MergeLayout.SideBySide
+    editor.findChild(QToolButton, "MergeEditorLayout_OneColumn").click()
+    assert settings.prefs.mergeEditorLayout == MergeLayout.OneColumn
+    editor.reject()
+
+    # The next file opens the way the last one was left
+    again = MergeEditor("eggs.txt", CONFLICTED_SAMPLE, mainWindow)
+    assert again.layoutMode == MergeLayout.OneColumn
+    assert not again.theirsColumn.isVisible()
+    assert again.findChild(QToolButton, "MergeEditorLayout_OneColumn").isChecked()
+    again.reject()
+
+    # ...and so does the next launch
+    class RoundTripPrefs(Prefs):
+        _filename = "prefs-mergelayout-test.json"
+
+    written = RoundTripPrefs()
+    written.mergeEditorLayout = MergeLayout.Stacked
+    path = Path(written.write())
+    try:
+        reloaded = RoundTripPrefs()
+        assert reloaded.load()
+        assert reloaded.mergeEditorLayout == MergeLayout.Stacked
+    finally:
+        path.unlink()
+
+
+def testMergeEditorKeepsTheDividerBetweenTheTwoVersions(mainWindow):
+    """A divider dragged in one arrangement is still where it was after a trip through another."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+    from gitfourchette.settings import MergeLayout
+
+    def share(sizes):
+        return sizes[0] / sum(sizes)
+
+    editor = MergeEditor("spam.txt", CONFLICTED_SAMPLE, mainWindow)
+    editor.resize(1200, 900)  # room enough that the panes' own minimums don't set the split
+    editor.show()
+    try:
+        button = {mode: editor.findChild(QToolButton, f"MergeEditorLayout_{mode.name}") for mode in MergeLayout}
+
+        # Give ours twice the room of theirs, as dragging the divider would
+        editor.sides.setSizes([2000, 1000])
+        dragged = share(editor.sides.sizes())
+        assert abs(dragged - 2 / 3) < 0.03
+
+        button[MergeLayout.Stacked].click()
+        assert abs(share(editor.sides.sizes()) - dragged) < 0.03, "ours keeps its share when the panes stack"
+
+        button[MergeLayout.OneColumn].click()
+        button[MergeLayout.SideBySide].click()
+        back = editor.sides.sizes()
+        assert min(back) > 0, "the folded pane comes back with room of its own"
+        assert abs(share(back) - dragged) < 0.03, "and the divider is where it was left"
+    finally:
+        editor.reject()

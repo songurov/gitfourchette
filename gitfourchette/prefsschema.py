@@ -269,6 +269,7 @@ PANES: list[Pane] = [
 
 
 HIDDEN: dict[str, str] = {
+    "mergeEditorLayout": "set where it's seen: the merge editor's header",
     "toolBarButtonStyle": "set where it's seen: the toolbar's context menu",
     "toolBarIconSize": "set where it's seen: the toolbar's context menu",
     "defaultCloneLocation": "remembered by the Clone dialog",

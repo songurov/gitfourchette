@@ -9157,3 +9157,31 @@ msgstr "Aynı yazarın ardışık commit’lerinde rozeti soluklaştır"
 #: trtables.py
 msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
 msgstr "Aynı kişinin ardışık commit’lerinde rozeti tam güçte yalnızca bir kez görünür, böylece yazar değişimi göze çarpar. Her satırda bir yüz için bunu kapat."
+
+#: mergeview/mergeeditor.py
+msgid "Stacked"
+msgstr "Üst üste"
+
+#: mergeview/mergeeditor.py
+msgid "One column"
+msgstr "Tek sütun"
+
+#: mergeview/mergeeditor.py
+msgid "Our version and theirs next to each other, the result underneath"
+msgstr "Bizim sürümümüz ve onlarınki yan yana, sonuç altta"
+
+#: mergeview/mergeeditor.py
+msgid "Our version above theirs, the result underneath"
+msgstr "Bizim sürümümüz onlarınkinin üstünde, sonuç altta"
+
+#: mergeview/mergeeditor.py
+msgid "One column, where each conflict shows our version over theirs"
+msgstr "Tek sütun: her çakışmada bizim sürümümüz onlarınkinin üstünde"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs"
+msgstr "Bizimki onlarınkinin üstünde"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs — {0} over {1}"
+msgstr "Bizimki onlarınkinin üstünde — {0}, {1} üstünde"

@@ -9293,3 +9293,31 @@ msgstr "Приглушать значок в череде коммитов од�
 #: trtables.py
 msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
 msgstr "В череде коммитов одного человека его значок показан в полную силу лишь один раз, поэтому смена автора бросается в глаза. Выключите, чтобы лицо было в каждой строке."
+
+#: mergeview/mergeeditor.py
+msgid "Stacked"
+msgstr "Друг над другом"
+
+#: mergeview/mergeeditor.py
+msgid "One column"
+msgstr "Одна колонка"
+
+#: mergeview/mergeeditor.py
+msgid "Our version and theirs next to each other, the result underneath"
+msgstr "Наша версия и их рядом друг с другом, результат снизу"
+
+#: mergeview/mergeeditor.py
+msgid "Our version above theirs, the result underneath"
+msgstr "Наша версия над их версией, результат снизу"
+
+#: mergeview/mergeeditor.py
+msgid "One column, where each conflict shows our version over theirs"
+msgstr "Одна колонка, где каждый конфликт показывает нашу версию над их"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs"
+msgstr "Наша над их"
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs — {0} over {1}"
+msgstr "Наша над их — {0} над {1}"

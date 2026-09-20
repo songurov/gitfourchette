@@ -183,6 +183,21 @@ class CommitFormPlacement(enum.StrEnum):
     BottomBar = "bottom-bar"
 
 
+class MergeLayout(enum.StrEnum):
+    """How the merge editor arranges the two versions and the result."""
+
+    SideBySide = "side-by-side"
+    """Our version and theirs next to each other, the result underneath."""
+
+    Stacked = "stacked"
+    """Our version above theirs, the result underneath: full-width lines,
+    and a change of side is a step down rather than a step across."""
+
+    OneColumn = "one-column"
+    """One column: each conflict shows our version over theirs, in place,
+    with the file's unchanged text running through them."""
+
+
 class TabBarClick(enum.StrEnum):
     Nothing = ""
     Close = "close"
@@ -302,6 +317,10 @@ class Prefs(PrefsFile):
 
     commands                    : str                   = ""
     confirmCommands             : bool                  = True
+
+    mergeEditorLayout           : MergeLayout           = MergeLayout.SideBySide
+    """How the merge editor lays itself out. Set in its own header, where the
+    arrangement is what you are looking at."""
 
     tabCloseButton              : bool                  = True
     expandingTabs               : bool                  = True

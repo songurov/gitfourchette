@@ -18,10 +18,29 @@ from gitfourchette.localization import *
 from gitfourchette.mergeview.conflictparser import (
     MergeRegion, Side, parseConflicts, renderResolution)
 from gitfourchette.qt import *
+from gitfourchette.settings import MergeLayout
 from gitfourchette.toolbox import *
 
 FILLER = " "
 "A line that stands in for text the other side doesn't have, so the panes stay level."
+
+
+def layoutCaptions() -> dict[MergeLayout, tuple[str, str]]:
+    """
+    What each arrangement calls itself in the editor's header, and what it
+    does. Built on demand, so that a change of language reaches it.
+    """
+    return {
+        MergeLayout.SideBySide: (
+            _("Side by side"),
+            _("Our version and theirs next to each other, the result underneath")),
+        MergeLayout.Stacked: (
+            _("Stacked"),
+            _("Our version above theirs, the result underneath")),
+        MergeLayout.OneColumn: (
+            _("One column"),
+            _("One column, where each conflict shows our version over theirs")),
+    }
 
 
 class MergePane(QPlainTextEdit):
@@ -33,6 +52,11 @@ class MergePane(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.blockRanges: list[tuple[int, int]] = []
         "First and last block of each conflict, in the order they appear."
+
+        self.sideRanges: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        """With both versions in one column, which blocks of each conflict are
+        ours and which are theirs. Empty in the arrangements that give each
+        version a pane of its own."""
 
     def mousePressEvent(self, event: QMouseEvent):
         super().mousePressEvent(event)
@@ -67,6 +91,11 @@ class MergeEditor(QDialog):
         self.inspecting = bool(committed)
         self.crlf = text.count("\r\n") * 2 >= text.count("\n")
         self.labels = labels
+        self.layoutMode = settings.prefs.mergeEditorLayout
+        self.sidesShare = 0.5
+        """How much of the room between the two versions goes to ours. Kept as
+        a share rather than in pixels, so that a divider the person dragged
+        survives a trip through another arrangement."""
 
         self.setWindowTitle(_("Merge of {0}", Path(path).name) if self.inspecting
                             else _("Resolve conflict in {0}", Path(path).name))
@@ -92,6 +121,8 @@ class MergeEditor(QDialog):
         header = QHBoxLayout()
         header.addWidget(self.pathLabel)
         header.addStretch(1)
+        header.addLayout(self.makeLayoutPicker())
+        header.addSpacing(8)
         header.addWidget(self.counterLabel)
         header.addWidget(self.previousButton)
         header.addWidget(self.nextButton)
@@ -111,17 +142,20 @@ class MergeEditor(QDialog):
             label.setProperty("class", "secondary")
             tweakWidgetFont(label, 90)
 
-        sides = QSplitter(Qt.Orientation.Horizontal, self)
-        sides.setObjectName("Split_MergeSides")
-        sides.setChildrenCollapsible(False)
-        sides.addWidget(self._column(self.oursHeader, self.oursPane))
-        sides.addWidget(self._column(self.theirsHeader, self.theirsPane))
-        sides.setSizes([1, 1])
+        self.oursColumn = self._column(self.oursHeader, self.oursPane)
+        self.theirsColumn = self._column(self.theirsHeader, self.theirsPane)
+
+        self.sides = QSplitter(Qt.Orientation.Horizontal, self)
+        self.sides.setObjectName("Split_MergeSides")
+        self.sides.setChildrenCollapsible(False)
+        self.sides.addWidget(self.oursColumn)
+        self.sides.addWidget(self.theirsColumn)
+        self.sides.setSizes([1, 1])
 
         self.splitter = QSplitter(Qt.Orientation.Vertical, self)
         self.splitter.setObjectName("Split_MergeEditor")
         self.splitter.setChildrenCollapsible(False)
-        self.splitter.addWidget(sides)
+        self.splitter.addWidget(self.sides)
         self.splitter.addWidget(self._column(self.outputHeader, self.outputPane))
         self.splitter.setSizes([600, 400])
 
@@ -198,11 +232,87 @@ class MergeEditor(QDialog):
         makeWidgetShortcut(self, self.finish, "Ctrl+Return", "Ctrl+Enter", context=inEditor)
 
         self.applyFont()
+        self.applyLayoutMode()
         self.fillPanes()
         if self.inspecting:
             self.enterInspection()
         self.refresh()
         self.goToConflict(0)
+
+    # -------------------------------------------------------------------------
+    # How the editor is laid out
+
+    def makeLayoutPicker(self) -> QHBoxLayout:
+        """
+        The arrangements, as one segmented control in the header: which one is
+        on is the point, so it is a row of latched buttons rather than a menu
+        you have to open to find out.
+        """
+        self.layoutButtons: list[tuple[QAbstractButton, MergeLayout]] = []
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+
+        row = QHBoxLayout()
+        row.setSpacing(0)
+        for mode, (caption, tip) in layoutCaptions().items():
+            button = QToolButton(self)
+            button.setObjectName(f"MergeEditorLayout_{mode.name}")
+            button.setText(caption)
+            button.setAccessibleName(caption)
+            button.setToolTip(tip)
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.setChecked(mode == self.layoutMode)
+            button.clicked.connect(lambda _checked=False, m=mode: self.setLayoutMode(m))
+            group.addButton(button)
+            row.addWidget(button)
+            self.layoutButtons.append((button, mode))
+        return row
+
+    def setLayoutMode(self, mode: MergeLayout):
+        """
+        Lay the editor out another way, and remember it for next time. Nothing
+        that has been decided is lost: the arrangement only moves the panes
+        around what the conflicts already say.
+        """
+        if mode == self.layoutMode:
+            return
+        self.rememberSidesShare()
+        self.layoutMode = mode
+        if settings.prefs.mergeEditorLayout != mode:
+            settings.prefs.mergeEditorLayout = mode
+            settings.prefs.setDirty()
+        self.applyLayoutMode()
+        self.fillPanes()
+        self.refresh()
+        self.goToConflict(self.currentConflict)
+
+    def rememberSidesShare(self):
+        """
+        Note where the divider between the two versions sits before the panes
+        are moved. One column has no divider — and the pane it folds away
+        measures zero — so there is nothing to learn from it.
+        """
+        if self.layoutMode == MergeLayout.OneColumn:
+            return
+        sizes = self.sides.sizes()
+        room = sum(sizes)
+        if len(sizes) == 2 and room > 0:
+            self.sidesShare = sizes[0] / room
+
+    def applyLayoutMode(self):
+        """Put the panes where the current arrangement wants them."""
+        oneColumn = self.layoutMode == MergeLayout.OneColumn
+        self.sides.setOrientation(Qt.Orientation.Horizontal if self.layoutMode == MergeLayout.SideBySide
+                                  else Qt.Orientation.Vertical)
+        self.theirsColumn.setVisible(not oneColumn)
+        if not oneColumn:
+            # In shares of a notional thousand: the splitter scales them to
+            # whatever room it has, in whichever direction it now runs
+            ours = round(1000 * self.sidesShare)
+            self.sides.setSizes([ours, 1000 - ours])
+        for button, mode in self.layoutButtons:
+            button.setChecked(mode == self.layoutMode)
 
     def enterInspection(self):
         """
@@ -257,9 +367,18 @@ class MergeEditor(QDialog):
         return [region for region in self.regions if region.conflicted]
 
     def fillPanes(self):
+        """Write the two versions out the way the current arrangement wants them."""
+        if self.layoutMode == MergeLayout.OneColumn:
+            self.fillOneColumn()
+        else:
+            self.fillTwoPanes()
+        self.writeHeaders()
+
+    def fillTwoPanes(self):
         """
-        Lay out both versions so they stay level: where one side has fewer
-        lines than the other, the shorter one gets blank ones.
+        A pane each, level with the other: where one side has fewer lines than
+        the other, the shorter one gets blank ones, so a conflict sits at the
+        same height in both.
         """
         for pane, side in ((self.oursPane, Side.Ours), (self.theirsPane, Side.Theirs)):
             lines: list[str] = []
@@ -275,8 +394,42 @@ class MergeEditor(QDialog):
                 ranges.append((first, len(lines) - 1))
             pane.setPlainText("\n".join(lines))
             pane.blockRanges = ranges
+            pane.sideRanges = []
 
+    def fillOneColumn(self):
+        """
+        One column, reading like the file itself: the text both sides agree on
+        runs through it, and at each conflict our version is followed by theirs.
+        A side that wrote nothing still gets a line, or there would be no way
+        to tell whose turn it was.
+        """
+        lines: list[str] = []
+        ranges: list[tuple[int, int]] = []
+        sideRanges: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        for region in self.regions:
+            if not region.conflicted:
+                lines += region.ours
+                continue
+            first = len(lines)
+            lines += region.ours or [FILLER]
+            middle = len(lines)
+            lines += region.theirs or [FILLER]
+            ranges.append((first, len(lines) - 1))
+            sideRanges.append(((first, middle - 1), (middle, len(lines) - 1)))
+        self.oursPane.setPlainText("\n".join(lines))
+        self.oursPane.blockRanges = ranges
+        self.oursPane.sideRanges = sideRanges
+        self.theirsPane.setPlainText("")
+        self.theirsPane.blockRanges = []
+        self.theirsPane.sideRanges = []
+
+    def writeHeaders(self):
+        """Say which version is where, and where it came from."""
         labels = self.labels or next(((r.oursLabel, r.theirsLabel) for r in self.conflicts), ("", ""))
+        if self.layoutMode == MergeLayout.OneColumn:
+            self.oursHeader.setText(_("Ours over theirs — {0} over {1}", labels[0], labels[1])
+                                    if labels[0] and labels[1] else _("Ours over theirs"))
+            return
         self.oursHeader.setText(_("Ours — {0}", labels[0]) if labels[0] else _("Ours"))
         self.theirsHeader.setText(_("Theirs — {0}", labels[1]) if labels[1] else _("Theirs"))
 
@@ -316,27 +469,57 @@ class MergeEditor(QDialog):
     def highlightCurrent(self):
         """
         Tint each side's conflicts in its own color, the one being decided on
-        strongest: the eye should find the passage in both panes at once.
+        strongest: the eye should find the passage on both sides at once. The
+        colors say which side is which, whether the two sit in two panes or
+        one above the other in the same one.
         """
         conflicts = self.conflicts
         if not conflicts:
             return
+
+        if self.layoutMode == MergeLayout.OneColumn:
+            selections = []
+            for index, ((ourFirst, ourLast), (theirFirst, theirLast)) in enumerate(self.oursPane.sideRanges):
+                for base, first, last in ((colors.blue, ourFirst, ourLast),
+                                          (colors.olive, theirFirst, theirLast)):
+                    selections += self.tintBlocks(self.oursPane, first, last,
+                                                  self.tint(base, index, conflicts[index].settled))
+            self.oursPane.setExtraSelections(selections)
+            self.theirsPane.setExtraSelections([])
+            return
+
         for pane, base in ((self.oursPane, colors.blue), (self.theirsPane, colors.olive)):
             selections = []
             for index, (first, last) in enumerate(pane.blockRanges):
-                settled = conflicts[index].settled
-                color = QColor(base)
-                color.setAlphaF(0.40 if index == self.currentConflict else (0.18 if not settled else 0.07))
-                for blockNumber in range(first, last + 1):
-                    block = pane.document().findBlockByNumber(blockNumber)
-                    if not block.isValid():
-                        continue
-                    selection = QTextEdit.ExtraSelection()
-                    selection.format.setBackground(color)
-                    selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
-                    selection.cursor = QTextCursor(block)
-                    selections.append(selection)
+                color = self.tint(base, index, conflicts[index].settled)
+                selections += self.tintBlocks(pane, first, last, color)
             pane.setExtraSelections(selections)
+
+    def versionPanes(self) -> tuple[MergePane, ...]:
+        """The panes holding a version of the file: one of them in one column."""
+        if self.layoutMode == MergeLayout.OneColumn:
+            return (self.oursPane,)
+        return (self.oursPane, self.theirsPane)
+
+    def tint(self, base: QColor, index: int, settled: bool) -> QColor:
+        """A side's color, strongest on the conflict being decided on."""
+        color = QColor(base)
+        color.setAlphaF(0.40 if index == self.currentConflict else (0.18 if not settled else 0.07))
+        return color
+
+    @staticmethod
+    def tintBlocks(pane: QPlainTextEdit, first: int, last: int, color: QColor) -> list:
+        selections = []
+        for blockNumber in range(first, last + 1):
+            block = pane.document().findBlockByNumber(blockNumber)
+            if not block.isValid():
+                continue
+            selection = QTextEdit.ExtraSelection()
+            selection.format.setBackground(color)
+            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+            selection.cursor = QTextCursor(block)
+            selections.append(selection)
+        return selections
 
     # -------------------------------------------------------------------------
     # Deciding
@@ -348,7 +531,7 @@ class MergeEditor(QDialog):
             return
         self.currentConflict = max(0, min(index, len(conflicts) - 1))
         first, _last = self.oursPane.blockRanges[self.currentConflict]
-        for pane in (self.oursPane, self.theirsPane):
+        for pane in self.versionPanes():
             cursor = QTextCursor(pane.document().findBlockByNumber(first))
             pane.setTextCursor(cursor)
             pane.centerCursor()

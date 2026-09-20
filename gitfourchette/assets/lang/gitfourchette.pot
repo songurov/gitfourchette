@@ -9171,3 +9171,31 @@ msgstr ""
 #: trtables.py
 msgid "A run of commits by the same person shows their chip once at full strength, so a change of author catches the eye. Turn it off for a face on every row."
 msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Stacked"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "One column"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Our version and theirs next to each other, the result underneath"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Our version above theirs, the result underneath"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "One column, where each conflict shows our version over theirs"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Ours over theirs — {0} over {1}"
+msgstr ""
