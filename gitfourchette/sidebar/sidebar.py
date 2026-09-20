@@ -27,7 +27,7 @@ from gitfourchette.sidebar.sidebarmodel import SidebarModel, SidebarNode, Sideba
 from gitfourchette.sidebar.sidebarsearch import SidebarSearch
 from gitfourchette.tasks import *
 from gitfourchette.tasks import gitflowtasks
-from gitfourchette.themes import activeTheme
+from gitfourchette.themes import ThemeVariant, activeTheme
 from gitfourchette.toolbox import *
 from gitfourchette.webhost import WebHost, identifyHost
 
@@ -721,6 +721,8 @@ class Sidebar(QTreeView):
 
         theme = activeTheme()
         self.setSourceList(theme is not None and theme.sidebarSourceList)
+        # Neutral keeps the filter field under the sidebar at all times
+        self.searchBar.setPermanent(theme is not None and theme.variant == ThemeVariant.Neutral)
 
     def setSourceList(self, sourceList: bool):
         """

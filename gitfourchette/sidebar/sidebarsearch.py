@@ -7,6 +7,7 @@
 from __future__ import annotations  # TODO: Remove once we can drop support for Python <= 3.13
 
 from gitfourchette.appconsts import *
+from gitfourchette.localization import *
 from gitfourchette.search.searchprovider import SearchProvider
 
 if TYPE_CHECKING:
@@ -19,6 +20,9 @@ class SidebarSearch(SearchProvider):
     def __init__(self, sidebar: Sidebar):
         super().__init__(sidebar)
         self.sidebar = sidebar
+
+    def longTitle(self) -> str:
+        return _("Filter")
 
     def invalidate(self):
         super().invalidate()

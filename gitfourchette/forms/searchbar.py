@@ -120,6 +120,7 @@ class SearchBar(QWidget):
         self.debounceTimer.timeout.connect(self.onDebounce)
 
         self.autoJumpWhenResultsComeIn = True
+        self.permanent = False
 
         tweakWidgetFont(self.ui.lineEdit, 85)
         tweakWidgetFont(self.ui.filterCheckBox, 85)
@@ -259,10 +260,29 @@ class SearchBar(QWidget):
         elif op == SearchBar.Op.Previous:
             self.onShiftEnterShortcut()
 
+    def setPermanent(self, permanent: bool):
+        """
+        A permanent bar stays with its buddy instead of popping up on demand
+        (Neutral's sidebar filter): it has no close button, and Escape empties
+        it rather than taking it away.
+        """
+        if permanent == self.permanent:
+            return
+        self.permanent = permanent
+        self.ui.closeButton.setVisible(not permanent)
+        if permanent:
+            self.popUp(SearchBar.Op.Start)
+            self.buddy.setFocus(Qt.FocusReason.OtherFocusReason)  # it's there, not asking to be typed in
+        else:
+            self.bail()
+
     def bail(self):
         self.debounceTimer.stop()
         self.buddy.setFocus(Qt.FocusReason.PopupFocusReason)
-        self.hide()
+        if self.permanent:
+            self.lineEdit.clear()
+        else:
+            self.hide()
 
     def onSearchTextChanged(self, text: str):
         assert self.isVisible()

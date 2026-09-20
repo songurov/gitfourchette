@@ -1004,3 +1004,34 @@ def testNeutralSidebarClickZonesFollowTheDrawing(tempDir, mainWindow, restoreThe
     textPoint = QPoint(row.left() + PADDING + 30, row.center().y())
     QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=textPoint)
     assert sb.selectedNode().data == "refs/heads/no-parent"
+
+
+def testNeutralKeepsTheFilterUnderTheSidebar(tempDir, mainWindow):
+    """Fork shows a Filter field at all times; the other looks pop it up on ⌘F."""
+    from gitfourchette.themes import ThemeName
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    sidebar = rw.sidebar
+    searchBar = sidebar.searchBar
+
+    GFApplication.applyPrefs(qtStyle="")
+    assert not searchBar.isVisibleTo(rw)
+
+    GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark,neutral")
+    try:
+        assert searchBar.isVisibleTo(rw)
+        assert not searchBar.ui.closeButton.isVisibleTo(searchBar)
+        assert searchBar.lineEdit.placeholderText() == "Filter"
+
+        searchBar.lineEdit.setText("master")
+        assert sidebar.indexForRef("refs/heads/master").isValid()
+        assert not sidebar.indexForRef("refs/heads/no-parent").isValid()
+
+        # Escape empties the field instead of taking it away
+        QTest.keyClick(searchBar.lineEdit, Qt.Key.Key_Escape)
+        assert searchBar.rawSearchTerm == ""
+        assert searchBar.isVisibleTo(rw)
+        assert sidebar.indexForRef("refs/heads/no-parent").isValid()
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+    assert not searchBar.isVisibleTo(rw)
