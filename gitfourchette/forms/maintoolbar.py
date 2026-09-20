@@ -543,11 +543,9 @@ class MainToolBar(QToolBar):
             self.branchAction,
             self.boxRightSpacer,
 
-            # Until the sidebar has rows that go to the working directory and
-            # to HEAD, these two wait on the right, out of the way of the
-            # buttons that act on the repo.
-            self.workdirAction,
-            self.headAction,
+            # No Workdir/HEAD buttons here: the sidebar's Local Changes and
+            # All Commits rows are one click away and say where you are, which
+            # a button can't. The menu entries and their keys are untouched.
             self.openInAction,
             self.themeAction,
             self.workspaceAction,
@@ -559,7 +557,6 @@ class MainToolBar(QToolBar):
             self.fetchAction, *syncSeparators, self.pullAction, self.pushAction, stashGap,
             self.stashAction,
             self.branchAction,
-            self.workdirAction, self.headAction,
             self.openInAction,
         ]
 
@@ -567,8 +564,6 @@ class MainToolBar(QToolBar):
             self.quickLaunchAction: "quick-launch",
             self.openInAction: "open-in",
             self.stashAction: "git-stash",
-            self.workdirAction: "sidebar-local-changes",
-            self.headAction: "sidebar-all-commits",
         }
         return ToolbarArrangement(actions, repoScoped, homeOnly, icons)
 

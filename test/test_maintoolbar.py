@@ -62,7 +62,14 @@ def testNeutralPutsTheSyncButtonsFirstAndTheRepoInTheMiddle(tempDir, mainWindow,
     mainWindow.openRepo(unpackRepo(tempDir))
     assert barItems(toolbar) == [
         "Sidebar", "Quick Launch", "Fetch", "|", "Pull", "|", "Push", "Stash",
-        "<repo>", "Branch", "Workdir", "HEAD", "Open In", "Theme", "Home"]
+        "<repo>", "Branch", "Open In", "Theme", "Home"]
+
+    # Workdir and HEAD left the bar for the sidebar's Local Changes and All
+    # Commits rows; the View menu and their keys still get you there
+    for action in toolbar.workdirAction, toolbar.headAction:
+        assert toolbar.widgetForAction(action) is None
+    assert findMenuAction(mainWindow.menuBar(), "view/working directory")
+    assert findMenuAction(mainWindow.menuBar(), "view/head")
 
     # Back, forward and Settings leave the bar, not the app
     for action in toolbar.backAction, toolbar.forwardAction, toolbar.settingsAction:
@@ -139,13 +146,13 @@ def testNeutralDrawsItsOwnToolbarIcons(tempDir, mainWindow, neutral):
     from gitfourchette.toolbox import iconbank
 
     toolbar = mainWindow.mainToolBar
-    actions = [toolbar.quickLaunchAction, toolbar.openInAction, toolbar.stashAction,
-               toolbar.workdirAction, toolbar.headAction]
+    actions = [toolbar.quickLaunchAction, toolbar.openInAction, toolbar.stashAction]
     icons = [action.property(ActionDef.IconProperty) for action in actions]
-    assert icons == ["quick-launch", "open-in", "git-stash", "sidebar-local-changes", "sidebar-all-commits"]
+    assert icons == ["quick-launch", "open-in", "git-stash"]
     assert iconbank.stockIconPath("git-stash").endswith("/neutral/git-stash.svg")
 
     GFApplication.applyPrefs(qtStyle=MODERN)
+    actions += [toolbar.workdirAction, toolbar.headAction]
     icons = [action.property(ActionDef.IconProperty) for action in actions]
     assert icons == ["edit-find", "terminal", "git-stash-black", "git-workdir", "git-head"]
 
