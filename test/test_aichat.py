@@ -734,3 +734,20 @@ def testEditingModeIsOffUnlessAskedFor():
 
     worktreePrompt = aichat.makeWorktreePrompt(["a.py"], "context", [], allowEdits=True)
     assert "You may change files in the working tree" in worktreePrompt
+
+
+def testAnswersShowCodeAsCode(aiDialog):
+    # An answer's listing gets its own box, in the font and colors of the diffs
+    aiDialog.messages = [
+        {"role": "user", "content": "what does it do?"},
+        {"role": "assistant", "content": "It calls this:\n\n```python\ndef prepare(self):\n    pass\n```\n"},
+    ]
+    aiDialog.render()
+    html = aiDialog.chat.toHtml()
+    assert "def prepare(self):" in aiDialog.chat.toPlainText()
+    assert "<table" in html, "the listing sits in a box of its own"
+
+    # A question is still quoted verbatim: Markdown in it stays in it
+    aiDialog.messages = [{"role": "user", "content": "# not a heading"}]
+    aiDialog.render()
+    assert "# not a heading" in aiDialog.chat.toPlainText()

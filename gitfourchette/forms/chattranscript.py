@@ -24,6 +24,19 @@ FENCE = re.compile(r"^[ \t]*```([^\n`]*)\n(.*?)(?:^[ \t]*```[ \t]*$|\Z)", re.DOT
 INLINE_CODE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 
 
+def answerHtml(content: str, scheme: ColorScheme | None = None, palette: QPalette | None = None) -> str:
+    """
+    One answer: its prose as Markdown, its code in a box of its own, in the
+    colors the diffs are read in.
+    """
+    palette = palette or QApplication.palette()
+    scheme = scheme if scheme is not None else settings.prefs.syntaxHighlightingScheme()
+    window = palette.color(QPalette.ColorRole.Base)
+    text = palette.color(QPalette.ColorRole.Text)
+    return messageHtml(content, scheme, _codeBackground(scheme, window, text),
+                       text, settings.prefs.monoFont().family())
+
+
 def transcriptHtml(messages, roleLabel, scheme: ColorScheme | None = None, palette: QPalette | None = None) -> str:
     """
     The whole conversation. `roleLabel` names a message's author ("You" or
@@ -94,8 +107,9 @@ def codeBlockHtml(code: str, language: str, scheme: ColorScheme | None,
     """
     code = code.rstrip("\n")
     inner = highlightedCode(code, language, scheme, textColor)
-    return (f'<table width="100%" cellpadding="8" cellspacing="0" '
-            f'style="background-color:{codeBg.name()};"><tr><td>'
+    rim = mixColors(codeBg, textColor, 0.18).name()
+    return (f'<table width="100%" cellpadding="8" cellspacing="0" border="1" '
+            f'bordercolor="{rim}" style="background-color:{codeBg.name()};"><tr><td>'
             f'<pre style="font-family:\'{fontFamily}\'; margin:0;">{inner}</pre>'
             f'</td></tr></table>')
 
@@ -141,9 +155,12 @@ def _lexer(language: str):
 
 
 def _codeBackground(scheme: ColorScheme | None, window: QColor, text: QColor) -> QColor:
-    if scheme is not None and scheme and scheme.backgroundColor.isValid():
-        return scheme.backgroundColor
-    return mixColors(window, text, 0.07)
+    """
+    A shade apart from the page, whichever way the page goes. The scheme's own
+    background is no good here: it matches the page in the theme it belongs to,
+    and a box you can't see isn't a box.
+    """
+    return mixColors(window, text, 0.09)
 
 
 def _body(html: str) -> str:

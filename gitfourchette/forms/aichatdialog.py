@@ -11,6 +11,7 @@ from gitfourchette import settings
 from gitfourchette.exttools.aichat import availableProviders, configuredModel, modelChoices, cliArguments, ResponseStream, makePrompt, makeWorktreePrompt
 from gitfourchette.exttools.aichat import CHANGE_REQUEST_PROMPT, PRESETS
 from gitfourchette.exttools.aireviewcontext import projectGuidance
+from gitfourchette.forms.chattranscript import answerHtml
 from gitfourchette.forms.commitarea import CommitDescriptionEdit
 from gitfourchette.localization import _, _n
 from gitfourchette.qt import *
@@ -36,7 +37,7 @@ def transcriptHtml(messages, roleLabel) -> str:
     The whole conversation as one document: a rule between exchanges, the name
     of whoever speaks, then what they said. A question is quoted verbatim —
     Markdown typed into it belongs to the question, not to the document that
-    quotes it.
+    quotes it — and an answer's code is set as code (see chattranscript).
     """
     blocks = []
     for index, message in enumerate(messages):
@@ -48,18 +49,8 @@ def transcriptHtml(messages, roleLabel) -> str:
             quoted = "<br>".join(escape(line) for line in content.splitlines())
             blocks.append(f"<blockquote><p>{quoted}</p></blockquote>" if quoted else "")
         else:
-            blocks.append(proseHtml(content))
+            blocks.append(answerHtml(content))
     return "\n".join(block for block in blocks if block)
-
-
-def proseHtml(markdown: str) -> str:
-    """An answer's Markdown, as Qt lays it out, without the document around it."""
-    if not markdown.strip():
-        return ""
-    document = QTextDocument()
-    document.setMarkdown(markdown, QTextDocument.MarkdownFeature.MarkdownDialectGitHub)
-    body = re.search(r"<body[^>]*>(.*)</body>", document.toHtml(), re.DOTALL)
-    return body.group(1).strip() if body else escape(markdown)
 
 
 class ScopeList(CommitDescriptionEdit):
