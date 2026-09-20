@@ -8844,3 +8844,119 @@ msgstr ""
 #: forms/aichatdialog.py:60
 msgid "{0}  (took {1})"
 msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Resolve conflict in {0}"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Previous conflict"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Next conflict"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Result"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Keep:"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Ours"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Theirs"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Ours, then theirs"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Theirs, then ours"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Neither"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "All ours"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of our version"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "All theirs"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of their version"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Edit the result by hand"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Mark as resolved"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Ours — {0}"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Theirs — {0}"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Conflict {0} of {1}"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "No conflicts"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "All {0} conflicts settled"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Unsettled conflicts"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here…"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Settle this file in GitFourchette: both versions side by side, one decision per conflict."
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "This file can’t be settled here; open it in your merge tool instead."
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here"
+msgstr ""
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict left"
+msgid_plural "{n} conflicts left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict is still open, and its markers would stay in the file. Mark the file as resolved anyway?"
+msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
+msgstr[0] ""
+msgstr[1] ""

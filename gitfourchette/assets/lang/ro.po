@@ -8918,3 +8918,121 @@ msgstr "{0}  ({1})"
 #: forms/aichatdialog.py:56
 msgid "{0}  (took {1})"
 msgstr "{0}  (a durat {1})"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve conflict in {0}"
+msgstr "Rezolvă conflictul din {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Previous conflict"
+msgstr "Conflictul anterior"
+
+#: mergeview/mergeeditor.py
+msgid "Next conflict"
+msgstr "Conflictul următor"
+
+#: mergeview/mergeeditor.py
+msgid "Result"
+msgstr "Rezultat"
+
+#: mergeview/mergeeditor.py
+msgid "Keep:"
+msgstr "Păstrează:"
+
+#: mergeview/mergeeditor.py
+msgid "Ours"
+msgstr "Versiunea noastră"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs"
+msgstr "Versiunea lor"
+
+#: mergeview/mergeeditor.py
+msgid "Ours, then theirs"
+msgstr "A noastră, apoi a lor"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs, then ours"
+msgstr "A lor, apoi a noastră"
+
+#: mergeview/mergeeditor.py
+msgid "Neither"
+msgstr "Niciuna"
+
+#: mergeview/mergeeditor.py
+msgid "All ours"
+msgstr "Toate ale noastre"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of our version"
+msgstr "Rezolvă toate conflictele rămase în favoarea versiunii noastre"
+
+#: mergeview/mergeeditor.py
+msgid "All theirs"
+msgstr "Toate ale lor"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of their version"
+msgstr "Rezolvă toate conflictele rămase în favoarea versiunii lor"
+
+#: mergeview/mergeeditor.py
+msgid "Edit the result by hand"
+msgstr "Editează rezultatul manual"
+
+#: mergeview/mergeeditor.py
+msgid "Mark as resolved"
+msgstr "Marchează ca rezolvat"
+
+#: mergeview/mergeeditor.py
+msgid "Ours — {0}"
+msgstr "A noastră — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs — {0}"
+msgstr "A lor — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Conflict {0} of {1}"
+msgstr "Conflictul {0} din {1}"
+
+#: mergeview/mergeeditor.py
+msgid "No conflicts"
+msgstr "Niciun conflict"
+
+#: mergeview/mergeeditor.py
+msgid "All {0} conflicts settled"
+msgstr "Toate cele {0} conflicte sunt rezolvate"
+
+#: mergeview/mergeeditor.py
+msgid "Unsettled conflicts"
+msgstr "Conflicte nerezolvate"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here…"
+msgstr "Rezolvă aici…"
+
+#: mergeview/mergeeditor.py
+msgid "Settle this file in GitFourchette: both versions side by side, one decision per conflict."
+msgstr "Rezolvă fișierul în GitFourchette: ambele versiuni alături, o decizie pentru fiecare conflict."
+
+#: mergeview/mergeeditor.py
+msgid "This file can’t be settled here; open it in your merge tool instead."
+msgstr "Acest fișier nu poate fi rezolvat aici; deschide-l în unealta ta de merge."
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here"
+msgstr "Rezolvă aici"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict left"
+msgid_plural "{n} conflicts left"
+msgstr[0] "{n} conflict rămas"
+msgstr[1] "{n} conflicte rămase"
+msgstr[2] "{n} de conflicte rămase"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict is still open, and its markers would stay in the file. Mark the file as resolved anyway?"
+msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
+msgstr[0] "{n} conflict e încă deschis, iar marcajele lui ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"
+msgstr[1] "{n} conflicte sunt încă deschise, iar marcajele lor ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"
+msgstr[2] "{n} de conflicte sunt încă deschise, iar marcajele lor ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"

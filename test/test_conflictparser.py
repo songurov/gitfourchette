@@ -67,7 +67,7 @@ def testDiff3MarkersKeepTheAncestor():
 def testEachChoiceRendersItsLines():
     def resolved(*choice):
         regions = parseConflicts(DIFF3)
-        regions[1].choice = choice
+        regions[1].decide(*choice)
         return renderResolution(regions)
 
     assert resolved(Side.Ours) == "hello\nour line\ngoodbye"
@@ -77,12 +77,12 @@ def testEachChoiceRendersItsLines():
     assert resolved(Side.Theirs, Side.Ours) == "hello\ntheir line\nour line\ngoodbye"
 
 
-def testDroppingASideIsAChoiceToo():
+def testKeepingNeitherSideIsADecisionToo():
     regions = parseConflicts(PLAIN)
-    regions[1].choice = ()
     assert not regions[1].settled
-    regions[1].choice = (Side.Ours,)
+    regions[1].decide()
     assert regions[1].settled
+    assert renderResolution(regions) == "hello\ngoodbye"
 
 
 def testEachSideReadsAsItsOwnFile():
@@ -119,10 +119,11 @@ def testEmptySideIsARealChoice():
     conflict = regions[1]
     assert conflict.ours == []
     assert conflict.theirs == ["their line"]
-    conflict.choice = (Side.Ours,)
+    conflict.decide(Side.Ours)
     assert renderResolution(regions) == "a\nb"
 
 
 def testRegionKnowsItsOwnLines():
-    region = MergeRegion(ours=["x"], theirs=["y"], conflicted=True, choice=(Side.Theirs,))
+    region = MergeRegion(ours=["x"], theirs=["y"], conflicted=True)
+    region.decide(Side.Theirs)
     assert region.resolvedLines() == ["y"]

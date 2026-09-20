@@ -416,6 +416,41 @@ class HardSolveConflicts(RepoTask):
         yield from self.flowConfirm(title, text=prompt + promptSuffix, verb=verb)
 
 
+class ResolveConflictHere(RepoTask):
+    """Settle a conflicted text file in the app, without an external merge tool."""
+
+    def flow(self, conflict: GitConflict):
+        from gitfourchette.mergeview.conflictparser import hasConflictMarkers
+        from gitfourchette.mergeview.mergeeditor import MergeEditor
+
+        path = conflict.ours.path
+        target = self.repo.in_workdir(path)
+
+        try:
+            text = Path(target).read_text("utf-8")
+        except (OSError, UnicodeDecodeError, ValueError) as error:
+            raise AbortTask(_("This file can’t be settled here; open it in your merge tool instead."),
+                            details=str(error)) from error
+
+        if not hasConflictMarkers(text):
+            raise AbortTask(_("There are no conflict markers in this file. "
+                              "Pick a version, or open it in your merge tool."))
+
+        dialog = MergeEditor(path, text, parent=self.parentWidget())
+        dialog.resize(900, 700)
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        yield from self.flowDialog(dialog)
+        resolution = dialog.resolution()
+        dialog.deleteLater()
+
+        self.epilog.effects |= TaskEffects.Workdir
+        Path(target).write_text(resolution, "utf-8")
+        yield from self.flowCallGit("add", "--force", "--", path)
+
+        self.epilog.jumpTo = NavLocator.inStaged(path)
+        self.epilog.status = _("Merge conflict resolved in {0}.", tquo(path))
+
+
 class OpenMergeTool(RepoTask):
     def flow(self, conflict: GitConflict, reopenWorkInProgress: bool):
         mergeDriver = MergeDriver.findOngoingMerge(conflict)

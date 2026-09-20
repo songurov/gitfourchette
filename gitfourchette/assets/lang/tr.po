@@ -8829,3 +8829,119 @@ msgstr "{0}  ({1})"
 #: forms/aichatdialog.py:56
 msgid "{0}  (took {1})"
 msgstr "{0}  ({1} sürdü)"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve conflict in {0}"
+msgstr "{0} içindeki çakışmayı çöz"
+
+#: mergeview/mergeeditor.py
+msgid "Previous conflict"
+msgstr "Önceki çakışma"
+
+#: mergeview/mergeeditor.py
+msgid "Next conflict"
+msgstr "Sonraki çakışma"
+
+#: mergeview/mergeeditor.py
+msgid "Result"
+msgstr "Sonuç"
+
+#: mergeview/mergeeditor.py
+msgid "Keep:"
+msgstr "Tut:"
+
+#: mergeview/mergeeditor.py
+msgid "Ours"
+msgstr "Bizim sürümümüz"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs"
+msgstr "Onların sürümü"
+
+#: mergeview/mergeeditor.py
+msgid "Ours, then theirs"
+msgstr "Önce bizimki, sonra onlarınki"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs, then ours"
+msgstr "Önce onlarınki, sonra bizimki"
+
+#: mergeview/mergeeditor.py
+msgid "Neither"
+msgstr "Hiçbiri"
+
+#: mergeview/mergeeditor.py
+msgid "All ours"
+msgstr "Tümü bizimki"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of our version"
+msgstr "Kalan tüm çakışmaları bizim sürümümüz lehine çöz"
+
+#: mergeview/mergeeditor.py
+msgid "All theirs"
+msgstr "Tümü onlarınki"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of their version"
+msgstr "Kalan tüm çakışmaları onların sürümü lehine çöz"
+
+#: mergeview/mergeeditor.py
+msgid "Edit the result by hand"
+msgstr "Sonucu elle düzenle"
+
+#: mergeview/mergeeditor.py
+msgid "Mark as resolved"
+msgstr "Çözüldü olarak işaretle"
+
+#: mergeview/mergeeditor.py
+msgid "Ours — {0}"
+msgstr "Bizimki — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs — {0}"
+msgstr "Onlarınki — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Conflict {0} of {1}"
+msgstr "Çakışma {0}/{1}"
+
+#: mergeview/mergeeditor.py
+msgid "No conflicts"
+msgstr "Çakışma yok"
+
+#: mergeview/mergeeditor.py
+msgid "All {0} conflicts settled"
+msgstr "{0} çakışmanın tümü çözüldü"
+
+#: mergeview/mergeeditor.py
+msgid "Unsettled conflicts"
+msgstr "Çözülmemiş çakışmalar"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here…"
+msgstr "Burada çöz…"
+
+#: mergeview/mergeeditor.py
+msgid "Settle this file in GitFourchette: both versions side by side, one decision per conflict."
+msgstr "Bu dosyayı GitFourchette içinde çöz: iki sürüm yan yana, her çakışma için bir karar."
+
+#: mergeview/mergeeditor.py
+msgid "This file can’t be settled here; open it in your merge tool instead."
+msgstr "Bu dosya burada çözülemez; birleştirme aracında aç."
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here"
+msgstr "Burada çöz"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict left"
+msgid_plural "{n} conflicts left"
+msgstr[0] "{n} çakışma kaldı"
+msgstr[1] "{n} çakışma kaldı"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict is still open, and its markers would stay in the file. Mark the file as resolved anyway?"
+msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
+msgstr[0] "{n} çakışma hâlâ açık ve işaretleri dosyada kalır. Dosya yine de çözüldü olarak işaretlensin mi?"
+msgstr[1] "{n} çakışma hâlâ açık ve işaretleri dosyada kalır. Dosya yine de çözüldü olarak işaretlensin mi?"

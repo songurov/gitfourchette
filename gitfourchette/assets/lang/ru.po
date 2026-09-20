@@ -8958,3 +8958,121 @@ msgstr "{0}  ({1})"
 #: forms/aichatdialog.py:56
 msgid "{0}  (took {1})"
 msgstr "{0}  (заняло {1})"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve conflict in {0}"
+msgstr "Разрешение конфликта в {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Previous conflict"
+msgstr "Предыдущий конфликт"
+
+#: mergeview/mergeeditor.py
+msgid "Next conflict"
+msgstr "Следующий конфликт"
+
+#: mergeview/mergeeditor.py
+msgid "Result"
+msgstr "Результат"
+
+#: mergeview/mergeeditor.py
+msgid "Keep:"
+msgstr "Оставить:"
+
+#: mergeview/mergeeditor.py
+msgid "Ours"
+msgstr "Наша версия"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs"
+msgstr "Их версия"
+
+#: mergeview/mergeeditor.py
+msgid "Ours, then theirs"
+msgstr "Наша, затем их"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs, then ours"
+msgstr "Их, затем наша"
+
+#: mergeview/mergeeditor.py
+msgid "Neither"
+msgstr "Ни одну"
+
+#: mergeview/mergeeditor.py
+msgid "All ours"
+msgstr "Везде наша"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of our version"
+msgstr "Разрешить все оставшиеся конфликты в пользу нашей версии"
+
+#: mergeview/mergeeditor.py
+msgid "All theirs"
+msgstr "Везде их"
+
+#: mergeview/mergeeditor.py
+msgid "Settle every remaining conflict in favor of their version"
+msgstr "Разрешить все оставшиеся конфликты в пользу их версии"
+
+#: mergeview/mergeeditor.py
+msgid "Edit the result by hand"
+msgstr "Править результат вручную"
+
+#: mergeview/mergeeditor.py
+msgid "Mark as resolved"
+msgstr "Отметить как разрешённый"
+
+#: mergeview/mergeeditor.py
+msgid "Ours — {0}"
+msgstr "Наша — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Theirs — {0}"
+msgstr "Их — {0}"
+
+#: mergeview/mergeeditor.py
+msgid "Conflict {0} of {1}"
+msgstr "Конфликт {0} из {1}"
+
+#: mergeview/mergeeditor.py
+msgid "No conflicts"
+msgstr "Конфликтов нет"
+
+#: mergeview/mergeeditor.py
+msgid "All {0} conflicts settled"
+msgstr "Все {0} конфликтов разрешены"
+
+#: mergeview/mergeeditor.py
+msgid "Unsettled conflicts"
+msgstr "Нерешённые конфликты"
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here…"
+msgstr "Разрешить здесь…"
+
+#: mergeview/mergeeditor.py
+msgid "Settle this file in GitFourchette: both versions side by side, one decision per conflict."
+msgstr "Разрешить файл в GitFourchette: обе версии рядом, по одному решению на конфликт."
+
+#: mergeview/mergeeditor.py
+msgid "This file can’t be settled here; open it in your merge tool instead."
+msgstr "Этот файл нельзя разрешить здесь; откройте его в программе слияния."
+
+#: mergeview/mergeeditor.py
+msgid "Resolve here"
+msgstr "Разрешить здесь"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict left"
+msgid_plural "{n} conflicts left"
+msgstr[0] "Остался {n} конфликт"
+msgstr[1] "Осталось {n} конфликта"
+msgstr[2] "Осталось {n} конфликтов"
+
+#: mergeview/mergeeditor.py
+msgid "{n} conflict is still open, and its markers would stay in the file. Mark the file as resolved anyway?"
+msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
+msgstr[0] "{n} конфликт ещё не решён, и его маркеры останутся в файле. Всё равно отметить файл как разрешённый?"
+msgstr[1] "{n} конфликта ещё не решены, и их маркеры останутся в файле. Всё равно отметить файл как разрешённый?"
+msgstr[2] "{n} конфликтов ещё не решены, и их маркеры останутся в файле. Всё равно отметить файл как разрешённый?"

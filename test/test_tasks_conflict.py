@@ -648,3 +648,47 @@ def testConflictSidesHasOursHasTheirs():
     assert get(GitConflictSides.DeletedByUs) == (False, True)
     assert get(GitConflictSides.BothAdded) == (True, True)
     assert get(GitConflictSides.BothModified) == (True, True)
+
+
+def testResolveConflictInTheApp(tempDir, mainWindow):
+    """Settle a conflicted file without an external merge tool."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+
+    wd = unpackRepo(tempDir, "testrepoformerging")
+    rw = mainWindow.openRepo(wd)
+    cv = rw.conflictView
+
+    node = rw.sidebar.findNodeByRef("refs/heads/branch-conflicts")
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), "merge into.+master")
+    acceptQMessageBox(rw, "branch-conflicts.+into.+master.+may cause conflicts")
+
+    rw.jump(NavLocator.inUnstaged(".gitignore"), check=True)
+    assert rw.repo.index.conflicts
+    assert cv.resolveHereButton.isVisible()
+
+    cv.resolveHereButton.click()
+    editor = findQDialog(rw, "resolve conflict", MergeEditor)
+
+    # Both versions are on screen, level with each other, and the result under them
+    assert editor.oursPane.blockRanges
+    assert len(editor.oursPane.blockRanges) == len(editor.theirsPane.blockRanges)
+    assert editor.oursPane.blockCount() == editor.theirsPane.blockCount()
+    assert "Conflict 1 of" in editor.counterLabel.text()
+    assert "conflict" in editor.summaryLabel.text().lower()
+
+    # Until a decision is made, the result keeps git's markers: no side is lost
+    assert "<<<<<<<" in editor.outputPane.toPlainText()
+
+    theirsButton = next(b for b, choice in editor.choiceButtons if b.text() == "Theirs")
+    theirsButton.click()
+    output = editor.outputPane.toPlainText()
+    assert "<<<<<<<" not in output
+    assert "All" in editor.summaryLabel.text() or "settled" in editor.summaryLabel.text()
+
+    editor.resolveButton.click()
+
+    assert not rw.repo.index.conflicts
+    staged = readTextFile(f"{wd}/.gitignore")
+    assert "<<<<<<<" not in staged
+    assert staged == output
+    assert rw.repo.status()[".gitignore"] & FileStatus.INDEX_MODIFIED

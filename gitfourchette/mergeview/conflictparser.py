@@ -42,11 +42,19 @@ class MergeRegion:
     baseLabel: str = ""
     theirsLabel: str = ""
     choice: tuple[Side, ...] = ()
-    "Which sides to keep, in this order. Empty means the conflict is still open."
+    "Which sides to keep, in this order. Empty with decided means: neither."
+
+    decided: bool = False
+    "Whether someone has settled this conflict."
 
     @property
     def settled(self) -> bool:
-        return not self.conflicted or bool(self.choice)
+        return not self.conflicted or self.decided
+
+    def decide(self, *sides: Side):
+        """Keep these sides, in this order; none of them is a decision too."""
+        self.choice = sides
+        self.decided = True
 
     def sideLines(self, side: Side) -> list[str]:
         return {Side.Ours: self.ours, Side.Theirs: self.theirs, Side.Base: self.base}[side]
@@ -154,7 +162,7 @@ def renderResolution(regions: list[MergeRegion]) -> str:
     """
     lines: list[str] = []
     for region in regions:
-        if region.conflicted and not region.choice:
+        if region.conflicted and not region.settled:
             lines += region.markedUpLines()
         else:
             lines += region.resolvedLines()

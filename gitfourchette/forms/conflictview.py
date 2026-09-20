@@ -24,7 +24,7 @@ from gitfourchette.gitdriver import GitConflict, GitConflictSides
 from gitfourchette.localization import *
 from gitfourchette.qt import *
 from gitfourchette.repomodel import RepoModel
-from gitfourchette.tasks import HardSolveConflicts, AcceptMergeConflictResolution, OpenMergeTool
+from gitfourchette.tasks import HardSolveConflicts, AcceptMergeConflictResolution, OpenMergeTool, ResolveConflictHere
 from gitfourchette.tasks.indextasks import PreviewDeltaFile
 from gitfourchette.toolbox import *
 
@@ -62,6 +62,20 @@ class ConflictView(QWidget):
         self.ui.theirsPreviewButton.setIcon(stockIcon("view-visible"))
         self.ui.oursPreviewButton.clicked.connect(lambda: self.openPreview("ours"))
         self.ui.theirsPreviewButton.clicked.connect(lambda: self.openPreview("theirs"))
+
+        # The app's own three-way editor, offered before the external tool:
+        # most conflicts are settled with a couple of clicks and never need one.
+        self.resolveHereButton = QPushButton(_("Resolve here…"), self)
+        self.resolveHereButton.setObjectName("resolveHereButton")
+        self.resolveHereButton.setToolTip(
+            _("Settle this file in GitFourchette: both versions side by side, one decision per conflict."))
+        self.resolveHereButton.setMinimumHeight(self.ui.mergeButton.minimumHeight())
+        self.resolveHereButton.setIcon(stockIcon("git-merge"))
+        self.resolveHereButton.clicked.connect(self.resolveHere)
+        mergeLayout: QGridLayout = self.ui.mergeLayout
+        mergeLayout.removeWidget(self.ui.mergeButton)
+        mergeLayout.addWidget(self.resolveHereButton, 0, 0, 1, 2)
+        mergeLayout.addWidget(self.ui.mergeButton, 1, 0, 1, 2)
 
         self.ui.mergeToolButton.clicked.connect(lambda: self.openPrefs.emit(ToolProcess.PrefKeyMergeTool))
         self.ui.oursButton.clicked.connect(lambda: self.execute("ours"))
@@ -124,6 +138,10 @@ class ConflictView(QWidget):
         if version in ["ours", "theirs"]:
             keepOurs = version == "ours"
             HardSolveConflicts.invoke(self, [self.currentConflict], keepOurs=keepOurs)
+
+    def resolveHere(self):
+        if self.currentConflict is not None:
+            ResolveConflictHere.invoke(self, self.currentConflict)
 
     def openMergeTool(self, conflict: GitConflict, reopenWorkInProgress=False):
         OpenMergeTool.invoke(self, conflict, reopenWorkInProgress)
