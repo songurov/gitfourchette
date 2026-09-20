@@ -12,6 +12,8 @@ import re
 
 import pytest
 
+from pathlib import Path
+
 from gitfourchette import settings
 from gitfourchette.nav import NavLocator
 from gitfourchette.themes import (
@@ -663,3 +665,31 @@ def testThemeSwitchAfterClosingATabRaisesNothing(tempDir, mainWindow):
         QTest.qWait(0)
     finally:
         GFApplication.applyPrefs(qtStyle="")
+
+
+def testEveryThemeStyleSheetParses(mainWindow):
+    """
+    A stylesheet Qt can't parse is silently half-applied: the app still runs,
+    but rules stop taking effect somewhere in the middle. A merge that drops a
+    brace has done exactly that here, so every look is parsed on its own.
+    """
+    from gitfourchette.themes import ThemeName
+
+    complaints = []
+    previous = qInstallMessageHandler(
+        lambda mode, context, message: complaints.append(str(message))
+        if "Could not parse" in str(message) else None)
+    try:
+        for style in ["", f"{ThemeName.BuiltIn},dark", f"{ThemeName.BuiltIn},light",
+                      f"{ThemeName.BuiltIn},dark,neutral", f"{ThemeName.BuiltIn},light,neutral"]:
+            GFApplication.applyPrefs(qtStyle=style)
+            assert not complaints, f"{style or 'default'}: {complaints}"
+    finally:
+        qInstallMessageHandler(previous)
+        GFApplication.applyPrefs(qtStyle="")
+
+
+def testThemeStyleSheetBracesBalance():
+    """The braces in the theme's source must pair up; a merge can drop one."""
+    source = Path(QFile("assets:style/theme.qss").fileName()).read_text("utf-8")
+    assert source.count("{") == source.count("}")
