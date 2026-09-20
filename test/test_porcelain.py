@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from gitfourchette.porcelain import strip_stash_message
 from .util import unpackRepo, RepoContext, WINDOWS
 
 
@@ -130,3 +131,19 @@ def testInGitdirWithSymlinkedRepo(tempDir):
         # Must not raise ValueError("Won't resolve absolute path outside gitdir")
         config_path = repo.in_gitdir("config", common=True)
     assert config_path.endswith("config")
+
+
+def testStashMessageSaysWhatTheStashIsAbout():
+    # A stash the user named
+    assert strip_stash_message("On master: half of the parser") == "half of the parser"
+    assert strip_stash_message("On (no branch): half of the parser") == "half of the parser"
+
+    # One git made on its own: everything past the branch describes the commit
+    # that was checked out, not what was stashed
+    assert strip_stash_message(
+        "WIP on feature/workspaces: 54336830 Merge branch 'feature/workspaces' of https://example/x"
+    ) == "WIP on feature/workspaces"
+    assert strip_stash_message("WIP on (no branch): 1a2b3c4 some subject") == "WIP on (no branch)"
+
+    # Anything else keeps its first line
+    assert strip_stash_message("something else entirely\nand more") == "something else entirely"

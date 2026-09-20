@@ -108,6 +108,7 @@ SHA-1 hash of the empty tree (sha1(b"tree \0")).
 DOT_GITMODULES = ".gitmodules"
 
 CORE_STASH_MESSAGE_PATTERN = _re.compile(r"^On (?:[^\s:]+|\(no branch\)): (.+)")
+AUTO_STASH_MESSAGE_PATTERN = _re.compile(r"^(WIP on (?:[^\s:]+|\(no branch\))): [0-9a-f]{7,40} .+")
 WINDOWS_RESERVED_FILENAMES_PATTERN = _re.compile(r"(.*/)?(AUX|COM[1-9]|CON|LPT[1-9]|NUL|PRN)($|\.|/)", _re.IGNORECASE)
 DIFF_HEADER_PATTERN = _re.compile(r"^diff --git (\"?\w/[^\"]+\"?) (\"?\w/[^\"]+\"?)")
 
@@ -446,7 +447,18 @@ def signatures_equalish(a: Signature, b: Signature) -> bool:
 
 
 def strip_stash_message(stash_message: str) -> str:
+    """
+    What a stash is about, in a few words.
+
+    A stash the user named says so in "On branch: their words". One git made
+    on its own says "WIP on branch: 1a2b3c4 the subject of the last commit",
+    where everything past the branch describes the commit that was checked
+    out, not what is in the stash: keep "WIP on branch" and drop the rest.
+    """
     m = CORE_STASH_MESSAGE_PATTERN.match(stash_message)
+    if m:
+        return m.group(1)
+    m = AUTO_STASH_MESSAGE_PATTERN.match(stash_message)
     if m:
         return m.group(1)
     # Remove linebreaks in WIP-type messages
