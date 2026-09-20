@@ -9349,3 +9349,18 @@ msgstr "Arbore de fișiere"
 #: diffarea.py
 msgid "The files this commit touched, under their folders"
 msgstr "Fișierele atinse de acest commit, în dosarele lor"
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to push to {0}"
+msgid_plural "{n} commits to push to {0}"
+msgstr[0] "{n} commit de trimis către {0}"
+msgstr[1] "{n} commit-uri de trimis către {0}"
+msgstr[2] "{n} de commit-uri de trimis către {0}"
+
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to pull from {0}"
+msgid_plural "{n} commits to pull from {0}"
+msgstr[0] "{n} commit de adus din {0}"
+msgstr[1] "{n} commit-uri de adus din {0}"
+msgstr[2] "{n} de commit-uri de adus din {0}"

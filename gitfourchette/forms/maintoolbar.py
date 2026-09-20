@@ -12,6 +12,7 @@ from gitfourchette import tasks
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
 from gitfourchette.qt import *
+from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.tasks import TaskBook
 from gitfourchette.themes import ToolbarLayout, activeTheme
 from gitfourchette.toolbox import *
@@ -69,6 +70,155 @@ class ActivityButton(QToolButton):
     def nextSpinnerFrame(self):
         self.spinnerFrame = (self.spinnerFrame + 1) % 8
         self.setIcon(stockIcon(f"busyspinner{1 + self.spinnerFrame}"))
+
+
+def tipWithCount(tip: str, count: int, sentence: str) -> str:
+    """
+    Put a count under a toolbar action's tooltip, never in place of it.
+
+    The bar's tooltips are the only place the buttons say what they are called
+    and which key presses them, so the count gets a line of its own under that
+    - "Push Branch… ⌘P" stays put whether or not anything is waiting.
+    """
+    if count <= 0:
+        return tip
+    if "<" not in tip:  # a tip without a shortcut is plain text: make it rich so the break takes
+        tip = f"<p style='white-space: pre'>{escape(tip)}"
+    return f"{tip}<br>{escape(sentence)}"
+
+
+class PushCountBadge(QWidget):
+    """
+    How much is waiting on the Push button: "↑2", the way the branch chips,
+    the graph and the sidebar already say it.
+
+    The app has always known the number - the graph hollows out the commits
+    that aren't on any remote and chips them "↑N", the sidebar arrows the
+    branch - but the button you press to send them said nothing until you
+    pressed it.
+
+    It floats over the button instead of joining the bar's layout, so the bar
+    comes out the same whether the badge is there or not: no button moves, no
+    gap changes, and the bar keeps its height.
+
+    It hangs off the bottom right of the glyph, on the line where the icon
+    gives way to the label: every theme leaves that line clear, and no theme
+    leaves a top corner clear. Neutral's swoosh ends in an arrowhead in the
+    top right, so a badge there erases it; Classic's glyph is a full-width bar
+    across the top over a centred arrow, so a badge in either top corner takes
+    half the bar with it. Down here the glyph keeps the head that names it,
+    whatever the count, and the badge only reaches over the tail.
+
+    However wide the digits come out, the pill stays on the button and the
+    count stops at "99+": a pill that outgrows the button is clipped flat by
+    its edge, which reads as a number cut in half rather than a number.
+
+    It only appears on a button that stacks its label under its icon, which is
+    the shape the bar uses. Icon-only buttons (compact mode) are barely wider
+    than their glyph, and a badge there would erase the only thing naming the
+    button; the count waits in the tooltip instead.
+    """
+
+    Inset = 1
+    "Gap between the badge and the button's right edge."
+
+    LabelGap = 7
+    "What a text-under-icon button leaves between the icon and its label."
+
+    Cap = 99
+    """
+    The highest count the badge spells out; above it, "99+".
+
+    The button is under 40 pixels wide: a count allowed to grow a digit at a
+    time eats the glyph, and then its own pill runs off the button's edge. The
+    tooltip always has the real number.
+    """
+
+    PointDrop = 2.0
+    "How much smaller than the button's own text the count is."
+
+    def __init__(self, parent: QToolButton):
+        super().__init__(parent)
+        self.setObjectName("GFToolbarPushBadge")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.count = 0
+        self.hide()
+        parent.installEventFilter(self)
+
+    @property
+    def text(self) -> str:
+        if self.count <= 0:
+            return ""
+        if self.count > PushCountBadge.Cap:
+            return f"{SYMBOL_AHEAD}{PushCountBadge.Cap}+"
+        return f"{SYMBOL_AHEAD}{self.count}"
+
+    def hasRoom(self) -> bool:
+        button = self.parentWidget()
+        return (isinstance(button, QToolButton)
+                and button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+
+    def badgeFont(self) -> QFont:
+        button = self.parentWidget()
+        font = QFont(button.font() if button is not None else QApplication.font())
+        font.setPointSizeF(max(6.0, font.pointSizeF() - PushCountBadge.PointDrop))
+        font.setBold(True)
+        return font
+
+    def setCount(self, count: int):
+        """Show `count`, or nothing at all when it's zero."""
+        count = max(0, count)
+        if count == self.count:
+            return
+        self.count = count
+        self.refresh()
+
+    def refresh(self):
+        """Fit the badge to its digits and park it under the glyph."""
+        button = self.parentWidget()
+        visible = self.count > 0 and self.hasRoom()
+        if visible:
+            assert isinstance(button, QToolButton)
+            inset = PushCountBadge.Inset
+            metrics = QFontMetrics(self.badgeFont())
+            # However wide the digits come out, the pill stays on the button:
+            # one clipped flat by the button's edge has lost its right cap and
+            # reads as a number cut in half.
+            width = min(metrics.horizontalAdvance(self.text) + 6, button.width() - 2 * inset)
+            height = metrics.height() + 1
+            # Sit on the line where the icon gives way to the label
+            bottom = min(button.iconSize().height() + PushCountBadge.LabelGap, button.height() - inset)
+            self.setFixedSize(width, height)
+            self.move(button.width() - width - inset, max(inset, bottom - height))
+            self.raise_()
+        self.setVisible(visible)
+        self.update()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # The button is resized by the bar's layout and refonted by applyCompact
+        if watched is self.parentWidget() and event.type() in (
+                QEvent.Type.Resize, QEvent.Type.FontChange):
+            self.refresh()
+        return False
+
+    def paintEvent(self, event: QPaintEvent):
+        if self.count <= 0:  # pragma: no cover - hidden at zero
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # The Active colors whatever the window's focus: a count that fades out
+        # when you click elsewhere reads as a count that changed.
+        palette = self.palette()
+        group = QPalette.ColorGroup.Active
+        rect = QRectF(self.rect())
+        radius = rect.height() / 2
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(palette.color(group, QPalette.ColorRole.Highlight))
+        painter.drawRoundedRect(rect, radius, radius)
+        painter.setPen(palette.color(group, QPalette.ColorRole.HighlightedText))
+        painter.setFont(self.badgeFont())
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text)
 
 
 class RepoSummaryBox(QFrame):
@@ -213,6 +363,14 @@ class MainToolBar(QToolBar):
         self.fetchAction = taskAction(tasks.FetchRemotes)
         self.pullAction = taskAction(tasks.PullBranch)
         self.pushAction = taskAction(tasks.PushBranch)
+
+        # What the checked-out branch has waiting: see setSyncCounts. The badge
+        # belongs to the Push button, which the bar makes anew in arrange(),
+        # so it's (re)created there.
+        self.syncCounts: tuple[int, int, str] = (0, 0, "")
+        self.pushBadge: PushCountBadge | None = None
+        self.pushTip = self.pushAction.toolTip()
+        self.pullTip = self.pullAction.toolTip()
 
         # In the Centered layout, Stash and Branch are split buttons: a click
         # stashes or starts a branch, as always, and the chevron beside the icon
@@ -463,8 +621,46 @@ class MainToolBar(QToolBar):
         if sidebarButton is not None:
             sidebarButton.setObjectName("GFToolbarSidebarButton")
 
+        pushButton = self.widgetForAction(self.pushAction)
+        assert isinstance(pushButton, QToolButton)
+        self.pushBadge = PushCountBadge(pushButton)
+        self.refreshSyncCounts()
+
         self.setToolButtonStyle(self.toolButtonStyle())
         self.setRepoScopedActionsVisible(self.repoOpen)
+
+    def setSyncCounts(self, ahead: int, behind: int, upstream: str):
+        """
+        Say what the checked-out branch has waiting: commits a push would send,
+        commits a pull would bring, and the upstream they travel to. All zero
+        when the branch has no upstream, so the buttons stay bare.
+        """
+        counts = (ahead, behind, upstream)
+        if counts == self.syncCounts:
+            return
+        self.syncCounts = counts
+        self.refreshSyncCounts()
+
+    def refreshSyncCounts(self):
+        """
+        Put the push count on the button, and spell both counts out in the
+        tooltips.
+
+        Only Push wears a badge. Pull's glyphs put their business exactly
+        where Push leaves room: Neutral's pull swoosh ends in its arrowhead at
+        the bottom left, and Classic's is a down arrow landing on a bar along
+        the bottom of the icon. A badge in that corner erases the arrowhead in
+        one look and the bar in the other, and Pull's button is the narrower
+        of the two in both, so its count rides in the tooltip instead, which
+        costs the bar nothing.
+        """
+        ahead, behind, upstream = self.syncCounts
+        if self.pushBadge is not None:
+            self.pushBadge.setCount(ahead)
+        self.pushAction.setToolTip(tipWithCount(self.pushTip, ahead, _n(
+            "{n} commit to push to {0}", "{n} commits to push to {0}", ahead, upstream)))
+        self.pullAction.setToolTip(tipWithCount(self.pullTip, behind, _n(
+            "{n} commit to pull from {0}", "{n} commits to pull from {0}", behind, upstream)))
 
     def centerRepoBox(self):
         """
@@ -694,6 +890,10 @@ class MainToolBar(QToolBar):
             button = self.widgetForAction(action)
             if isinstance(button, QToolButton):  # it may not be on the bar in this layout
                 button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+        # The badge only fits a button that stacks its label under its icon
+        if self.pushBadge is not None:
+            self.pushBadge.refresh()
 
     def onCustomContextMenuRequested(self, localPoint: QPoint):
         globalPoint = self.mapToGlobal(localPoint)

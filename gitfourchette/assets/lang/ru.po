@@ -9389,3 +9389,18 @@ msgstr "Дерево файлов"
 #: diffarea.py
 msgid "The files this commit touched, under their folders"
 msgstr "Файлы, затронутые этим коммитом, по папкам"
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to push to {0}"
+msgid_plural "{n} commits to push to {0}"
+msgstr[0] "{n} коммит для отправки в {0}"
+msgstr[1] "{n} коммита для отправки в {0}"
+msgstr[2] "{n} коммитов для отправки в {0}"
+
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to pull from {0}"
+msgid_plural "{n} commits to pull from {0}"
+msgstr[0] "{n} коммит для получения из {0}"
+msgstr[1] "{n} коммита для получения из {0}"
+msgstr[2] "{n} коммитов для получения из {0}"

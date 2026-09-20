@@ -13,7 +13,7 @@ import pytest
 
 from gitfourchette import settings
 from gitfourchette.globalshortcuts import GlobalShortcuts
-from gitfourchette.themes import NEUTRAL_DARK, ThemeName
+from gitfourchette.themes import NEUTRAL_DARK, ThemeName, ToolbarLayout
 from gitfourchette.toolbox import ActionDef, stripAccelerators
 from .util import *
 
@@ -407,3 +407,239 @@ def testNeutralActivityButtonListsWhatTasksSaid(tempDir, mainWindow, neutral):
     mainWindow.closeTab(mainWindow.tabs.indexOf(rw1))
     assert not activity.isBusy()
     QTest.qWait(1)  # let the closed tab go before the fixture changes the theme back
+
+
+# -----------------------------------------------------------------------------
+# The push count on the Push button
+
+
+def barMetrics(toolbar) -> list[tuple]:
+    """Where the bar puts everything, so a badge can be proven not to move it."""
+    metrics = [("toolbar", toolbar.height(), toolbar.iconSize().width())]
+    for action in toolbar.actions():
+        widget = toolbar.widgetForAction(action)
+        if widget is not None and action.isVisible():
+            metrics.append((stripAccelerators(action.text()), widget.geometry().getRect()))
+    return metrics
+
+
+def testPushButtonSaysHowMuchIsWaiting(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    # The fixture's master sits two commits ahead of origin/master
+    badge = toolbar.pushBadge
+    assert badge.count == 2
+    assert badge.text == "\u21912"
+    assert not badge.isHidden()
+    assert f"{toolbar.pushTip}<br>2 commits to push to origin/master" == toolbar.pushAction.toolTip()
+
+    # The badge belongs to the Push button and keeps to it
+    pushButton = toolbar.widgetForAction(toolbar.pushAction)
+    assert badge.parentWidget() is pushButton
+    assert pushButton.rect().contains(badge.geometry())
+
+    # Nothing waiting, nothing shown - and the button says what it does again
+    shell("git reset --hard origin/master", wd)
+    rw.refreshRepo()
+    assert badge.count == 0
+    assert badge.isHidden()
+    assert toolbar.pushAction.toolTip() == toolbar.pushTip
+    assert "commits to push" not in toolbar.pushAction.toolTip()
+
+
+def testPushBadgeFollowsCommitsAndPushes(tempDir, mainWindow, neutral):
+    from gitfourchette.forms.pushdialog import PushDialog
+
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    # A remote we can really push to, level with master to begin with
+    makeBareCopy(wd, addAsRemote="localfs", preFetch=True)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    badge = toolbar.pushBadge
+    assert badge.count == 0
+    assert badge.isHidden()
+
+    # A commit is one more thing to push, and the button says so unprompted
+    with RepoContext(wd) as repo:
+        repo.create_commit_on_head("local only", TEST_SIGNATURE, TEST_SIGNATURE)
+    rw.refreshRepo()
+    assert badge.count == 1
+    assert badge.text == "\u21911"
+    assert not badge.isHidden()
+    assert f"{toolbar.pushTip}<br>1 commit to push to localfs/master" == toolbar.pushAction.toolTip()
+
+    # Pushing empties it, again unprompted
+    node = rw.sidebar.findNodeByRef("refs/heads/master")
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), "push")
+    dlg = findQDialog(rw, "push.+branch")
+    assert isinstance(dlg, PushDialog)
+    dlg.startOperationButton.click()
+    QTest.qWait(0)
+
+    assert badge.count == 0
+    assert badge.isHidden()
+    assert toolbar.pushAction.toolTip() == toolbar.pushTip
+
+
+def testPushBadgeFollowsTheCheckedOutBranch(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    assert toolbar.pushBadge.count == 2
+
+    # no-parent is level with its upstream: switching to it clears the count
+    menu = toolbar.branchAction.menu()
+    menu.aboutToShow.emit()
+    triggerMenuAction(menu, "no-parent")
+    acceptQMessageBox(rw, "switch to")
+    assert "no-parent" == rw.repoModel.homeBranch
+    assert toolbar.pushBadge.count == 0
+    assert toolbar.pushBadge.isHidden()
+
+
+def testPushBadgeStaysAwayWithoutAnUpstream(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    shell("git branch --unset-upstream master", wd)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    # The graph still marks those two commits, but there is no remote to name,
+    # so the button keeps quiet rather than pointing nowhere
+    assert 2 == len(rw.repoModel.unpushedCommits)
+    assert toolbar.pushBadge.count == 0
+    assert toolbar.pushBadge.isHidden()
+    assert "commits to push" not in toolbar.pushAction.toolTip()
+
+
+def testPushBadgeDoesntMoveTheToolbar(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(50)  # let the box settle in the middle of the bar
+    assert toolbar.pushBadge.count == 2
+    withBadge = barMetrics(toolbar)
+
+    shell("git reset --hard origin/master", wd)
+    rw.refreshRepo()
+    QTest.qWait(50)
+    assert toolbar.pushBadge.count == 0
+    assert barMetrics(toolbar) == withBadge, "the badge must not shift the bar"
+
+
+def testPushBadgeStepsAsideInCompactMode(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    assert not toolbar.pushBadge.isHidden()
+
+    # Compact buttons are icon-only and barely wider than their glyph: a badge
+    # would erase the only thing naming the button, so the count waits in the
+    # tooltip until the labels come back
+    GFApplication.applyPrefs(compactUi=True)
+    QTest.qWait(0)
+    assert toolbar.pushBadge.count == 2
+    assert toolbar.pushBadge.isHidden()
+    assert f"{toolbar.pushTip}<br>2 commits to push to origin/master" == toolbar.pushAction.toolTip()
+
+    GFApplication.applyPrefs(compactUi=False)
+    QTest.qWait(0)
+    assert not toolbar.pushBadge.isHidden()
+
+
+def testPullTooltipSaysHowMuchIsBehind(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    shell("git reset --hard origin/master~1", wd)  # now origin/master is ahead of us
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+
+    # Pull's glyph puts its arrowhead (Neutral) or its bar (Classic) in the
+    # corner Push keeps free, so the count rides in its tooltip, not a badge
+    assert (0, 3, "origin/master") == rw.repoModel.syncCounts()
+    assert f"{toolbar.pullTip}<br>3 commits to pull from origin/master" == toolbar.pullAction.toolTip()
+    assert toolbar.pushBadge.isHidden()
+    assert toolbar.pushAction.toolTip() == toolbar.pushTip
+
+
+def testSyncCountsDontEatTheButtonNames(tempDir, mainWindow, neutral):
+    """The bar's tooltips are the only place Push and Pull say their name and their key."""
+    toolbar = mainWindow.mainToolBar
+    wd = unpackRepo(tempDir)
+    shell("git reset --hard origin/master~1", wd)  # three behind
+    with RepoContext(wd) as repo:  # and one ahead
+        repo.create_commit_on_head("local only", TEST_SIGNATURE, TEST_SIGNATURE)
+    rw = mainWindow.openRepo(wd)
+    QTest.qWait(0)
+    assert (1, 3, "origin/master") == rw.repoModel.syncCounts()
+
+    pushTip = toolbar.pushAction.toolTip()
+    pullTip = toolbar.pullAction.toolTip()
+    assert pushTip == f"{toolbar.pushTip}<br>1 commit to push to origin/master"
+    assert pullTip == f"{toolbar.pullTip}<br>3 commits to pull from origin/master"
+    # What the buttons are called is still in there, ahead of the count
+    assert "Push Branch" in pushTip
+    assert "Pull Remote Branch" in pullTip
+
+
+def testPushBadgeStaysOnTheButtonHoweverBigTheCountGets(tempDir, mainWindow, neutral):
+    toolbar = mainWindow.mainToolBar
+    mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    badge = toolbar.pushBadge
+    button = toolbar.widgetForAction(toolbar.pushAction)
+
+    # A count that grows a digit at a time outgrows the button it sits on, and
+    # a pill clipped flat by the button's edge reads as a number cut in half
+    for count, text in ((9, "↑9"), (99, "↑99"), (100, "↑99+"), (54321, "↑99+")):
+        toolbar.setSyncCounts(count, 0, "origin/master")
+        assert badge.text == text
+        assert button.rect().contains(badge.geometry())
+
+    # The real number is never lost: it's in the tooltip, under the button's name
+    assert f"{toolbar.pushTip}<br>54321 commits to push to origin/master" == toolbar.pushAction.toolTip()
+
+
+def glyphHead(button) -> QRect:
+    """The top of the button, where every theme puts the part that names the glyph."""
+    return QRect(0, 0, button.width(), button.iconSize().height() // 2 + 2)
+
+
+def assertBadgeKeepsOffTheGlyphsHead(toolbar):
+    button = toolbar.widgetForAction(toolbar.pushAction)
+    toolbar.setSyncCounts(0, 0, "")
+    QTest.qWait(0)
+    bare = button.grab().toImage()
+
+    toolbar.setSyncCounts(54321, 0, "origin/master")
+    QTest.qWait(0)
+    assert not toolbar.pushBadge.isHidden()
+    badged = button.grab().toImage()
+
+    head = glyphHead(button)
+    assert bare.copy(head) == badged.copy(head), "the badge sat on the glyph's head"
+    assert bare != badged, "the badge went missing"
+
+
+def testPushBadgeKeepsOffTheNeutralArrowhead(tempDir, mainWindow, neutral):
+    mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    assertBadgeKeepsOffTheGlyphsHead(mainWindow.mainToolBar)
+
+
+def testPushBadgeKeepsOffTheClassicBar(tempDir, mainWindow):
+    # Classic's glyph is a full-width bar over a centred arrow: a badge in
+    # either top corner covers the bar, whatever the count. Its button is also
+    # the narrowest the bar ever gives Push.
+    mainWindow.resize(1400, 800)
+    GFApplication.applyPrefs(qtStyle="", compactUi=False)
+    mainWindow.openRepo(unpackRepo(tempDir))
+    QTest.qWait(0)
+    toolbar = mainWindow.mainToolBar
+    assert toolbar.arrangementName == ToolbarLayout.Classic
+    assertBadgeKeepsOffTheGlyphsHead(toolbar)

@@ -9253,3 +9253,16 @@ msgstr "Dosya Ağacı"
 #: diffarea.py
 msgid "The files this commit touched, under their folders"
 msgstr "Bu işlemenin dokunduğu dosyalar, klasörleri altında"
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to push to {0}"
+msgid_plural "{n} commits to push to {0}"
+msgstr[0] "{0} dalına gönderilecek {n} işleme"
+msgstr[1] "{0} dalına gönderilecek {n} işleme"
+
+#: forms/maintoolbar.py
+#, python-brace-format
+msgid "{n} commit to pull from {0}"
+msgid_plural "{n} commits to pull from {0}"
+msgstr[0] "{0} dalından alınacak {n} işleme"
+msgstr[1] "{0} dalından alınacak {n} işleme"

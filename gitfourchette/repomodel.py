@@ -644,6 +644,23 @@ class RepoModel:
         self._unpushedCountByTip[tip] = len(seen)
         return len(seen), ""
 
+    def syncCounts(self) -> tuple[int, int, str]:
+        """
+        What the checked-out branch has waiting against its upstream: commits
+        to push, commits to pull, and the upstream's shorthand name.
+
+        All zero and empty without a checked-out branch or without an
+        upstream: there is no number to state, and no remote to state it
+        against. (Unlike `countUnpushed`, which falls back to counting commits
+        that aren't on any remote so the graph can still mark them.)
+        """
+        branch = self.homeBranch
+        upstream = self.upstreams.get(branch, "") if branch else ""
+        if not upstream:
+            return 0, 0, ""
+        ahead, behind = self.aheadBehind.get(branch, (0, 0))
+        return ahead, behind, upstream
+
     @benchmark
     def toggleHideRefPattern(self, refPattern: str, allButThis: bool = False):
         if not allButThis:

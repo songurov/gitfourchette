@@ -772,12 +772,14 @@ class MainWindow(QMainWindow):
             rw = self.currentRepoWidget()
         except NoRepoWidgetError:
             self.mainToolBar.setRepoSummary("", "", False)
+            self.mainToolBar.setSyncCounts(0, 0, "")
             return
         self.mainToolBar.setRepoSummary(
             settings.history.peekRepoNickname(rw.workdir),
             rw.repoModel.homeBranch,
             rw.repoModel.numUncommittedChanges > 0,
             rw.repoModel.headIsDetached)
+        self.mainToolBar.setSyncCounts(*rw.repoModel.syncCounts())
 
     def fillOpenInMenu(self) -> None:
         """Where to take the repo that's in front of you."""
@@ -1089,6 +1091,10 @@ class MainWindow(QMainWindow):
         self.mainToolBar.updateNavButtons()  # Kill back/forward arrows
         self.statusBar2.clearMessage()
         self.fillWorkspaceMenu()
+        # The bar speaks for the tab in front of you: hand it over now, rather
+        # than leaving the last tab's repo and its push count on the bar until
+        # this one finishes refreshing.
+        self.refreshRepoButton()
 
         widget = self.tabs.currentWidget()
 
