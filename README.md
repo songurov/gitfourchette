@@ -66,10 +66,31 @@ the reviewed revision; additional local guidance is labeled separately. **View
 rules** shows the included text and any files omitted due to size limits. Rules
 are used as review criteria; skill scripts are not automatically executed.
 
-Analysis uses Codex's read-only sandbox or Claude's read-only file tools. Large
-diffs are capped at 180 KB and marked as truncated. No requests are sent until
-you submit a question. Codex integration uses its documented
+By default the assistant only reads: Codex runs in its read-only sandbox, and
+Claude is given read-only file tools. Tick **Let it change files** to also let it
+edit files in the working directory when you ask it to. Even then it never
+commits, stages or pushes—whatever it changes shows up as your uncommitted work,
+to keep or throw away. Large diffs are capped at 180 KB and marked as truncated.
+No requests are sent until you submit a question. Codex integration uses its
+documented
 [non-interactive JSONL interface](https://learn.chatgpt.com/docs/non-interactive-mode).
+
+## Workspaces
+
+A workspace is a named set of repositories—**Work**, **Home**, **Client A**. Use
+the **Workspace** menu to create, edit, delete or switch between them; switching
+closes the current tabs and reopens the workspace's repositories. **Home** is the
+empty workspace: it shows the repository browser instead of tabs. Workspaces also
+appear in Quick Launch, so you can jump to one by typing its name.
+
+## Worktrees
+
+A worktree checks out another branch of the same repository in a separate folder,
+so you can work on two branches at once without stashing. Right-click **Worktrees**
+in the sidebar to add one, or use **New worktree** from the repository menu.
+Worktrees can be locked and unlocked to protect them from removal, removed
+(folder and registration together), and pruned when their folders are gone.
+A worktree that another tab has open is protected from removal and pruning.
 
 ## Documentation
 
@@ -78,6 +99,8 @@ you submit a question. Codex integration uses its documented
   - [User’s Guide](https://gitfourchette.org/guide)
   - [Limitations](https://gitfourchette.org/limitations.html)
 - [Changelog](CHANGELOG.md)
+- [Project documentation](docs/) — architecture, roadmap and design decisions
+  for this fork
 - [Localization guide](https://gitfourchette.org/localization.html)
 
 ## Install

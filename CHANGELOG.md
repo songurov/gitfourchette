@@ -1,5 +1,48 @@
 # GitFourchette version history
 
+## Unreleased — fork changes (songurov/gitfourchette, branch `feature/workspaces`)
+
+Work in this fork that has not been released or submitted upstream. See
+[docs/](docs/) for the architecture notes, roadmap and design decisions behind it.
+
+New features:
+
+- **Workspaces:** name a set of repositories (Work, Home, Client A) and switch
+  between them from the Workspace menu or Quick Launch. Home is the empty
+  workspace and shows the repository browser.
+- **Worktree management:** create, lock, unlock, remove and prune worktrees from
+  the sidebar. A worktree another tab has open is protected from removal.
+- **Ask AI:** ask Codex or Claude about commits, branches or developer activity.
+  The assistant reads by default; tick "Let it change files" and it may also edit
+  the working directory, but it never commits, stages or pushes. Screenshots can
+  be attached to a question, and the status line reports how long the CLI has
+  been working.
+- **Conflict editor:** settle a conflicted file side by side inside the app,
+  driven from the keyboard, with line endings preserved. Settling one file leads
+  to the next. "See what a merge in history decided" reconstructs the decisions
+  behind an existing merge commit.
+- **Home:** scans the machine for repositories on its own thread, shows READMEs
+  and per-repository status, and never freezes the window.
+
+Quality of life improvements:
+
+- Neutral look: reworked toolbar layout, thin-line icon set, round "+" tab
+  button, status bar as a footer.
+- Graph: a branch chip reports how many commits it has left to push.
+- Git Flow: finish a feature and pick it up again after a conflict; initialize a
+  repository the git-flow way from the Repo menu.
+- Working directory: a clean one says "Nothing to commit" and offers the push.
+- Side-by-side diff, file lists, commit form and Quick Launch refinements.
+
+Documentation:
+
+- Corrected the Ask AI section of the README, which described the assistant as
+  read-only after the write mode had been added.
+- Added `docs/` with architecture notes, a staged roadmap, a Git feature coverage
+  matrix, UX guidelines, and ADRs covering the desktop stack, the worktree
+  control center, agentic mode and the relationship with upstream.
+
+
 ## 1.11.0 (2026-08-21)
 
 New features:
