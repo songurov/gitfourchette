@@ -427,7 +427,10 @@ class ResolveConflictHere(RepoTask):
         target = self.repo.in_workdir(path)
 
         try:
-            text = Path(target).read_text("utf-8")
+            # newline="" so a CRLF file comes back exactly as it is: what we
+            # write back must not quietly change every line's ending
+            with open(target, encoding="utf-8", newline="") as file:
+                text = file.read()
         except (OSError, UnicodeDecodeError, ValueError) as error:
             raise AbortTask(_("This file can’t be settled here; open it in your merge tool instead."),
                             details=str(error)) from error
@@ -444,7 +447,8 @@ class ResolveConflictHere(RepoTask):
         dialog.deleteLater()
 
         self.epilog.effects |= TaskEffects.Workdir
-        Path(target).write_text(resolution, "utf-8")
+        with open(target, "w", encoding="utf-8", newline="") as file:
+            file.write(resolution)
         yield from self.flowCallGit("add", "--force", "--", path)
 
         # Go on to the next file waiting on a decision, as long as there is one
@@ -540,7 +544,8 @@ class InspectMergeResolution(RepoTask):
 
         self.epilog.effects |= TaskEffects.Workdir
         Path(target).parent.mkdir(parents=True, exist_ok=True)
-        Path(target).write_text(resolution, "utf-8")
+        with open(target, "w", encoding="utf-8", newline="") as file:
+            file.write(resolution)
         self.epilog.jumpTo = NavLocator.inUnstaged(path)
         self.epilog.status = _("{0} settled again; the change is in your working directory.", tquo(path))
 

@@ -4,6 +4,8 @@
 # For full terms, see the included LICENSE file.
 # -----------------------------------------------------------------------------
 
+from pathlib import Path
+
 from gitfourchette.codeview.codewindow import CodeWindow
 from gitfourchette.tasks import InspectMergeResolution
 from gitfourchette.toolbox import ActionDef
@@ -801,3 +803,57 @@ def testInspectWhatAMergeDecided(tempDir, mainWindow):
     assert readTextFile(f"{wd}/.gitignore") == theirVersion
     assert rw.repo.head_commit_id == mergeId, "history is left alone"
     assert "settled again" in mainWindow.statusBar2.currentMessage()
+
+
+def testResolveHereRefusesWhatItCannotShow(tempDir, mainWindow):
+    """A binary file has no lines to choose between: say so and point elsewhere."""
+    scenario = """
+        printf '\\x00\\x01ours\\x00' > blob.bin
+        git add blob.bin && git commit -m 'add a binary file'
+        git checkout -b THEIR-BRANCH
+        printf '\\x00\\x01theirs\\x00' > blob.bin
+        git commit -a -m 'they changed it'
+        git checkout master
+        printf '\\x00\\x01mine\\x00' > blob.bin
+        git commit -a -m 'we changed it'
+        git merge THEIR-BRANCH || true
+    """
+    wd = unpackRepo(tempDir)
+    shell(scenario, directory=wd)
+
+    rw = mainWindow.openRepo(wd)
+    assert "blob.bin" in rw.repo.index.conflicts
+
+    rw.jump(NavLocator.inUnstaged("blob.bin"), check=True)
+    rw.conflictView.resolveHereButton.click()
+    acceptQMessageBox(rw, "merge tool")
+    assert "blob.bin" in rw.repo.index.conflicts, "nothing was settled behind our back"
+
+
+def testSettlingAFileKeepsItsLineEndings(tempDir, mainWindow):
+    """Windows line endings and a missing last newline survive the round trip."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+
+    scenario = """
+        printf 'one\\r\\ntwo\\r\\nthree' > crlf.txt
+        git add crlf.txt && git commit -m 'add a CRLF file'
+        git checkout -b THEIR-BRANCH
+        printf 'one\\r\\ntheirs\\r\\nthree' > crlf.txt
+        git commit -a -m 'they changed the middle'
+        git checkout master
+        printf 'one\\r\\nours\\r\\nthree' > crlf.txt
+        git commit -a -m 'we changed the middle'
+        git merge THEIR-BRANCH || true
+    """
+    wd = unpackRepo(tempDir)
+    shell(scenario, directory=wd)
+
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("crlf.txt"), check=True)
+    rw.conflictView.resolveHereButton.click()
+    editor = findQDialog(rw, "resolve conflict", MergeEditor)
+    next(b for b, choice in editor.choiceButtons if b.text() == "Ours").click()
+    editor.resolveButton.click()
+
+    written = Path(f"{wd}/crlf.txt").read_bytes()
+    assert written == b"one\r\nours\r\nthree", written

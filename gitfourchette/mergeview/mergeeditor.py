@@ -65,6 +65,7 @@ class MergeEditor(QDialog):
         self.manualEdit = False
         self.committed = committed
         self.inspecting = bool(committed)
+        self.crlf = text.count("\r\n") * 2 >= text.count("\n")
         self.labels = labels
 
         self.setWindowTitle(_("Merge of {0}", Path(path).name) if self.inspecting
@@ -385,7 +386,19 @@ class MergeEditor(QDialog):
     # Leaving
 
     def resolution(self) -> str:
-        return self.outputPane.toPlainText()
+        """
+        What to write back. The decisions carry the file's own line endings;
+        only text typed by hand comes out of the widget, where Qt has turned
+        every ending into a newline, so it gets the file's ending back.
+        """
+        if self.inspecting:
+            return self.committed
+        if not self.manualEdit:
+            return renderResolution(self.regions)
+        text = self.outputPane.toPlainText()
+        if self.crlf:
+            text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+        return text
 
     def finish(self):
         """Take the result, unless conflicts are still open and the person thinks again."""
