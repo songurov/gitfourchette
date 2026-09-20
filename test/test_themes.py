@@ -405,6 +405,42 @@ def testThemeSwitchRepaintsTheSideBySideDiff(tempDir, mainWindow):
         GFApplication.applyPrefs(qtStyle="", sideBySideDiff=False)
 
 
+def testSystemThemeFlipFollowsThroughToBothDiffPanes(tempDir, mainWindow):
+    """
+    A light/dark flip coming from the desktop reaches the app as a palette
+    change: it restyles, but it never announces a change of preferences. Both
+    panes have to follow the unified view through it, or the diff is read in
+    one theme's syntax colors on the other theme's background.
+    """
+    app = GFApplication.instance()
+    GFApplication.applyPrefs(qtStyle=f"{BUILTIN},light,neutral", sideBySideDiff=True)
+    try:
+        rw = _openDuckDiff(tempDir, mainWindow)
+        side = rw.diffArea.sideBySideDiffView
+        assert side.isVisible()
+        assert not rw.diffView.highlighter.scheme.isDark()
+        assert not side.oldHighlighter.scheme.isDark()
+        assert not side.newHighlighter.scheme.isDark()
+        lightQss = side.newView.styleSheet()
+
+        # Exactly what the app does on QEvent.Type.PaletteChange: the palette
+        # is applied and everyone is told to restyle, with no prefsChanged.
+        settings.prefs.qtStyle = f"{BUILTIN},dark,neutral"
+        app.applyQtStylePref(paletteOnly=True)
+        app.restyle.emit()
+
+        assert rw.diffView.highlighter.scheme.isDark()
+        assert side.oldHighlighter.scheme.isDark()
+        assert side.newHighlighter.scheme.isDark()
+
+        darkScheme = settings.prefs.syntaxHighlightingScheme()
+        assert side.oldView.styleSheet() == darkScheme.basicQss(side.oldView)
+        assert side.newView.styleSheet() == darkScheme.basicQss(side.newView)
+        assert side.newView.styleSheet() != lightQss
+    finally:
+        GFApplication.applyPrefs(qtStyle="", sideBySideDiff=False)
+
+
 def testThemeSwitchRedrawsTheSpecialDiffPage(tempDir, mainWindow):
     from gitfourchette.diffview.specialdiffview import secondaryTextColor
 

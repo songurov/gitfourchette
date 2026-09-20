@@ -3,10 +3,14 @@
 # This file is part of GitFourchette, distributed under the GNU GPL v3.
 # -----------------------------------------------------------------------------
 
+from typing import NamedTuple
+
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
+from gitfourchette.codeview.codehighlighter import CodeHighlighter
 from gitfourchette.diffview.diffdocument import DiffDocument, DiffTextFormats, LineData, doppelgangerRanges
 from gitfourchette.qt import *
+from gitfourchette.syntax import ColorScheme, LexJob
 from gitfourchette.toolbox import qstringLength
 
 
@@ -17,6 +21,74 @@ anything else, and no whitespace mark is ever drawn on it. The line numbers
 in front of the code are padded with it so that turning the marks on doesn't
 fill the numbers with dots that belong to no line of code.
 """
+
+
+class Row(NamedTuple):
+    """One row of one pane."""
+
+    text: str
+    "Line number, origin sign and code, as the pane shows them."
+
+    blockFormat: QTextBlockFormat | None
+    "The row's tint; None keeps the document's own."
+
+    spans: list[tuple[int, int, QTextCharFormat]]
+    "What changed inside the line, in this row's coordinates."
+
+    line: LineData | None = None
+    "The line of the diff this row came from; None for filler rows."
+
+    offset: int = 0
+    "Where the code starts in `text`, past the line number."
+
+
+class SideDiffHighlighter(CodeHighlighter):
+    """
+    Syntax colors for one pane of the side-by-side view. A pane's rows are
+    lines of one side of the file with a line number written in front, so the
+    highlighter has to be told which line each row came from.
+    """
+
+    rows: list[Row]
+
+    def __init__(self, parent, oldSide: bool):
+        super().__init__(parent)
+        self.oldSide = oldSide
+        self.rows = []
+
+    def setRows(self, rows: list[Row], lexJob: LexJob | None):
+        self.rows = rows
+        self.stopLexJobs()
+        if lexJob is not None:
+            self.installLexJob(lexJob)
+        self.rehighlight()
+
+    def highlightSyntax(self, text: str):
+        blockNumber = self.currentBlock().blockNumber()
+        if not self.lexJobs or blockNumber >= len(self.rows):
+            return
+
+        row = self.rows[blockNumber]
+        if row.line is None:
+            return
+        lineNumber = row.line.oldLineNo if self.oldSide else row.line.newLineNo
+        if lineNumber < 0:  # A hunk header, or a line the other side owns
+            return
+
+        # A changed line sits on a tint of its own: its colors need to pop off it
+        scheme = self.scheme.highContrastScheme if row.line.origin in "+-" else self.scheme.scheme
+        column = row.offset
+        boundary = len(text)
+
+        for tokenType, tokenLength in self.lexJobs[0].tokens(lineNumber, text[row.offset:]):
+            try:
+                charFormat = scheme[tokenType]
+            except KeyError:
+                charFormat = ColorScheme.fillInFallback(scheme, tokenType)
+            self.setFormat(column, tokenLength, charFormat)
+            column += tokenLength
+            if column >= boundary:
+                break
 
 
 class SideBySideDiffView(QWidget):
@@ -34,6 +106,10 @@ class SideBySideDiffView(QWidget):
         self.shownDocument = None
         self.oldView = self._makeView()
         self.newView = self._makeView()
+        self.oldHighlighter = SideDiffHighlighter(self.oldView, oldSide=True)
+        self.newHighlighter = SideDiffHighlighter(self.newView, oldSide=False)
+        self.oldHighlighter.setDocument(self.oldView.document())
+        self.newHighlighter.setDocument(self.newView.document())
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("Split_SideBySideDiff")
@@ -51,6 +127,10 @@ class SideBySideDiffView(QWidget):
         layout.addWidget(splitter)
 
         app = GFApplication.instance()
+        # A theme that comes from the desktop restyles the app without touching
+        # the preferences: listen for both, as the unified view does, or a
+        # light/dark flip would leave the panes in the colors it left behind.
+        app.restyle.connect(self.refreshPrefs)
         app.prefsChanged.connect(self.refreshPrefs)
         self.refreshPrefs()
 
@@ -64,9 +144,9 @@ class SideBySideDiffView(QWidget):
 
     def refreshPrefs(self):
         """
-        Set the code in the same font as the unified view, and mark whitespace
-        where the unified view marks it. Code read next to its old self only
-        lines up in a fixed-pitch font.
+        Dress both panes like the unified view: its font, its tab width, its
+        whitespace marks and its syntax colors. Code read next to its old self
+        only lines up in a fixed-pitch font.
         """
         font = settings.prefs.monoFont()
         tabWidth = QFontMetricsF(font).horizontalAdvance(" " * settings.prefs.tabSpaces)
@@ -75,7 +155,9 @@ class SideBySideDiffView(QWidget):
         if settings.prefs.showWhitespace:
             flags |= QTextOption.Flag.ShowTabsAndSpaces
 
-        for view in self.oldView, self.newView:
+        scheme = settings.prefs.syntaxHighlightingScheme()
+
+        for view, highlighter in ((self.oldView, self.oldHighlighter), (self.newView, self.newHighlighter)):
             view.setFont(font)
             view.setTabStopDistance(tabWidth)
             document = view.document()
@@ -83,13 +165,16 @@ class SideBySideDiffView(QWidget):
             option = QTextOption(document.defaultTextOption())
             option.setFlags(flags)
             document.setDefaultTextOption(option)
+            view.setStyleSheet(scheme.basicQss(view))
+            highlighter.setColorScheme(scheme)
+            highlighter.rehighlight()
 
     @staticmethod
-    def _row(text: str, lineNo: int, origin: str, fmt: QTextBlockFormat | None = None,
-             ranges: list[tuple[int, int]] = ()):
+    def _row(line: LineData | None, text: str, lineNo: int, origin: str,
+             fmt: QTextBlockFormat | None = None, ranges: list[tuple[int, int]] = ()):
         """
-        One row of a pane: its text, its block format, and the character ranges
-        that tell what changed inside the line, in the row's own coordinates.
+        One row of a pane: its text, its block format, the character ranges
+        that tell what changed inside the line, and the line it came from.
         """
         prefix = "" if lineNo < 0 else str(lineNo)
         head = f"{prefix:>6} {origin or ' '} ".replace(" ", GUTTER_SPACE)
@@ -97,7 +182,7 @@ class SideBySideDiffView(QWidget):
         emphasis = DiffTextFormats.doppelgangerDelCF if origin == "-" else DiffTextFormats.doppelgangerAddCF
         spans = [(len(head) + start, len(head) + min(end, len(body)), emphasis)
                  for start, end in ranges if start < len(body)]
-        return head + body, fmt, spans
+        return Row(head + body, fmt, spans, line, len(head))
 
     @classmethod
     def _alignedRows(cls, lines: list[LineData]):
@@ -107,14 +192,14 @@ class SideBySideDiffView(QWidget):
         while i < len(lines):
             line = lines[i]
             if line.hunkPos.isHunkHeaderLine():
-                row = cls._row(line.text, -1, "", DiffTextFormats.hunkBF)
+                row = cls._row(None, line.text, -1, "", DiffTextFormats.hunkBF)
                 oldRows.append(row)
                 newRows.append(row)
                 i += 1
                 continue
             if line.origin not in "+-":
-                oldRows.append(cls._row(line.text, line.oldLineNo, " "))
-                newRows.append(cls._row(line.text, line.newLineNo, " "))
+                oldRows.append(cls._row(line, line.text, line.oldLineNo, " "))
+                newRows.append(cls._row(line, line.text, line.newLineNo, " "))
                 i += 1
                 continue
 
@@ -127,7 +212,7 @@ class SideBySideDiffView(QWidget):
                 i += 1
             # Rows with nothing across from them are filler, drawn as such if the theme says how
             hasFillerColor = DiffTextFormats.fillerBF.background().style() != Qt.BrushStyle.NoBrush
-            filler = ("", DiffTextFormats.fillerBF if hasFillerColor else None, [])
+            filler = Row("", DiffTextFormats.fillerBF if hasFillerColor else None, [])
             for n in range(max(len(deletions), len(additions))):
                 deletion = deletions[n] if n < len(deletions) else None
                 addition = additions[n] if n < len(additions) else None
@@ -140,12 +225,12 @@ class SideBySideDiffView(QWidget):
 
                 if deletion is not None:
                     item = deletion[1]
-                    oldRows.append(cls._row(item.text, item.oldLineNo, "-", DiffTextFormats.delBF, delRanges))
+                    oldRows.append(cls._row(item, item.text, item.oldLineNo, "-", DiffTextFormats.delBF, delRanges))
                 else:
                     oldRows.append(filler)
                 if addition is not None:
                     item = addition[1]
-                    newRows.append(cls._row(item.text, item.newLineNo, "+", DiffTextFormats.addBF, addRanges))
+                    newRows.append(cls._row(item, item.text, item.newLineNo, "+", DiffTextFormats.addBF, addRanges))
                 else:
                     newRows.append(filler)
         return oldRows, newRows
@@ -155,7 +240,7 @@ class SideBySideDiffView(QWidget):
         # Put all the text in at once, then format only the blocks that need it,
         # in one edit block. Inserting row by row relaid the document out after
         # every line: seconds for a long diff.
-        view.setPlainText("\n".join(text for text, _blockFormat, _spans in rows))
+        view.setPlainText("\n".join(row.text for row in rows))
         cls._paint(view.document(), rows)
         view.moveCursor(QTextCursor.MoveOperation.Start)
 
@@ -168,16 +253,15 @@ class SideBySideDiffView(QWidget):
         cursor = QTextCursor(document)
         cursor.beginEditBlock()
         block = document.firstBlock()
-        for text, blockFormat, spans in rows:
-            if blockFormat is None:
-                blockFormat = plainFormat
+        for row in rows:
+            blockFormat = row.blockFormat if row.blockFormat is not None else plainFormat
             if blockFormat is not None:
                 cursor.setPosition(block.position())
                 cursor.setBlockFormat(blockFormat)
-            for start, end, charFormat in spans:
+            for start, end, charFormat in row.spans:
                 # Qt counts UTF-16 units, Python counts characters
-                cursor.setPosition(block.position() + qstringLength(text[:start]))
-                cursor.setPosition(block.position() + qstringLength(text[:end]),
+                cursor.setPosition(block.position() + qstringLength(row.text[:start]))
+                cursor.setPosition(block.position() + qstringLength(row.text[:end]),
                                    QTextCursor.MoveMode.KeepAnchor)
                 cursor.setCharFormat(charFormat)
             block = block.next()
@@ -192,6 +276,17 @@ class SideBySideDiffView(QWidget):
     def showEvent(self, event: QShowEvent):
         super().showEvent(event)
         self._showPendingDocument()
+        self._lexWhileVisible(True)
+
+    def hideEvent(self, event: QHideEvent):
+        super().hideEvent(event)
+        self._lexWhileVisible(False)
+
+    def _lexWhileVisible(self, visible: bool):
+        # The lex jobs are shared with the unified view, which puts them on ice
+        # when it goes behind us. Whoever is on screen keeps them going.
+        for highlighter in self.oldHighlighter, self.newHighlighter:
+            highlighter.onParentVisibilityChanged(visible)
 
     def _showPendingDocument(self):
         document = self.pendingDocument
@@ -202,6 +297,10 @@ class SideBySideDiffView(QWidget):
         oldRows, newRows = self._alignedRows(document.lineData)
         self._fill(self.oldView, oldRows)
         self._fill(self.newView, newRows)
+        # The lex jobs are the unified view's: both presentations read the same
+        # file, so they read the same tokens
+        self.oldHighlighter.setRows(oldRows, document.oldLexJob)
+        self.newHighlighter.setRows(newRows, document.newLexJob)
 
     def recolor(self, document: DiffDocument):
         """
@@ -212,6 +311,11 @@ class SideBySideDiffView(QWidget):
         if document is not self.shownDocument:
             return
         oldRows, newRows = self._alignedRows(document.lineData)
+        # The highlighters read the rows to find out which line of the file each
+        # one came from: hand them the fresh batch so there is one set of rows,
+        # not two that are only equal by luck
+        self.oldHighlighter.rows = oldRows
+        self.newHighlighter.rows = newRows
         # A row that was painted in the old colors may have no color now (filler rows)
         plainFormat = QTextBlockFormat()
         self._paint(self.oldView.document(), oldRows, plainFormat)

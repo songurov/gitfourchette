@@ -248,3 +248,51 @@ def testHidingDiffAfterLexJobIsGone(tempDir, mainWindow):
     highlighter.onParentVisibilityChanged(True)
     highlighter.rehighlight()
     highlighter.stopLexJobs()
+
+
+def testSideBySideSyntaxHighlighting(tempDir, mainWindow):
+    """
+    Both panes of the side-by-side view color the code, and a line sitting on
+    a red or green tint gets the colors that stand out on it.
+    """
+
+    wd = unpackRepo(tempDir)
+    before = "def a():\n    return 1\n\ndef b():\n    return 2\n\nb()\n"
+    writeFile(f"{wd}/duck.py", before)
+    with RepoContext(wd) as repo:
+        repo.index.add("duck.py")
+        repo.index.write()
+    writeFile(f"{wd}/duck.py", before.replace("return 2", "return 3"))
+
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("duck.py"), check=True)
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    side = rw.diffArea.sideBySideDiffView
+    # Give the shared lex job a chance to run; the panes must be colored by
+    # the time it's done (and if nothing keeps it going, they never are)
+    job = rw.diffView.highlighter.newLexJob
+    deadline = QDeadlineTimer(2000)
+    while not job.lexingComplete and not deadline.hasExpired():
+        QTest.qWait(10)
+    QTest.qWait(0)  # let the highlighter respond to the last pulse
+
+    def keyword(view, row, word):
+        """Where the keyword is colored in the row, and in what color."""
+        block = view.document().find(row).block()
+        assert block.isValid(), f"no row {row!r}"
+        at = block.text().index(word)
+        spans = [s for s in block.layout().formats() if s.start <= at < s.start + s.length]
+        assert len(spans) == 1, f"expected {word!r} to be colored once, got {len(spans)} spans"
+        return spans[0].start, spans[0].format.foreground().color().name()
+
+    context = keyword(side.newView, "return 1", "return")
+    changed = keyword(side.newView, "return 3", "return")
+    removed = keyword(side.oldView, "return 2", "return")
+
+    # The coloring starts at the code, not at the line number in front of it
+    assert context[0] == side.newView.document().find("return 1").block().text().index("return")
+    # A line on a tint gets the high-contrast color, a plain line the usual one
+    assert changed[1] != context[1]
+    assert removed[1] == changed[1]
+    # The old pane is colored too, not just the new one
+    assert keyword(side.oldView, "return 1", "return")[1] == context[1]
