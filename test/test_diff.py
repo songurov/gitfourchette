@@ -1861,3 +1861,42 @@ def testWrapButtonGoesOffDutyInSideBySide(tempDir, mainWindow):
     assert not buttons.wordWrapButton.isEnabled()
     GFApplication.applyPrefs(sideBySideDiff=False)
     assert buttons.wordWrapButton.isEnabled()
+
+
+def testChangeAtTheEndOfAFileIsMarkedInsideTheLine(tempDir, mainWindow):
+    """
+    Emphasis inside a line used to need a line after the change to close the
+    clump. The last lines of a file have none, so a change there read as a
+    flat red line facing a flat green one.
+    """
+    from gitfourchette.diffview.diffdocument import DiffTextFormats
+
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/duck.py", 'print("start")\nprint("quack")\n')
+    with RepoContext(wd) as repo:
+        repo.index.add("duck.py")
+        repo.index.write()
+    writeFile(f"{wd}/duck.py", 'print("start")\nprint("moo")\n')
+
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("duck.py"), check=True)
+
+    # The last line of the file faces its old self, with nothing after it
+    lineData = rw.diffView.lineData
+    changed = [ld for ld in lineData if ld.origin in ("+", "-")]
+    assert [ld.origin + ld.text.strip() for ld in changed] == ['-print("quack")', '+print("moo")']
+    deleted, added = changed
+    assert lineData[deleted.doppelganger] is added
+    assert lineData[added.doppelganger] is deleted
+
+    # And the emphasis lands on the word that changed, not on the whole line
+    block = rw.diffView.document().find('print("moo")').block()
+    strong = DiffTextFormats.doppelgangerAddCF.background()
+    runs = []
+    fragments = block.begin()
+    while not fragments.atEnd():
+        fragment = fragments.fragment()
+        if fragment.charFormat().background() == strong:
+            runs.append(fragment.text())
+        fragments += 1
+    assert runs == ["moo"]

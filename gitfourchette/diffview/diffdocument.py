@@ -254,6 +254,27 @@ class DiffDocument:
         oldHash = ""
         newHash = ""
 
+        def closeClump():
+            """
+            Pair up the lines of the clump that just ended with their old
+            selves, so that each one can say which words changed inside it.
+            Only a clump that deletes as many lines as it adds has such pairs.
+            """
+            nonlocal clumpID, numLinesInClump, perfectClumpTally
+            if numLinesInClump == 0:
+                return
+            if perfectClumpTally == 0:
+                assert (numLinesInClump % 2) == 0, "line count should be even in perfect clumps"
+                clumpStart = len(lineData) - numLinesInClump
+                halfClump = numLinesInClump // 2
+                for doppel1 in range(clumpStart, clumpStart + halfClump):
+                    doppel2 = doppel1 + halfClump
+                    lineData[doppel1].doppelganger = doppel2
+                    lineData[doppel2].doppelganger = doppel1
+            clumpID += 1
+            numLinesInClump = 0
+            perfectClumpTally = 0
+
         for pos, endPos in iterateLines(patch):
             if maxLineLength and endPos - pos > maxLineLength:
                 raise DiffDocument.VeryLongLinesError()
@@ -272,6 +293,9 @@ class DiffDocument:
 
             # Start new hunk
             if firstChar == "@":
+                # No clump reaches across a hunk boundary, even with no
+                # context lines between the two hunks
+                closeClump()
                 rawLine = patch[pos:endPos]
                 oldLine, _dummy1, newLine, _dummy2, _dummy3 = _parseHunkHeader(rawLine)
 
@@ -295,21 +319,8 @@ class DiffDocument:
             hunkLineNum += 1
 
             # Any lines that aren't +/- break up the current clump
-            if origin not in "+-" and numLinesInClump != 0:
-                # Process perfect clump (sum of + and - origins is 0)
-                if numLinesInClump > 0 and perfectClumpTally == 0:
-                    assert (numLinesInClump % 2) == 0, "line count should be even in perfect clumps"
-                    clumpStart = len(lineData) - numLinesInClump
-                    halfClump = numLinesInClump // 2
-                    for doppel1 in range(clumpStart, clumpStart + halfClump):
-                        doppel2 = doppel1 + halfClump
-                        lineData[doppel1].doppelganger = doppel2
-                        lineData[doppel2].doppelganger = doppel1
-
-                # Start new clump
-                clumpID += 1
-                numLinesInClump = 0
-                perfectClumpTally = 0
+            if origin not in "+-":
+                closeClump()
 
             ld = LineData(text=patch[pos+1:endPos],
                           hunkPos=DiffLinePos(hunkID, hunkLineNum),
@@ -341,6 +352,10 @@ class DiffDocument:
                 oldLine += 1
 
             lineData.append(ld)
+
+        # A file that ends on a change has no context line after it to close
+        # the clump, and its last lines would go without emphasis
+        closeClump()
 
         if not lineData:
             if isBinary:
