@@ -93,6 +93,12 @@ def testBranchDropMergeDestination(tempDir, mainWindow, cancel):
                             mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     sb.dropEvent(event)
     assert event.isAccepted()
+
+    # The drop asks what it means instead of merging behind your back
+    menu = waitForVisibleMenu("BranchDropMenu")
+    triggerMenuAction(menu, r"merge.+master.+into.+no-parent")
+    menu.close()
+
     if cancel:
         rejectQMessageBox(rw, "merge.+master.+into.+no-parent")
         assert rw.repo.head.name == "refs/heads/master"

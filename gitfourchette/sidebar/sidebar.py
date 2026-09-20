@@ -13,7 +13,9 @@ from gitfourchette import trtables
 from gitfourchette import porcelain
 from gitfourchette import settings
 from gitfourchette.application import GFApplication
-from gitfourchette.branchdrop import BRANCH_MIME_TYPE, branchDragMimeData, draggedBranch
+from gitfourchette.branchdrop import (
+    BranchDropTarget, branchDragMimeData, branchDropHint, draggedBranch,
+    isBranchDrag, openBranchDropMenu)
 from gitfourchette.exttools.usercommand import UserCommand
 from gitfourchette.forms.searchbar import SearchBar
 from gitfourchette.localization import *
@@ -996,17 +998,18 @@ class Sidebar(QTreeView):
         return source, target.data
 
     def dragEnterEvent(self, event):
-        if event.source() is self and event.mimeData().hasFormat(BRANCH_MIME_TYPE):
+        if isBranchDrag(event, self.repoModel):
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event):
-        pair = self.branchDropTarget(event.mimeData(), event.position().toPoint())
-        if event.source() is self and pair:
-            self.setCurrentIndex(self.indexAt(event.position().toPoint()))
-            self.statusMessage.emit(_("Merge {0} into {1}", RefPrefix.split(pair[0])[1], RefPrefix.split(pair[1])[1]))
+        pos = event.position().toPoint()
+        pair = self.branchDropTarget(event.mimeData(), pos) if isBranchDrag(event, self.repoModel) else None
+        if pair:
+            self.setCurrentIndex(self.indexAt(pos))
+            self.statusMessage.emit(branchDropHint(pair[0], self.dropTarget(pair[1])))
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
         else:
@@ -1018,15 +1021,20 @@ class Sidebar(QTreeView):
         event.accept()
 
     def dropEvent(self, event):
-        pair = self.branchDropTarget(event.mimeData(), event.position().toPoint())
+        pos = event.position().toPoint()
+        pair = self.branchDropTarget(event.mimeData(), pos) if isBranchDrag(event, self.repoModel) else None
         self.statusMessage.emit("")
-        if event.source() is not self or not pair:
+        if not pair:
             event.ignore()
             return
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
         source, destination = pair
-        MergeBranch.invoke(self, source, destination=destination)
+        openBranchDropMenu(self, self.repoModel, source, self.dropTarget(destination),
+                           self.viewport().mapToGlobal(pos))
+
+    def dropTarget(self, ref: str) -> BranchDropTarget:
+        return BranchDropTarget(self.repoModel.refs[ref], ref)
 
     def mousePressEvent(self, event: QMouseEvent):
         pos = event.position().toPoint()

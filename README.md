@@ -71,6 +71,26 @@ diffs are capped at 180 KB and marked as truncated. No requests are sent until
 you submit a question. Codex integration uses its documented
 [non-interactive JSONL interface](https://learn.chatgpt.com/docs/non-interactive-mode).
 
+## Drag a branch onto another
+
+Drag a branch by its chip in the history, or by its row in the sidebar, and
+drop it on any other branch or commit. The row you are over is outlined and
+the status line names both ends of the gesture.
+
+The drop opens a menu at the pointer instead of deciding for you: **Merge**
+the dragged branch into the one you dropped on, **Cherry-pick** its tip,
+**Reset** the branch you dropped on to it, **Fast-forward** it, or start a
+**New branch** at that commit. Operations that don't apply to these two refs
+stay in the menu, disabled, and their tooltip says why — a branch that isn't
+checked out can't be reset or cherry-picked onto, a branch that doesn't track
+the dragged remote branch can't be fast-forwarded.
+
+The target is the branch of the row you drop on, or the commit itself if the
+row carries none — a branch you have hidden draws no chip, so it is never the
+target. Dropping a branch on itself does nothing. Drags cross between the two
+views: a chip can be dropped in the sidebar and a sidebar branch in the
+history.
+
 ## Documentation
 
 - [GitFourchette's website](https://gitfourchette.org) ([source code](https://github.com/jorio/gitfourchette.org))
