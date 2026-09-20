@@ -8960,3 +8960,9 @@ msgid "{n} conflict is still open, and its markers would stay in the file. Mark 
 msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
 msgstr[0] ""
 msgstr[1] ""
+
+#: tasks/indextasks.py
+msgid "{0} settled; {n} file still has conflicts."
+msgid_plural "{0} settled; {n} files still have conflicts."
+msgstr[0] ""
+msgstr[1] ""

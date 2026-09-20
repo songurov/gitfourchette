@@ -693,8 +693,44 @@ def testResolveConflictInTheApp(tempDir, mainWindow):
 
     editor.resolveButton.click()
 
+    # .gitignore was the only conflict in this repo, so nothing is left to settle
     assert not rw.repo.index.conflicts
     staged = readTextFile(f"{wd}/.gitignore")
     assert "<<<<<<<" not in staged
     assert staged == output
     assert rw.repo.status()[".gitignore"] & FileStatus.INDEX_MODIFIED
+
+
+def testResolveHereMovesOnToTheNextConflictedFile(tempDir, mainWindow):
+    """With several files in conflict, settling one leads to the next."""
+    from gitfourchette.mergeview.mergeeditor import MergeEditor
+
+    scenario = """
+        git checkout -b THEIR-BRANCH
+        echo 'theirs 1' > a/a1.txt
+        echo 'theirs 2' > a/a2.txt
+        git commit -a -m 'they changed two files'
+        git checkout master
+        echo 'ours 1' > a/a1.txt
+        echo 'ours 2' > a/a2.txt
+        git commit -a -m 'we changed the same two files'
+        git merge THEIR-BRANCH || true
+    """
+    wd = unpackRepo(tempDir)
+    shell(scenario, directory=wd)
+
+    rw = mainWindow.openRepo(wd)
+    assert "a/a1.txt" in rw.repo.index.conflicts and "a/a2.txt" in rw.repo.index.conflicts
+
+    rw.jump(NavLocator.inUnstaged("a/a1.txt"), check=True)
+    rw.conflictView.resolveHereButton.click()
+    editor = findQDialog(rw, "resolve conflict", MergeEditor)
+    next(b for b, choice in editor.choiceButtons if b.text() == "Theirs").click()
+    editor.resolveButton.click()
+
+    # One file settled, and the app is already on the other one
+    assert "a/a1.txt" not in rw.repo.index.conflicts
+    assert "a/a2.txt" in rw.repo.index.conflicts
+    assert rw.navLocator.path == "a/a2.txt"
+    assert "still have conflicts" in mainWindow.statusBar2.currentMessage() \
+        or "still has conflicts" in mainWindow.statusBar2.currentMessage()

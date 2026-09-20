@@ -9036,3 +9036,10 @@ msgid_plural "{n} conflicts are still open, and their markers would stay in the 
 msgstr[0] "{n} conflict e încă deschis, iar marcajele lui ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"
 msgstr[1] "{n} conflicte sunt încă deschise, iar marcajele lor ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"
 msgstr[2] "{n} de conflicte sunt încă deschise, iar marcajele lor ar rămâne în fișier. Marchezi totuși fișierul ca rezolvat?"
+
+#: tasks/indextasks.py
+msgid "{0} settled; {n} file still has conflicts."
+msgid_plural "{0} settled; {n} files still have conflicts."
+msgstr[0] "{0} rezolvat; {n} fișier mai are conflicte."
+msgstr[1] "{0} rezolvat; {n} fișiere mai au conflicte."
+msgstr[2] "{0} rezolvat; {n} de fișiere mai au conflicte."

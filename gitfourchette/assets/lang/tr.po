@@ -8945,3 +8945,9 @@ msgid "{n} conflict is still open, and its markers would stay in the file. Mark 
 msgid_plural "{n} conflicts are still open, and their markers would stay in the file. Mark the file as resolved anyway?"
 msgstr[0] "{n} çakışma hâlâ açık ve işaretleri dosyada kalır. Dosya yine de çözüldü olarak işaretlensin mi?"
 msgstr[1] "{n} çakışma hâlâ açık ve işaretleri dosyada kalır. Dosya yine de çözüldü olarak işaretlensin mi?"
+
+#: tasks/indextasks.py
+msgid "{0} settled; {n} file still has conflicts."
+msgid_plural "{0} settled; {n} files still have conflicts."
+msgstr[0] "{0} çözüldü; {n} dosyada hâlâ çakışma var."
+msgstr[1] "{0} çözüldü; {n} dosyada hâlâ çakışma var."

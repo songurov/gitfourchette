@@ -447,8 +447,18 @@ class ResolveConflictHere(RepoTask):
         Path(target).write_text(resolution, "utf-8")
         yield from self.flowCallGit("add", "--force", "--", path)
 
-        self.epilog.jumpTo = NavLocator.inStaged(path)
-        self.epilog.status = _("Merge conflict resolved in {0}.", tquo(path))
+        # Go on to the next file waiting on a decision, as long as there is one
+        self.repo.refresh_index()
+        remaining = sorted({entry.path for sides in self.repo.index.conflicts or []
+                            for entry in sides if entry is not None} - {path})
+        if remaining:
+            self.epilog.jumpTo = NavLocator.inUnstaged(remaining[0])
+            self.epilog.status = _n("{0} settled; {n} file still has conflicts.",
+                                    "{0} settled; {n} files still have conflicts.",
+                                    len(remaining), tquo(path))
+        else:
+            self.epilog.jumpTo = NavLocator.inStaged(path)
+            self.epilog.status = _("Merge conflict resolved in {0}.", tquo(path))
 
 
 class OpenMergeTool(RepoTask):
