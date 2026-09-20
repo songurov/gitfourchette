@@ -12,6 +12,7 @@ from gitfourchette.forms.repostub import RepoStub
 from gitfourchette.mainwindow import NoRepoWidgetError
 from gitfourchette.nav import NavContext
 from gitfourchette.repowidget import RepoWidget
+from gitfourchette.toolbox.qstatusbar2 import QStatusBar2
 from .util import *
 
 
@@ -275,3 +276,31 @@ def testShowSidebarHidesTheSidebarInEveryTab(tempDir, mainWindow):
     assert action.isChecked()
     assert all(rw.sidebarContainer.isVisibleTo(rw) for rw in (rw1, rw2, rw3))
     assert rw3.sidebar.isVisible()
+
+
+def testNeutralStatusBarIsSlim(mainWindow):
+    """Neutral's status bar is a footer, not a second toolbar (22 px like Fork's)."""
+    from gitfourchette.themes import ThemeName
+
+    def barHeight():
+        mainWindow.layout().activate()
+        return mainWindow.statusBar2.height()
+
+    bar = mainWindow.statusBar2
+    GFApplication.applyPrefs(qtStyle="")
+    classicHeight = barHeight()
+
+    GFApplication.applyPrefs(qtStyle=f"{ThemeName.BuiltIn},dark,neutral")
+    try:
+        assert barHeight() == QStatusBar2.NeutralHeight
+        assert barHeight() < classicHeight
+        # Still a footer with something in it
+        assert mainWindow.versionLabel.isVisibleTo(bar)
+        assert mainWindow.whatsNewButton.isVisibleTo(bar)
+        assert mainWindow.whatsNewButton.height() <= QStatusBar2.NeutralHeight
+        bar.showMessage("hello")
+        assert bar.currentMessage() == "hello"
+    finally:
+        GFApplication.applyPrefs(qtStyle="")
+
+    assert barHeight() == classicHeight

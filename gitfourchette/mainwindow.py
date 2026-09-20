@@ -604,6 +604,15 @@ class MainWindow(QMainWindow):
         self.statusBar2.addPermanentWidget(self.versionLabel)
         self.statusBar2.addPermanentWidget(self.whatsNewButton)
 
+    def refreshStatusBarTheme(self) -> None:
+        """In Neutral, the footer and its small print are 22 px tall (see QStatusBar2)."""
+        from gitfourchette.themes import ThemeVariant, activeTheme
+        theme = activeTheme()
+        neutral = theme is not None and theme.variant == ThemeVariant.Neutral
+        self.statusBar2.applyTheme(neutral)
+        for widget in (self.versionLabel, self.whatsNewButton):
+            widget.setMaximumHeight(QStatusBar2.NeutralHeight - 4 if neutral else QWIDGETSIZE_MAX)
+
     def openWhatsNew(self) -> WhatsNewDialog:
         dialog = WhatsNewDialog(self)
         dialog.show()
@@ -1799,6 +1808,7 @@ class MainWindow(QMainWindow):
     def refreshPrefs(self) -> None:
         # The Settings dialog can change the theme too; keep the switch honest
         self.refreshThemeButton()
+        self.refreshStatusBarTheme()
         self.mainToolBar.applyCompact(settings.prefs.compactUi)
         self.statusBar2.setVisible(settings.prefs.showStatusBar)
         self.statusBar2.enableMemoryIndicator(APP_DEBUG)

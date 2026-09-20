@@ -9,6 +9,8 @@ from gitfourchette.toolbox import *
 
 
 class QStatusBar2(QStatusBar):
+    NeutralHeight = 22
+
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setObjectName("QStatusBar2")
@@ -38,6 +40,18 @@ class QStatusBar2(QStatusBar):
 
         self.busyWidget.setVisible(False)
         self.isBusyMessageSet = False
+
+    def applyTheme(self, neutral: bool) -> None:
+        """
+        Neutral keeps the bar to a line of small print under the window, like
+        the reference's 22 px footer, instead of a second toolbar.
+        """
+        self.setFixedHeight(self.NeutralHeight) if neutral else self.unsetFixedHeight()
+
+    def unsetFixedHeight(self) -> None:
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(QWIDGETSIZE_MAX)
+        self.updateGeometry()
 
     def showMessage(self, text: str, msecs=0):
         if self.busyMessageDelayer.isActive():
