@@ -16,23 +16,25 @@ CHANGE_REQUEST_PROMPT = (
     "Infrastructure, and Documentation. Include only evidenced areas, explain behavior and "
     "risks, and do not claim tests were run unless verified.")
 
+# Each caption names what comes back, not the discipline it comes from, and the
+# order is the order the questions get asked: what changed, then how good it is.
 PRESETS = {
-    "review": ("Code review", ("Review these commits for correctness, maintainability and missing tests. "
-               "List actionable findings by severity, with commit/file/line evidence and suggested fixes. "
-               "If there are no supported findings, say so. Finish with a short verdict.")),
-    "bugs": ("Find bugs", ("Find bugs and regressions introduced by these commits. Check edge cases, null values, "
-             "error handling, concurrency and compatibility. For each supported finding give severity, "
-             "a reproduction scenario, commit/file/line evidence and a suggested fix. Separate hypotheses.")),
-    "performance": ("Performance", ("Review these commits for performance problems: unnecessary queries, N+1, "
-                    "algorithmic complexity, allocations, blocking work and resource leaks. Explain likely "
-                    "impact, cite evidence and suggest improvements and benchmarks. Do not invent measurements.")),
-    "security": ("Security", ("Review these commits for security issues: authorization, input validation, injection, "
-                 "sensitive data exposure and unsafe dependencies. Give actionable findings with severity, "
-                 "prerequisites, commit/file/line evidence and remediation. Distinguish risks from verified issues.")),
-    "summary": ("Summary", ("Summarize what changed in these commits, grouped by feature or purpose. Explain "
+    "summary": ("What changed", ("Summarize what changed in these commits, grouped by feature or purpose. Explain "
                 "user-visible impact, affected areas, tests and remaining risks. Reference the relevant commits. "
                 "For developer activity, report only work evidenced by these commits; do not infer hours worked "
                 "or overall productivity.")),
+    "review": ("Code review", ("Review these commits for correctness, maintainability and missing tests. "
+               "List actionable findings by severity, with commit/file/line evidence and suggested fixes. "
+               "If there are no supported findings, say so. Finish with a short verdict.")),
+    "bugs": ("Bugs and regressions", ("Find bugs and regressions introduced by these commits. Check edge cases, null values, "
+             "error handling, concurrency and compatibility. For each supported finding give severity, "
+             "a reproduction scenario, commit/file/line evidence and a suggested fix. Separate hypotheses.")),
+    "performance": ("Performance risks", ("Review these commits for performance problems: unnecessary queries, N+1, "
+                    "algorithmic complexity, allocations, blocking work and resource leaks. Explain likely "
+                    "impact, cite evidence and suggest improvements and benchmarks. Do not invent measurements.")),
+    "security": ("Security risks", ("Review these commits for security issues: authorization, input validation, injection, "
+                 "sensitive data exposure and unsafe dependencies. Give actionable findings with severity, "
+                 "prerequisites, commit/file/line evidence and remediation. Distinguish risks from verified issues.")),
 }
 
 

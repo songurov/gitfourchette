@@ -248,6 +248,26 @@ QPushButton:disabled {
     border-color: ${border};
 }
 
+/* The button a dialog exists for wears the default button's coat without
+ * being the default: Enter belongs to the text field it sits under. */
+QPushButton[primary="true"] {
+    background: ${defaultButton};
+    border-color: ${accent};
+}
+
+QPushButton[primary="true"]:hover {
+    background: ${defaultButtonHover};
+}
+
+QPushButton[primary="true"]:pressed {
+    background: ${buttonPressed};
+}
+
+QPushButton[primary="true"]:disabled {
+    background: ${inputDisabled};
+    border-color: ${border};
+}
+
 QPushButton::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;

@@ -1199,6 +1199,37 @@ msgstr ""
 msgid "Special thanks to Marc-Alexandre Espiaut for beta testing."
 msgstr ""
 
+#: forms/aichatdialog.py:437
+msgid "Assistant, model, response language and project rules"
+msgstr ""
+
+#: forms/aichatdialog.py:323
+msgid "Developer's work…"
+msgstr ""
+
+#: forms/aichatdialog.py:410
+msgid "no project rules"
+msgstr ""
+
+#: forms/aichatdialog.py:414
+#, python-brace-format
+msgid "{n} rule omitted"
+msgid_plural "{n} rules omitted"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/aichatdialog.py:453
+#, python-brace-format
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/aichatdialog.py:618
+#, python-brace-format
+msgid "{0} · last {1}"
+msgstr ""
+
 #: forms/analysisview.py:274
 #, python-brace-format
 msgid "Analysis — {0}"
@@ -1373,7 +1404,7 @@ msgstr ""
 msgid "No commits by {0} between {1} and {2}."
 msgstr ""
 
-#: forms/analysisview.py:636
+#: forms/aichatdialog.py:455 forms/analysisview.py:636
 #, python-brace-format
 msgid "{n} commit"
 msgid_plural "{n} commits"
@@ -3545,7 +3576,7 @@ msgstr ""
 msgid "No README — worth adding one."
 msgstr ""
 
-#: forms/welcomewidget.py:635
+#: forms/aichatdialog.py:267 forms/welcomewidget.py:635
 msgid "Uncommitted changes"
 msgstr ""
 

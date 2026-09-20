@@ -1206,6 +1206,39 @@ msgstr "Tradus în română de:"
 msgid "Special thanks to Marc-Alexandre Espiaut for beta testing."
 msgstr "Mulțumiri speciale lui Marc-Alexandre Espiaut pentru testarea beta."
 
+#: forms/aichatdialog.py:437
+msgid "Assistant, model, response language and project rules"
+msgstr "Asistentul, modelul, limba răspunsului și regulile proiectului"
+
+#: forms/aichatdialog.py:323
+msgid "Developer's work…"
+msgstr "Munca unui dezvoltator…"
+
+#: forms/aichatdialog.py:410
+msgid "no project rules"
+msgstr "fără regulile proiectului"
+
+#: forms/aichatdialog.py:414
+#, python-brace-format
+msgid "{n} rule omitted"
+msgid_plural "{n} rules omitted"
+msgstr[0] "{n} regulă omisă"
+msgstr[1] "{n} reguli omise"
+msgstr[2] "{n} de reguli omise"
+
+#: forms/aichatdialog.py:453
+#, python-brace-format
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] "{n} fișier"
+msgstr[1] "{n} fișiere"
+msgstr[2] "{n} de fișiere"
+
+#: forms/aichatdialog.py:618
+#, python-brace-format
+msgid "{0} · last {1}"
+msgstr "{0} · ultimele {1}"
+
 #: forms/analysisview.py:274
 #, python-brace-format
 msgid "Analysis — {0}"
@@ -1376,7 +1409,7 @@ msgstr "(îmbinare)"
 msgid "No commits by {0} between {1} and {2}."
 msgstr "Niciun commit de la {0} între {1} și {2}."
 
-#: forms/analysisview.py:636
+#: forms/aichatdialog.py:455 forms/analysisview.py:636
 #, python-brace-format
 msgid "{n} commit"
 msgid_plural "{n} commits"
@@ -3563,7 +3596,7 @@ msgstr "Acest depozit nu a putut fi citit."
 msgid "No README — worth adding one."
 msgstr "Fără README — merită să adaugi unul."
 
-#: forms/welcomewidget.py:635
+#: forms/aichatdialog.py:267 forms/welcomewidget.py:635
 msgid "Uncommitted changes"
 msgstr "Modificări fără commit"
 

@@ -95,14 +95,182 @@ def testResponseStream(provider):
 def testModelCommands(aiDialog):
     dlg = aiDialog
     assert dlg.model() == ""
-    assert "configured-model" in dlg.modelLabel.text()
+    # The header names the assistant and the model it will really use
+    assert "configured-model" in dlg.setupButton.text()
+    assert "Codex" in dlg.setupButton.text()
     dlg.input.setPlainText("/model custom-model")
     dlg.send()
     assert dlg.model() == "custom-model"
+    assert "custom-model" in dlg.setupButton.text()
     assert not dlg.messages
     dlg.input.setPlainText("/model default")
     dlg.send()
     assert dlg.model() == ""
+
+
+def testHeaderSaysWhatTheChatIsAboutAndWhoAnswers(aiDialog):
+    dlg = aiDialog
+    # Two commits: the count on the header line, the subjects in the list below it
+    assert "2 commits" in dlg.selectionLabel.text()
+    assert all(sha[:10] in dlg.selectionLabel.toolTip() for sha in dlg.commits)
+    assert dlg.commitList.isVisible()
+    assert "English" in dlg.setupButton.text()
+    assert "no project rules" not in dlg.setupButton.text()
+    dlg.rulesCheck.setChecked(False)
+    assert "no project rules" in dlg.setupButton.text()
+
+    # One commit tells its own story on the header line; no list under it
+    single = AiChatDialog(dlg.repo, [dlg.repo.head.target], dlg)
+    single.show()
+    assert "1 commit" in single.selectionLabel.text()
+    assert (single.repo.head_commit.message or "").partition("\n")[0] in single.selectionLabel.text()
+    assert not single.commitList.isVisible()
+    single.reject()
+
+
+def testSetupStripStaysTheWayYouLeaveIt(aiDialog):
+    dlg = aiDialog
+    # Everything that is set once starts out folded away, under a line that says what it says
+    assert not settings.history.aiSetupExpanded
+    assert not dlg.setupButton.isChecked()
+    assert not dlg.setupStrip.isVisible()
+    assert not dlg.providerCombo.isVisible()
+
+    dlg.setupButton.setChecked(True)
+    assert dlg.setupStrip.isVisible()
+    assert dlg.providerCombo.isVisible()
+    assert settings.history.aiSetupExpanded
+
+    # The next chat opens on the same choice
+    other = AiChatDialog(dlg.repo, [dlg.repo.head.target], dlg)
+    other.show()
+    assert other.setupButton.isChecked()
+    assert other.setupStrip.isVisible()
+    other.reject()
+
+
+def testTranscriptKeepsYourPlaceUntilYouAskAgain(aiDialog, monkeypatch):
+    dlg = aiDialog
+    dlg.chat.resize(400, 200)
+    dlg.messages = [{"role": "user", "content": "What changed?"},
+                    {"role": "assistant", "content": "\n\n".join(f"Finding {i}." for i in range(200))}]
+    dlg.render()
+    bar = dlg.chat.verticalScrollBar()
+    assert bar.maximum() > 0
+
+    # Reading back through the answer isn't interrupted by the words still arriving
+    bar.setValue(0)
+    dlg.messages[-1]["content"] += "\n\n" + "\n\n".join(f"More {i}." for i in range(50))
+    dlg.render()
+    assert bar.value() == 0
+
+    # Watching the end of it still follows along
+    bar.setValue(bar.maximum())
+    dlg.messages[-1]["content"] += "\n\n" + "\n\n".join(f"Tail {i}." for i in range(50))
+    dlg.render()
+    assert bar.value() == bar.maximum()
+
+    # The question is set off from the answer, so the two never read as one
+    assert "You" in dlg.chat.toPlainText()
+    assert "Assistant" in dlg.chat.toPlainText()
+
+    # Asking the next question is the one moment the end of the transcript wins:
+    # your own question, and the answer it is waiting for, land on screen
+    fakeCli(monkeypatch, "import sys, time; sys.stdin.read(); time.sleep(60)")
+    dlg.context = "context"
+    bar.setValue(0)
+    dlg.input.setPlainText("And the tests?")
+    dlg.send()
+    assert bar.value() == bar.maximum()
+    assert "And the tests?" in dlg.chat.toPlainText()
+    waitUntilTrue(lambda: dlg.process.state() == QProcess.ProcessState.Running)
+    dlg.stop()
+    waitUntilTrue(lambda: dlg.process is None)
+
+
+def testAQuestionsMarkdownStaysInTheQuestion(aiDialog):
+    dlg = aiDialog
+    # What you typed is quoted, not obeyed: a rule or a heading in the question
+    # must not restyle the document that quotes it
+    dlg.messages = [{"role": "user", "content": "Why the `---` here?\n# Not a heading"},
+                    {"role": "assistant", "content": "# A heading of my own"}]
+    dlg.render()
+    text = dlg.chat.toPlainText()
+    assert "Why the `---` here?" in text
+    assert "# Not a heading" in text
+    # The answer, on the other hand, is Markdown and is laid out as such
+    assert "A heading of my own" in text and "# A heading of my own" not in text
+
+
+def testOmittedRulesReachTheCollapsedHeader(aiDialog, monkeypatch):
+    dlg = aiDialog
+    monkeypatch.setattr(aichatdialog, "projectGuidance",
+                        lambda *args, **kwargs: ("Root rules.", ["AGENTS.md"], ["big.md", "bigger.md"]))
+    # The strip that holds View rules is shut, the way it opens by default
+    assert not dlg.setupStrip.isVisible()
+    dlg.prepareGuidance()
+    assert not dlg.rulesButton.isVisible()
+    # Incomplete rules are the one thing here nobody chose, so the header says so
+    assert "2 rules omitted" in dlg.setupButton.text()
+    assert "2 rules omitted" in dlg.setupButton.toolTip()
+    # A fresh scope has no verdict on its rules yet, and stops claiming one
+    dlg.resetScope(dlg.commits)
+    assert "omitted" not in dlg.setupButton.text()
+
+
+def testALongModelNameDoesNotWidenTheDialog(aiDialog):
+    dlg = aiDialog
+    dlg.modelCombo.setEditText("vendor/reasoning-model-5-20251101-thinking-high")
+    dlg.layout().activate()
+    capped = dlg.minimumSizeHint().width()
+    dlg.modelCombo.setEditText("vendor/" + "very-long-" * 40 + "model")
+    dlg.layout().activate()
+    assert dlg.minimumSizeHint().width() == capped
+    assert "…" in dlg.setupButton.text()
+    # Elided on the line, whole under the pointer
+    assert "vendor/" + "very-long-" * 40 + "model" in dlg.setupButton.toolTip()
+
+
+def testTheActivityScopeSaysWhatItSearches(aiDialog):
+    dlg = aiDialog
+    assert "Changing scope starts a new chat." in dlg.scopeCombo.toolTip()
+    dlg.scopeCombo.setCurrentIndex(1)
+    waitUntilTrue(lambda: dlg.process is None)
+    # Once you are in that scope, the controls you are using carry its caveat
+    assert "All local and remote-tracking branches" in dlg.scopeCombo.toolTip()
+    assert "All local and remote-tracking branches" in dlg.activityControls.toolTip()
+    dlg.scopeCombo.setCurrentIndex(0)
+    assert "Changing scope starts a new chat." in dlg.scopeCombo.toolTip()
+
+
+def testStatusTooltipDoesNotOutliveTheFailure(aiDialog):
+    dlg = AiChatDialog(aiDialog.repo, [], aiDialog, branch="refs/heads/master")
+    waitUntilTrue(lambda: dlg.process is None)
+    # git's complaint is too long for one line, so it waits under the pointer
+    dlg.phase = "branch"
+    dlg.fail("fatal: bad revision 'refs/heads/nope'")
+    assert "fatal: bad revision" in dlg.status.text()
+    assert dlg.status.toolTip() == "fatal: bad revision 'refs/heads/nope'"
+
+    # The retry that puts it right takes the complaint with it
+    dlg.baseCombo.setCurrentIndex(dlg.baseCombo.findData("refs/heads/no-parent"))
+    dlg.loadBranch()
+    waitUntilTrue(lambda: dlg.process is None)
+    assert dlg.status.text() == "Ready"
+    assert not dlg.status.toolTip()
+    dlg.reject()
+
+
+def testDeveloperWorkButton(aiDialog):
+    dlg = aiDialog
+    addActivityCommit(dlg.repo, "Alice [dev]", "alice@example.com", 1, "refs/heads/alice-work")
+    # One click for "what has this developer been working on"
+    dlg.activityButton.click()
+    waitUntilTrue(lambda: dlg.process is None)
+    assert dlg.scopeCombo.currentIndex() == 1
+    assert dlg.activityControls.isVisible()
+    assert dlg.authorCombo.findData("alice@example.com") >= 0
+    assert dlg.input.toPlainText() == aichat.PRESETS["summary"][1]
 
 
 def fakeCli(monkeypatch, code):
@@ -170,13 +338,17 @@ def testStop(aiDialog, monkeypatch):
     fakeCli(monkeypatch, "import sys, time; sys.stdin.read(); time.sleep(60)")
     dlg = aiDialog
     dlg.context = "context"
+    # Nothing to stop yet, so the bottom row only offers Send
+    assert not dlg.stopButton.isVisible()
     dlg.input.setPlainText("Review")
     dlg.send()
     waitUntilTrue(lambda: dlg.process.state() == QProcess.ProcessState.Running)
+    assert dlg.stopButton.isVisible()
     dlg.stop()
     waitUntilTrue(lambda: dlg.process is None)
     assert dlg.status.text() == "Stopped"
     assert dlg.sendButton.isEnabled()
+    assert not dlg.stopButton.isVisible()
 
 
 @pytest.mark.parametrize("count", [1, 2, 3])
@@ -341,7 +513,11 @@ def testBranchPresetMenu(tempDir, mainWindow, monkeypatch, ref):
     rw = mainWindow.openRepo(unpackRepo(tempDir))
     menu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByRef(ref))
     assert menu.actions()[0].text() == "Ask AI about branch…"
-    assert [a.text() for a in menu.actions()[1:6]] == [caption + "…" for caption, _prompt in aichat.PRESETS.values()]
+    # The branch menu is built from PRESETS, so it reads in the same order as
+    # the chat's own row of buttons — spelled out here so that reordering one
+    # cannot quietly reorder the other
+    assert [a.text() for a in menu.actions()[1:6]] == [
+        "What changed…", "Code review…", "Bugs and regressions…", "Performance risks…", "Security risks…"]
     # The test repo's origin is on GitHub: the pull request action follows the presets
     assert menu.actions()[6].text() == "Create or Open Pull Request…"
     assert menu.actions()[7].isSeparator()
@@ -349,7 +525,7 @@ def testBranchPresetMenu(tempDir, mainWindow, monkeypatch, ref):
     dlg = rw.sidebar.findChild(AiChatDialog)
     waitUntilTrue(lambda: dlg.process is None)
     assert dlg.branch == ref
-    assert dlg.input.toPlainText() == aichat.PRESETS["review"][1]
+    assert dlg.input.toPlainText() == aichat.PRESETS["summary"][1]
     assert not dlg.messages
     dlg.reject()
 
@@ -379,8 +555,12 @@ def testChangeRequestAction(tempDir, mainWindow, monkeypatch, ref, installed):
 
     assert not openedUrls
     waitUntilTrue(lambda: dlg.process is None)
-    # The chat keeps the five general-purpose presets; the request summary is not one of them
-    assert [b.text() for b in dlg.presetButtons] == ["Code review", "Find bugs", "Performance", "Security", "Summary"]
+    # The chat keeps the five general-purpose presets, each named after what it
+    # gives back and ordered as the questions get asked; the request summary is not one of them
+    assert [b.text() for b in dlg.presetButtons] == [
+        "What changed", "Code review", "Bugs and regressions", "Performance risks", "Security risks"]
+    # "What has this developer been working on" sits beside them, not in a combo box
+    assert dlg.activityButton.text() == "Developer's work…"
     assert dlg.branch == ref
     assert dlg.changeRequest == ("https://github.com/libgit2/TestGitRepository", "master")
     assert dlg.changeRequestButton.text() == "Open Pull Request"

@@ -1207,6 +1207,39 @@ msgstr "На ваш родной язык перевели:"
 msgid "Special thanks to Marc-Alexandre Espiaut for beta testing."
 msgstr "Особая благодарность Марку Александру Эспио за бета тестирование."
 
+#: forms/aichatdialog.py:437
+msgid "Assistant, model, response language and project rules"
+msgstr "Ассистент, модель, язык ответа и правила проекта"
+
+#: forms/aichatdialog.py:323
+msgid "Developer's work…"
+msgstr "Работа разработчика…"
+
+#: forms/aichatdialog.py:410
+msgid "no project rules"
+msgstr "без правил проекта"
+
+#: forms/aichatdialog.py:414
+#, python-brace-format
+msgid "{n} rule omitted"
+msgid_plural "{n} rules omitted"
+msgstr[0] "{n} правило опущено"
+msgstr[1] "{n} правила опущено"
+msgstr[2] "{n} правил опущено"
+
+#: forms/aichatdialog.py:453
+#, python-brace-format
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] "{n} файл"
+msgstr[1] "{n} файла"
+msgstr[2] "{n} файлов"
+
+#: forms/aichatdialog.py:618
+#, python-brace-format
+msgid "{0} · last {1}"
+msgstr "{0} · за последние {1}"
+
 #: forms/analysisview.py:274
 #, python-brace-format
 msgid "Analysis — {0}"
@@ -1377,7 +1410,7 @@ msgstr "(слияние)"
 msgid "No commits by {0} between {1} and {2}."
 msgstr "Нет коммитов автора {0} с {1} по {2}."
 
-#: forms/analysisview.py:636
+#: forms/aichatdialog.py:455 forms/analysisview.py:636
 #, python-brace-format
 msgid "{n} commit"
 msgid_plural "{n} commits"
@@ -3475,7 +3508,7 @@ msgstr "Не удалось прочитать этот репозиторий."
 msgid "No README — worth adding one."
 msgstr "Нет README — стоит его добавить."
 
-#: forms/welcomewidget.py:635
+#: forms/aichatdialog.py:267 forms/welcomewidget.py:635
 msgid "Uncommitted changes"
 msgstr "Незакоммиченные изменения"
 

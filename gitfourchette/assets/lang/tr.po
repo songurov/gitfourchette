@@ -1184,6 +1184,37 @@ msgstr "Ana dilinize çevirenler:"
 msgid "Special thanks to Marc-Alexandre Espiaut for beta testing."
 msgstr "Beta testleri için Marc-Alexandre Espiaut'ya özel teşekkürler."
 
+#: forms/aichatdialog.py:437
+msgid "Assistant, model, response language and project rules"
+msgstr "Asistan, model, yanıt dili ve proje kuralları"
+
+#: forms/aichatdialog.py:323
+msgid "Developer's work…"
+msgstr "Geliştiricinin çalışması…"
+
+#: forms/aichatdialog.py:410
+msgid "no project rules"
+msgstr "proje kuralı yok"
+
+#: forms/aichatdialog.py:414
+#, python-brace-format
+msgid "{n} rule omitted"
+msgid_plural "{n} rules omitted"
+msgstr[0] "{n} kural atlandı"
+msgstr[1] "{n} kural atlandı"
+
+#: forms/aichatdialog.py:453
+#, python-brace-format
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] "{n} dosya"
+msgstr[1] "{n} dosya"
+
+#: forms/aichatdialog.py:618
+#, python-brace-format
+msgid "{0} · last {1}"
+msgstr "{0} · son {1}"
+
 #: forms/analysisview.py:274
 #, python-brace-format
 msgid "Analysis — {0}"
@@ -1353,7 +1384,7 @@ msgstr "(birleştirme)"
 msgid "No commits by {0} between {1} and {2}."
 msgstr "{1} ile {2} arasında {0} tarafından yapılmış işleme yok."
 
-#: forms/analysisview.py:636
+#: forms/aichatdialog.py:455 forms/analysisview.py:636
 #, python-brace-format
 msgid "{n} commit"
 msgid_plural "{n} commits"
@@ -3527,7 +3558,7 @@ msgstr "Bu depo okunamadı."
 msgid "No README — worth adding one."
 msgstr "README yok — bir tane eklemeye değer."
 
-#: forms/welcomewidget.py:635
+#: forms/aichatdialog.py:267 forms/welcomewidget.py:635
 msgid "Uncommitted changes"
 msgstr "İşlenmemiş değişiklikler"
 

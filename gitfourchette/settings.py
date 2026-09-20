@@ -391,6 +391,8 @@ class History(PrefsFile):
     aiModels: dict[str, str] = dataclasses.field(default_factory=dict)
     aiLanguage: str = "English"
     aiCommitDetail: str = "deep"
+    aiSetupExpanded: bool = False
+    "Whether the AI chat shows the strip that picks the assistant, model, language and rules."
     _filename = "history.json"
 
     class JsonRepo(TypedDict, total=False):
