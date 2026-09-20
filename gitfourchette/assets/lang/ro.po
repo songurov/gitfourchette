@@ -8902,3 +8902,19 @@ msgstr "Nu există modificări pregătite de descris."
 #: diffarea.py:939
 msgid "The CLI returned no commit message."
 msgstr "CLI nu a întors niciun mesaj de commit."
+
+#: forms/aichatdialog.py:56
+msgid "{0} s"
+msgstr "{0} s"
+
+#: forms/aichatdialog.py:56
+msgid "{0} min {1} s"
+msgstr "{0} min {1} s"
+
+#: forms/aichatdialog.py:56
+msgid "{0}  ({1})"
+msgstr "{0}  ({1})"
+
+#: forms/aichatdialog.py:56
+msgid "{0}  (took {1})"
+msgstr "{0}  (a durat {1})"

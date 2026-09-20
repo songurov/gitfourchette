@@ -482,3 +482,30 @@ def testBranchReviewWithoutNewCommits(aiDialog):
     assert not dlg.sendButton.isEnabled()
     assert "No branch commits" in dlg.status.text()
     dlg.reject()
+
+
+def testStatusLineTimesTheRequest(aiDialog, monkeypatch):
+    # An answer can take minutes; the status line says how long it has been
+    monkeypatch.setattr(aichatdialog, "makePrompt", lambda *args, **kwargs: "prompt")
+    fakeClock = [0]
+    monkeypatch.setattr(aiDialog.status.elapsed, "isValid", lambda: True)
+    monkeypatch.setattr(aiDialog.status.elapsed, "elapsed", lambda: fakeClock[0])
+
+    aiDialog.status.setText("Responding…")
+    assert aiDialog.status.text() == "Responding…"
+
+    aiDialog.setBusy(True)
+    fakeClock[0] = 42_000
+    aiDialog.status.refresh()
+    assert "42 s" in aiDialog.status.text()
+    assert "Responding…" in aiDialog.status.text()
+
+    fakeClock[0] = 125_000
+    aiDialog.status.refresh()
+    assert "2 min 5 s" in aiDialog.status.text()
+
+    # Once it's over, the time it took stays on screen
+    aiDialog.setBusy(False)
+    aiDialog.status.setText("Ready")
+    assert "took" in aiDialog.status.text()
+    assert "2 min 5 s" in aiDialog.status.text()

@@ -8828,3 +8828,19 @@ msgstr ""
 #: diffarea.py:939
 msgid "The CLI returned no commit message."
 msgstr ""
+
+#: forms/aichatdialog.py:56
+msgid "{0} s"
+msgstr ""
+
+#: forms/aichatdialog.py:56
+msgid "{0} min {1} s"
+msgstr ""
+
+#: forms/aichatdialog.py:58
+msgid "{0}  ({1})"
+msgstr ""
+
+#: forms/aichatdialog.py:60
+msgid "{0}  (took {1})"
+msgstr ""

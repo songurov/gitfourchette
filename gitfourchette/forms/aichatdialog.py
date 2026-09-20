@@ -17,6 +17,47 @@ from gitfourchette.toolbox import makeWidgetShortcut
 from gitfourchette.webhost import WebHost
 
 
+class ElapsedStatusLabel(QLabel):
+    """
+    The status line, with a clock on it while the CLI is working: an answer
+    can take minutes, and a line that only says "Responding…" doesn't tell
+    you whether anything is happening. The last run's time stays on screen.
+    """
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.message = text
+        self.elapsed = QElapsedTimer()
+        self.clock = QTimer(self)
+        self.clock.setInterval(1000)
+        self.clock.timeout.connect(self.refresh)
+
+    def setText(self, text: str):  # override
+        self.message = text
+        self.refresh()
+
+    def setClockRunning(self, running: bool):
+        if running == self.clock.isActive():
+            return
+        if running:
+            self.elapsed.start()
+            self.clock.start()
+        else:
+            self.clock.stop()
+        self.refresh()
+
+    def refresh(self):
+        seconds = self.elapsed.elapsed() // 1000 if self.elapsed.isValid() else 0
+        if not seconds:
+            super().setText(self.message)
+            return
+        clock = _("{0} s", seconds) if seconds < 60 else _("{0} min {1} s", seconds // 60, seconds % 60)
+        if self.clock.isActive():
+            super().setText(_("{0}  ({1})", self.message, clock))
+        else:
+            super().setText(_("{0}  (took {1})", self.message, clock))
+
+
 class AiChatDialog(QDialog):
     ContextLimit = 180_000
 
@@ -171,7 +212,7 @@ class AiChatDialog(QDialog):
             else _("Ask about these commits…  /model to choose a model. Ctrl+Enter to send."))
         layout.addWidget(self.input)
         buttons = QHBoxLayout()
-        self.status = QLabel(_("Ready"))
+        self.status = ElapsedStatusLabel(_("Ready"))
         buttons.addWidget(self.status, 1)
         self.stopButton = QPushButton(_("Stop"))
         self.stopButton.setEnabled(False)
@@ -417,6 +458,7 @@ class AiChatDialog(QDialog):
         self.chat.verticalScrollBar().setValue(self.chat.verticalScrollBar().maximum())
 
     def setBusy(self, busy):
+        self.status.setClockRunning(busy)
         self.sendButton.setEnabled(not busy and bool(self.providers) and bool(self.commits or self.worktreePaths))
         self.stopButton.setEnabled(busy)
         self.providerCombo.setEnabled(not busy)

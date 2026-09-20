@@ -8942,3 +8942,19 @@ msgstr "Нет подготовленных изменений для описа
 #: diffarea.py:939
 msgid "The CLI returned no commit message."
 msgstr "CLI не вернул сообщение коммита."
+
+#: forms/aichatdialog.py:56
+msgid "{0} s"
+msgstr "{0} с"
+
+#: forms/aichatdialog.py:56
+msgid "{0} min {1} s"
+msgstr "{0} мин {1} с"
+
+#: forms/aichatdialog.py:56
+msgid "{0}  ({1})"
+msgstr "{0}  ({1})"
+
+#: forms/aichatdialog.py:56
+msgid "{0}  (took {1})"
+msgstr "{0}  (заняло {1})"
