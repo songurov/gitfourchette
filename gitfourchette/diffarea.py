@@ -100,7 +100,18 @@ class DiffArea(QWidget):
         commitTabs.addTab(_p("noun", "Changes"))
         commitTabs.setCurrentIndex(self.ChangesTab)
         commitTabs.currentChanged.connect(pageStack.setCurrentIndex)
-        commitTabs.setVisible(False)
+
+        # Neutral hugs the tabs with a track (see refreshTheme); the other
+        # looks let them run the width of the pane, as they always have.
+        commitTabBar = QWidget(self)
+        commitTabBar.setObjectName("CommitTabBar")
+        commitTabRow = QHBoxLayout(commitTabBar)
+        commitTabRow.setContentsMargins(QMargins())
+        commitTabRow.setSpacing(0)
+        commitTabRow.addWidget(commitTabs, 1)
+        commitTabFiller = QSpacerItem(0, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        commitTabRow.addSpacerItem(commitTabFiller)
+        commitTabBar.setVisible(False)
 
         contextHeader = ContextHeader(self)
 
@@ -111,7 +122,7 @@ class DiffArea(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(QMargins())
         layout.setSpacing(0)
-        layout.addWidget(commitTabs)
+        layout.addWidget(commitTabBar)
         layout.addWidget(contextHeader)
         layout.addWidget(diffBanner)
         layout.addWidget(QFaintSeparator(self))
@@ -127,6 +138,9 @@ class DiffArea(QWidget):
         self.diffBanner = diffBanner
         self.contextHeader = contextHeader
         self.commitTabs = commitTabs
+        self.commitTabBar = commitTabBar
+        self.commitTabRow = commitTabRow
+        self.commitTabFiller = commitTabFiller
         self.pageStack = pageStack
         self.commitDetailView = commitDetailView
         self.commitPatchStack = commitPatchStack
@@ -1183,6 +1197,16 @@ class DiffArea(QWidget):
         for header in self.fileListHeaders:
             header.parentWidget().layout().invalidate()
 
+        # Neutral's commit tabs are a segmented control: the track stops at
+        # the last tab, with room around it. Elsewhere they span the pane.
+        self.commitTabRow.setContentsMargins(QMargins(8, 4, 8, 4) if neutral else QMargins())
+        self.commitTabFiller.changeSize(
+            0, 0,
+            QSizePolicy.Policy.Expanding if neutral else QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Minimum)
+        self.commitTabRow.setStretch(0, 0 if neutral else 1)
+        self.commitTabRow.invalidate()
+
     # -------------------------------------------------------------------------
     # File navigation
 
@@ -1307,7 +1331,7 @@ class DiffArea(QWidget):
     def setCommitDetail(self, repoModel, commit, deltas, isStash=False):
         """Show the tabs and fill the Commit tab for the commit being viewed."""
         self.commitDetailView.setCommit(repoModel, commit, deltas, isStash)
-        self.commitTabs.setVisible(True)
+        self.commitTabBar.setVisible(True)
         self.hideCommitPatch()
 
     def hideCommitPatch(self):
@@ -1339,7 +1363,7 @@ class DiffArea(QWidget):
     def hideCommitDetail(self):
         """No commit in sight (the working directory, say): no tabs either."""
         self.commitDetailView.clear()
-        self.commitTabs.setVisible(False)
+        self.commitTabBar.setVisible(False)
         self.hideCommitPatch()
         self.showChangesTab()
 

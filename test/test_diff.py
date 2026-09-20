@@ -1645,6 +1645,40 @@ def testCommitTabShowsNoAvatarWhileAvatarsAreOff(tempDir, mainWindow):
 
 
 # -----------------------------------------------------------------------------
+# Commit | Changes | File Tree
+
+
+MERGE_COMMIT = "83834a7afdaa1a1260568567f6ad90020389f664"  # Merge branch 'a' into c
+
+
+def testNeutralDrawsTheCommitTabsAsASegmentedControl(tempDir, mainWindow):
+    """Neutral: a pill on a track that stops at the last tab, like the repo tabs above."""
+    from gitfourchette.themes import NEUTRAL_DARK
+
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    tabs = diffArea.commitTabs
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+
+    # Other looks keep the tabs they always had: a bar across the whole pane
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark"))
+    QTest.qWait(0)
+    assert tabs.width() == diffArea.width()
+
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark", variant=ThemeVariant.Neutral))
+    QTest.qWait(0)
+    lastTab = tabs.tabRect(tabs.count() - 1)
+    assert lastTab.right() < tabs.width() <= lastTab.right() + 8, "the track stops at the last tab"
+    assert tabs.x() >= 8, "with room between it and the pane's edge"
+
+    image = tabs.grab().toImage()
+    pill = tabs.tabRect(tabs.currentIndex())
+    assert image.pixelColor(4, image.height() // 2).name() == NEUTRAL_DARK.tabTrack
+    assert image.pixelColor(pill.left() + 6, pill.center().y()).name() == NEUTRAL_DARK.tabPill
+
+
+# -----------------------------------------------------------------------------
 # The buttons around the diff: named, legible, reachable from the keyboard
 
 

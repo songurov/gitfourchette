@@ -1021,3 +1021,33 @@ ${neutralOnly}#GFToolbar QToolButton::menu-indicator {
     image: none;
     width: 0px;
 }
+
+/* The lower pane's tabs (Commit, Changes, File Tree): a small segmented
+   control, like the repo tabs above. DiffArea.refreshTheme makes the bar hug
+   its tabs, so the track stops where the last one does. */
+${neutralOnly}DiffArea QTabBar#CommitTabs {
+    background: ${tabTrack};
+    border: 1px solid ${tabTrackEdge};
+    border-radius: 11px;
+}
+
+${neutralOnly}DiffArea QTabBar#CommitTabs::tab {
+    height: 18px;
+    margin: 2px;
+    padding: 0px 10px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: ${textDim};
+}
+
+${neutralOnly}DiffArea QTabBar#CommitTabs::tab:hover:!selected {
+    background: ${tabPill};
+}
+
+${neutralOnly}DiffArea QTabBar#CommitTabs::tab:selected {
+    background: ${tabPill};
+    /* Lit along the top and bottom, in shadow at the rounded ends */
+    border-color: ${tabPillEdge} ${tabPillShade};
+    color: ${tabActiveText};
+    font-weight: normal;
+}
