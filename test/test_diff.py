@@ -12,7 +12,7 @@ from gitfourchette import settings
 from gitfourchette.diffview.diffview import DiffView
 from gitfourchette.nav import NavLocator
 from gitfourchette.settings import WhitespaceMode
-from gitfourchette.themes import ThemeName, formatStyle
+from gitfourchette.themes import ThemeName, ThemeVariant, formatStyle
 from gitfourchette.toolbox import contrastRatio
 from .test_prefs import assertTranslatedInForkLanguages
 from .util import *
@@ -1711,12 +1711,16 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
     assert [accessibleNameOf(control) for control in commitAreaControls] == [
         "Write the commit message with AI", "Recent messages", "More commit options", "Commit"]
 
-    # A toggle's tooltip says whether it's on
-    assert area.diffButtons.wordWrapButton.toolTip() == "Wrap long lines: off"
+    # A toggle's tooltip says whether it's on, then what flipping it does
+    assert area.diffButtons.wordWrapButton.toolTip() == (
+        "Wrap long lines: off\nWrap long lines instead of scrolling sideways")
     area.diffButtons.wordWrapButton.click()
-    assert area.diffButtons.wordWrapButton.toolTip() == "Wrap long lines: on"
+    assert area.diffButtons.wordWrapButton.toolTip().startswith("Wrap long lines: on\n")
     area.diffButtons.wordWrapButton.click()
     assert area.diffButtons.contextButton.toolTip() == "Show up to 3 context lines"
+    for button in area.diffButtons.toggles:
+        assert button.toolTip().count("\n") == 1, accessibleNameOf(button)
+        assert button.accessibleDescription(), accessibleNameOf(button)
 
     # Each icon is drawn at its full 16px: the stylesheet's padding used to
     # squeeze it into the 8px left inside a 24px button
@@ -1731,6 +1735,10 @@ def testDiffAreaButtonsAreNamedLegibleAndReachable(tempDir, mainWindow):
 
     assertTranslatedInForkLanguages(
         "{0}: on", "{0}: off", "Side-by-side diff", "File display", "Show as list or folder tree",
+        "Read the new file next to the old one, in two panes",
+        "Wrap long lines instead of scrolling sideways",
+        "Mark the spaces and tabs in the code",
+        "Show the picture instead of the markup that draws it",
         "Stage all files", "Unstage all files", "Ask AI about the selected files",
         "AI message language", "AI message detail", "Write the commit message with AI", "Recent messages",
         "More commit options", "Commit subject", "Description")
@@ -1796,3 +1804,60 @@ def testCleanWorkdirSaysNothingToCommitAndOffersPush(tempDir, mainWindow):
     assert area.diffButtons.isVisible()
 
     assertTranslatedInForkLanguages("Nothing to commit", "Files you change in the working directory will show up here.")
+
+
+def testDiffButtonsReadAsASet(tempDir, mainWindow):
+    """
+    The row of diff options is a handful of small sets, all of the same
+    optical weight, and the ones that are on wear the accent.
+    """
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "an edit\n")
+    GFApplication.applyPrefs(qtStyle=formatStyle(ThemeName.BuiltIn, "dark", variant=ThemeVariant.Neutral))
+    rw = mainWindow.openRepo(wd)
+    buttons = rw.diffArea.diffButtons
+    rw.jump(NavLocator.inUnstaged("a/a1.txt"), check=True)
+
+    # Two columns of code, not an eye: the odd one out in a row of line art
+    assert buttons.sideBySideButton.icon().name() == "diff-side-by-side.svg"
+
+    def accentPixels(button):
+        accent = QApplication.palette().color(QPalette.ColorRole.Highlight)
+        image = button.grab().toImage()
+        return sum(image.pixelColor(x, y) == accent
+                   for y in range(image.height()) for x in range(image.width()))
+
+    # A button that is off wears no accent; turning it on paints its icon in it
+    assert accentPixels(buttons.sideBySideButton) == 0
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    assert accentPixels(buttons.sideBySideButton) > 10
+    GFApplication.applyPrefs(sideBySideDiff=False)
+    assert accentPixels(buttons.sideBySideButton) == 0
+
+    # The row is grouped: neighbours in a group sit closer than across groups
+    def gap(left, right):
+        return right.geometry().left() - left.geometry().right()
+
+    within = gap(buttons.contextButton, buttons.wholeFileButton)
+    across = gap(buttons.wholeFileButton, buttons.sideBySideButton)
+    assert within <= 2, within  # a group reads as one block
+    assert across >= within + 8, (within, across)
+
+
+def testWrapButtonGoesOffDutyInSideBySide(tempDir, mainWindow):
+    """
+    Each pane of the side-by-side view scrolls sideways on its own, so the
+    view turns wrapping off. The button that flips it sits in the same group:
+    left lit there, it would promise something the two panes can't do.
+    """
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/a/a1.txt", "an edit\n")
+    rw = mainWindow.openRepo(wd)
+    buttons = rw.diffArea.diffButtons
+    rw.jump(NavLocator.inUnstaged("a/a1.txt"), check=True)
+
+    assert buttons.wordWrapButton.isEnabled()
+    GFApplication.applyPrefs(sideBySideDiff=True)
+    assert not buttons.wordWrapButton.isEnabled()
+    GFApplication.applyPrefs(sideBySideDiff=False)
+    assert buttons.wordWrapButton.isEnabled()

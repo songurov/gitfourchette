@@ -142,6 +142,8 @@ class DiffArea(QWidget):
             passiveWidget.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
 
         GFApplication.instance().prefsChanged.connect(self.diffButtons.refreshPrefs)
+        # The buttons that are on wear the accent: a new theme is a new accent
+        GFApplication.instance().restyle.connect(self.diffButtons.refreshPrefs)
         GFApplication.instance().prefsChanged.connect(self.refreshDiffPresentation)
         GFApplication.instance().prefsChanged.connect(self.refreshCommitFormPlacement)
         GFApplication.instance().prefsChanged.connect(self.refreshFileViewActions)

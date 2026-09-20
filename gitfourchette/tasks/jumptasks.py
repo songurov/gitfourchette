@@ -574,7 +574,7 @@ class Jump(RepoTask):
         showSvgButton = (result.delta is not None
                          and result.delta.new.path.lower().endswith(".svg")
                          and isImageFormatSupported("file.svg"))
-        area.diffButtons.svgButton.setVisible(showSvgButton)
+        area.diffButtons.setSvgButtonVisible(showSvgButton)
 
         # No file, no options for showing it (e.g. a clean working directory)
         area.diffButtons.setVisible(result.delta is not None and not isinstance(document, GitConflict))

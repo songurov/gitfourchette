@@ -9023,3 +9023,18 @@ msgstr "Dosyayı yaz"
 #: tasks/indextasks.py
 msgid "{0} settled again; the change is in your working directory."
 msgstr "{0} yeniden çözüldü; değişiklik çalışma dizininizde."
+#: diffbuttons.py:39
+msgid "Read the new file next to the old one, in two panes"
+msgstr "Yeni dosyayı eskisinin yanında, iki bölmede oku"
+
+#: diffbuttons.py:42
+msgid "Wrap long lines instead of scrolling sideways"
+msgstr "Yana kaydırmak yerine uzun satırları sarmala"
+
+#: diffbuttons.py:45
+msgid "Mark the spaces and tabs in the code"
+msgstr "Koddaki boşlukları ve sekmeleri işaretle"
+
+#: diffbuttons.py:49
+msgid "Show the picture instead of the markup that draws it"
+msgstr "Görüntüyü, onu çizen işaretleme yerine göster"

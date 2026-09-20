@@ -9037,4 +9037,18 @@ msgstr ""
 
 #: tasks/indextasks.py
 msgid "{0} settled again; the change is in your working directory."
+#: diffbuttons.py:39
+msgid "Read the new file next to the old one, in two panes"
+msgstr ""
+
+#: diffbuttons.py:42
+msgid "Wrap long lines instead of scrolling sideways"
+msgstr ""
+
+#: diffbuttons.py:45
+msgid "Mark the spaces and tabs in the code"
+msgstr ""
+
+#: diffbuttons.py:49
+msgid "Show the picture instead of the markup that draws it"
 msgstr ""
