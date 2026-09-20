@@ -371,6 +371,14 @@ class AiChatDialog(QDialog):
         self.rulesButton.setAutoDefault(False)
         self.rulesButton.clicked.connect(self.showGuidance)
         setupRow.addWidget(self.rulesButton)
+        # Off unless asked for: the assistant reads, and only writes when told to
+        self.editsCheck = QCheckBox(_("Let it change files"))
+        self.editsCheck.setChecked(settings.history.aiAllowEdits)
+        self.editsCheck.setToolTip(
+            _("The assistant may edit files in the working directory when you ask it to. "
+              "It never commits, stages or pushes: whatever it changes shows up as your "
+              "uncommitted work, to keep or throw away."))
+        setupRow.addWidget(self.editsCheck)
         layout.addWidget(self.setupStrip)
 
         self.chat = TranscriptView()
@@ -452,6 +460,7 @@ class AiChatDialog(QDialog):
         self.modelCombo.currentTextChanged.connect(self.modelChanged)
         self.languageCombo.currentTextChanged.connect(self.refreshSetup)
         self.rulesCheck.toggled.connect(self.refreshSetup)
+        self.editsCheck.toggled.connect(self.editsToggled)
         self.setupButton.toggled.connect(self.showSetup)
         makeWidgetShortcut(self, self.send, "Ctrl+Return", "Ctrl+Enter")
         self.loadModels()
@@ -494,6 +503,10 @@ class AiChatDialog(QDialog):
         answered = self.stream is not None and self.stream.provider == self.provider()
         model = self.stream.model if answered and self.stream.model else self.modelCombo.currentText()
         rest = [self.languageCombo.currentText().strip()]
+        if self.editsCheck.isChecked():
+            # The one thing here that lets the assistant touch your files:
+            # it belongs in the header whether the strip is open or not
+            rest.append(_("may change files"))
         if not self.rulesCheck.isChecked():
             rest.append(_("no project rules"))
         elif self.guidanceOmitted:
@@ -795,6 +808,7 @@ class AiChatDialog(QDialog):
         self.branchControls.setEnabled(not busy)
         self.languageCombo.setEnabled(not busy)
         self.rulesCheck.setEnabled(not busy)
+        self.editsCheck.setEnabled(not busy)
         self.rulesButton.setEnabled(not busy and bool(self.commits or self.worktreePaths))
         self.activityButton.setEnabled(not busy)
         for button in self.presetButtons:
@@ -837,6 +851,11 @@ class AiChatDialog(QDialog):
             chip.clicked.connect(lambda _checked=False, p=path: self.removeAttachment(p))
             layout.addWidget(chip)
         self.attachmentsRow.setVisible(bool(self.attachments))
+
+    def editsToggled(self, allowed: bool):
+        settings.history.aiAllowEdits = allowed
+        settings.history.setDirty()
+        self.refreshSetup()
 
     def send(self):
         if self.process is not None or not self.providers:
@@ -907,17 +926,21 @@ class AiChatDialog(QDialog):
         guidance = self.guidance if self.rulesCheck.isChecked() else "Project guidance disabled by user."
         if self.rulesCheck.isChecked() and self.guidanceOmitted:
             guidance += "\n\nGuidance omitted due to limits; do not claim full rule compliance:\n" + "\n".join(self.guidanceOmitted)
+        allowEdits = self.editsCheck.isChecked()
         if self.worktreePaths:
             prompt = makeWorktreePrompt(
-                self.worktreePaths, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
+                self.worktreePaths, context, self.messages[:-1], self.languageCombo.currentText().strip(),
+                guidance, allowEdits=allowEdits)
         else:
             prompt = makePrompt(
-                self.commits, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
+                self.commits, context, self.messages[:-1], self.languageCombo.currentText().strip(),
+                guidance, allowEdits=allowEdits)
         images = list(self.attachments)
         if images:
             prompt += imageInstructions(images)
+        allowEdits = self.editsCheck.isChecked()
         self.startProcess(self.providers[self.provider()],
-                          cliArguments(self.provider(), self.model(), images=images),
+                          cliArguments(self.provider(), self.model(), images=images, allowEdits=allowEdits),
                           "assistant", prompt)
 
     def startProcess(self, program, args, phase, prompt=""):

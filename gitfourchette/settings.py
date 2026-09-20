@@ -392,6 +392,7 @@ class History(PrefsFile):
     aiLanguage: str = "English"
     aiCommitDetail: str = "deep"
     aiSetupExpanded: bool = False
+    aiAllowEdits: bool = False
     "Whether the AI chat shows the strip that picks the assistant, model, language and rules."
     _filename = "history.json"
 

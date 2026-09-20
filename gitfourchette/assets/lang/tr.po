@@ -9081,3 +9081,15 @@ msgstr "Sorunuza bir görsel ekleyin — neyin ters gittiğinin ekran görüntü
 #: forms/aichatdialog.py
 msgid "{0} — click to leave it out"
 msgstr "{0} — çıkarmak için tıklayın"
+
+#: forms/aichatdialog.py
+msgid "Let it change files"
+msgstr "Dosyaları değiştirmesine izin ver"
+
+#: forms/aichatdialog.py
+msgid "The assistant may edit files in the working directory when you ask it to. It never commits, stages or pushes: whatever it changes shows up as your uncommitted work, to keep or throw away."
+msgstr "Asistan, istediğinizde çalışma dizinindeki dosyaları düzenleyebilir. Asla işleme almaz, hazırlamaz veya göndermez: değiştirdiği her şey sizin işlenmemiş çalışmanız olarak görünür; tutun ya da atın."
+
+#: forms/aichatdialog.py
+msgid "may change files"
+msgstr "dosyaları değiştirebilir"

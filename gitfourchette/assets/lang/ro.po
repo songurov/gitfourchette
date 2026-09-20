@@ -9177,3 +9177,15 @@ msgstr "Atașează o imagine la întrebare — o captură cu ce n-a mers, o diag
 #: forms/aichatdialog.py
 msgid "{0} — click to leave it out"
 msgstr "{0} — clic pentru a o scoate"
+
+#: forms/aichatdialog.py
+msgid "Let it change files"
+msgstr "Îi permit să modifice fișiere"
+
+#: forms/aichatdialog.py
+msgid "The assistant may edit files in the working directory when you ask it to. It never commits, stages or pushes: whatever it changes shows up as your uncommitted work, to keep or throw away."
+msgstr "Asistentul poate modifica fișiere în directorul de lucru, când îi ceri. Nu face niciodată commit, staging sau push: ce schimbă apare ca modificări necomise ale tale, de păstrat sau de aruncat."
+
+#: forms/aichatdialog.py
+msgid "may change files"
+msgstr "poate modifica fișiere"

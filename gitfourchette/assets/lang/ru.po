@@ -9217,3 +9217,15 @@ msgstr "Прикрепите изображение к вопросу — сни
 #: forms/aichatdialog.py
 msgid "{0} — click to leave it out"
 msgstr "{0} — нажмите, чтобы убрать"
+
+#: forms/aichatdialog.py
+msgid "Let it change files"
+msgstr "Разрешить менять файлы"
+
+#: forms/aichatdialog.py
+msgid "The assistant may edit files in the working directory when you ask it to. It never commits, stages or pushes: whatever it changes shows up as your uncommitted work, to keep or throw away."
+msgstr "Ассистент может править файлы в рабочем каталоге, если вы попросите. Он никогда не делает коммит, индексацию или push: изменения появляются как ваша незакоммиченная работа — оставить или отбросить."
+
+#: forms/aichatdialog.py
+msgid "may change files"
+msgstr "может менять файлы"

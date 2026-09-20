@@ -784,3 +784,32 @@ def testImagesRideAlongWithTheQuestion(aiDialog, monkeypatch, tmp_path):
     aiDialog.removeAttachment(str(shot))
     assert aiDialog.attachments == []
     assert not aiDialog.attachmentsRow.isVisibleTo(aiDialog)
+
+
+def testLettingTheAssistantChangeFilesIsDeliberate(aiDialog, monkeypatch):
+    """Editing is off until asked for, and the header says so while it's on."""
+    started = []
+    monkeypatch.setattr(AiChatDialog, "startProcess",
+                        lambda self, program, args, phase, prompt="": started.append((args, prompt)))
+    aiDialog.context = "diff --git a/x b/x"
+
+    assert not aiDialog.editsCheck.isChecked()
+    assert "may change files" not in aiDialog.setupButton.text()
+
+    aiDialog.messages.append({"role": "user", "content": "fix it"})
+    aiDialog.startAssistant()
+    args, prompt = started[-1]
+    assert "Do not edit files" in prompt
+    assert "workspace-write" not in args and "acceptEdits" not in args
+
+    aiDialog.editsCheck.setChecked(True)
+    assert "may change files" in aiDialog.setupButton.text()
+    assert settings.history.aiAllowEdits, "the choice is remembered"
+
+    aiDialog.startAssistant()
+    args, prompt = started[-1]
+    assert "You may change files in the working tree" in prompt
+    assert "Do not run Git write operations" in prompt
+    assert "workspace-write" in args or "acceptEdits" in args
+
+    aiDialog.editsCheck.setChecked(False)

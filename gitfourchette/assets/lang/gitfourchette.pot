@@ -9095,3 +9095,15 @@ msgstr ""
 #: forms/aichatdialog.py
 msgid "{0} — click to leave it out"
 msgstr ""
+
+#: forms/aichatdialog.py
+msgid "Let it change files"
+msgstr ""
+
+#: forms/aichatdialog.py
+msgid "The assistant may edit files in the working directory when you ask it to. It never commits, stages or pushes: whatever it changes shows up as your uncommitted work, to keep or throw away."
+msgstr ""
+
+#: forms/aichatdialog.py
+msgid "may change files"
+msgstr ""
