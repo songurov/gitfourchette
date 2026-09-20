@@ -3,6 +3,8 @@
 # This file is part of GitFourchette, distributed under the GNU GPL v3.
 # -----------------------------------------------------------------------------
 
+from gitfourchette import settings
+from gitfourchette.application import GFApplication
 from gitfourchette.diffview.diffdocument import DiffDocument, DiffTextFormats, LineData
 from gitfourchette.qt import *
 
@@ -38,11 +40,39 @@ class SideBySideDiffView(QWidget):
         layout.setSpacing(0)
         layout.addWidget(splitter)
 
+        app = GFApplication.instance()
+        app.prefsChanged.connect(self.refreshPrefs)
+        self.refreshPrefs()
+
     def _makeView(self):
         view = QPlainTextEdit(self)
         view.setReadOnly(True)
+        # Both sides scroll sideways on their own, and a row on the left always
+        # faces its counterpart on the right: wrapping would break the pairing.
         view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         return view
+
+    def refreshPrefs(self):
+        """
+        Set the code in the same font as the unified view, and mark whitespace
+        where the unified view marks it. Code read next to its old self only
+        lines up in a fixed-pitch font.
+        """
+        font = settings.prefs.monoFont()
+        tabWidth = QFontMetricsF(font).horizontalAdvance(" " * settings.prefs.tabSpaces)
+
+        flags = QTextOption.Flag(0)
+        if settings.prefs.showWhitespace:
+            flags |= QTextOption.Flag.ShowTabsAndSpaces
+
+        for view in self.oldView, self.newView:
+            view.setFont(font)
+            view.setTabStopDistance(tabWidth)
+            document = view.document()
+            document.setDefaultFont(font)
+            option = QTextOption(document.defaultTextOption())
+            option.setFlags(flags)
+            document.setDefaultTextOption(option)
 
     @staticmethod
     def _row(text: str, lineNo: int, origin: str, fmt: QTextBlockFormat | None = None):

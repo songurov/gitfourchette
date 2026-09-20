@@ -188,6 +188,45 @@ def testSideBySideDiffIsOnlyBuiltWhenShown(tempDir, mainWindow):
     assert "new line A" not in side.newView.toPlainText()
 
 
+def testSideBySideDiffUsesTheCodeFont(tempDir, mainWindow):
+    # Two columns of code only line up in a fixed-pitch font, and the whole
+    # point of the side-by-side view is reading one column against the other
+    wd = unpackRepo(tempDir)
+    writeFile(F"{wd}/SideBySide.txt", "new line A\nnew line B\n")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("SideBySide.txt"), check=True)
+    GFApplication.applyPrefs(sideBySideDiff=True)
+
+    side = rw.diffArea.sideBySideDiffView
+    unified = rw.diffArea.diffView
+    assert unified.font().family() == settings.prefs.monoFont().family()
+    for view in side.oldView, side.newView:
+        assert view.font().family() == unified.font().family()
+        assert view.document().defaultFont().family() == unified.font().family()
+        assert view.tabStopDistance() == unified.tabStopDistance()
+
+    # A new code font reaches it without reopening the diff
+    GFApplication.applyPrefs(fontSize=unified.font().pointSize() + 3)
+    for view in side.oldView, side.newView:
+        assert view.font().pointSize() == unified.font().pointSize()
+
+
+def testSideBySideDiffMarksWhitespaceWhenAsked(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    writeFile(F"{wd}/SideBySide.txt", "new  line A\n")
+    rw = mainWindow.openRepo(wd)
+    rw.jump(NavLocator.inUnstaged("SideBySide.txt"), check=True)
+    GFApplication.applyPrefs(sideBySideDiff=True, showWhitespace=False)
+
+    side = rw.diffArea.sideBySideDiffView
+    marks = QTextOption.Flag.ShowTabsAndSpaces
+    assert not (side.newView.document().defaultTextOption().flags() & marks)
+
+    GFApplication.applyPrefs(showWhitespace=True)
+    assert side.newView.document().defaultTextOption().flags() & marks
+    assert side.oldView.document().defaultTextOption().flags() & marks
+
+
 @pytest.mark.skipif(QT5, reason="Qt 5 (deprecated) is finicky with this test, but Qt 6 is fine")
 def testDiffViewStageAllLinesThenJumpToNextFile(tempDir, mainWindow):
     wd = unpackRepo(tempDir)
