@@ -1106,6 +1106,9 @@ def testAnExplicitCodeFontSizeWinsOverCompact(tempDir, mainWindow):
     GFApplication.applyPrefs(compactUi=True)
     assert 13 == settings.prefs.monoFont().pointSize()
     settings.prefs.fontSize = 0
+    # Back to the desktop's font for the tests that follow: compact mode sets
+    # it on the application, and resetting the prefs doesn't put it back
+    GFApplication.applyPrefs(compactUi=False)
 
 
 def testCompactShrinksTheInterfaceFromLaunch(tempDir, mainWindow):
