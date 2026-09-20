@@ -9369,3 +9369,23 @@ msgstr "Сб&росить {0} на {1}…"
 #: branchdrop.py
 msgid "&Fast-forward {0} to {1}…"
 msgstr "&Перемотать {0} до {1}…"
+#: diffarea.py
+msgid "Views of this commit"
+msgstr "Способы взглянуть на этот коммит"
+
+#: diffarea.py
+msgid "What this commit says, and who made it"
+msgstr "Что говорит этот коммит и кто его сделал"
+
+#: diffarea.py
+msgid "The files this commit touched"
+msgstr "Файлы, затронутые этим коммитом"
+
+#: diffarea.py
+msgctxt "noun"
+msgid "File Tree"
+msgstr "Дерево файлов"
+
+#: diffarea.py
+msgid "The files this commit touched, under their folders"
+msgstr "Файлы, затронутые этим коммитом, по папкам"

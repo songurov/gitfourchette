@@ -219,6 +219,8 @@ class FileList(QTreeView):
         self._flModel = FileListModel(self, self.repoModel.repo, navContext)
         self.treeModel = FileTreeModel(self._flModel, self)
         self.treeMode = False
+        self.treeModeOverride: bool | None = None
+        "A tab that shows this list as a tree (or a list) of its own accord; None follows the pref."
         self.setModel(self._flModel)
         self.setHeaderHidden(True)
         self.setRootIsDecorated(True)
@@ -257,7 +259,7 @@ class FileList(QTreeView):
         makeWidgetShortcut(self, self.copyPaths, QKeySequence.StandardKey.Copy)
 
     def refreshPrefs(self):
-        self.setTreeMode(settings.prefs.fileTreeView)
+        self.setTreeMode(self.wantTreeMode())
         self.setCompactFolders(settings.prefs.compactFolders)
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
         nameFirst = settings.prefs.pathDisplayStyle == PathDisplayStyle.FileNameFirst
@@ -355,6 +357,22 @@ class FileList(QTreeView):
 
     def fileCount(self) -> int:
         return self.flModel.rowCount()
+
+    def wantTreeMode(self) -> bool:
+        """Folder tree or flat list: what the pref asks for, unless a tab asks for something else."""
+        if self.treeModeOverride is None:
+            return settings.prefs.fileTreeView
+        return self.treeModeOverride
+
+    def setTreeModeOverride(self, enabled: bool | None):
+        """
+        Show this list as a tree (True) or as a flat list (False) no matter
+        what the pref says; None goes back to following it. The commit's File
+        Tree tab uses this, so picking it leaves the pref - and the working
+        directory's own lists - exactly as the user set them.
+        """
+        self.treeModeOverride = enabled
+        self.setTreeMode(self.wantTreeMode())
 
     def setTreeMode(self, enabled: bool):
         if self.treeMode == enabled:

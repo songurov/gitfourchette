@@ -9246,4 +9246,23 @@ msgstr ""
 
 #: branchdrop.py
 msgid "&Fast-forward {0} to {1}…"
+#: diffarea.py
+msgid "Views of this commit"
+msgstr ""
+
+#: diffarea.py
+msgid "What this commit says, and who made it"
+msgstr ""
+
+#: diffarea.py
+msgid "The files this commit touched"
+msgstr ""
+
+#: diffarea.py
+msgctxt "noun"
+msgid "File Tree"
+msgstr ""
+
+#: diffarea.py
+msgid "The files this commit touched, under their folders"
 msgstr ""

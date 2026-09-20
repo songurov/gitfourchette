@@ -9233,3 +9233,23 @@ msgstr "{0} Dalını {1} Konumuna &Sıfırla…"
 #: branchdrop.py
 msgid "&Fast-forward {0} to {1}…"
 msgstr "{0} Dalını {1} Konumuna İ&leri Sar…"
+#: diffarea.py
+msgid "Views of this commit"
+msgstr "Bu işlemeye bakma yolları"
+
+#: diffarea.py
+msgid "What this commit says, and who made it"
+msgstr "Bu işlemenin söyledikleri ve onu kimin yaptığı"
+
+#: diffarea.py
+msgid "The files this commit touched"
+msgstr "Bu işlemenin dokunduğu dosyalar"
+
+#: diffarea.py
+msgctxt "noun"
+msgid "File Tree"
+msgstr "Dosya Ağacı"
+
+#: diffarea.py
+msgid "The files this commit touched, under their folders"
+msgstr "Bu işlemenin dokunduğu dosyalar, klasörleri altında"

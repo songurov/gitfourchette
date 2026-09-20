@@ -9329,3 +9329,23 @@ msgstr "Re&setează {0} la {1}…"
 #: branchdrop.py
 msgid "&Fast-forward {0} to {1}…"
 msgstr "&Fast-forward {0} la {1}…"
+#: diffarea.py
+msgid "Views of this commit"
+msgstr "Moduri de a privi acest commit"
+
+#: diffarea.py
+msgid "What this commit says, and who made it"
+msgstr "Ce spune acest commit și cine l-a făcut"
+
+#: diffarea.py
+msgid "The files this commit touched"
+msgstr "Fișierele atinse de acest commit"
+
+#: diffarea.py
+msgctxt "noun"
+msgid "File Tree"
+msgstr "Arbore de fișiere"
+
+#: diffarea.py
+msgid "The files this commit touched, under their folders"
+msgstr "Fișierele atinse de acest commit, în dosarele lor"

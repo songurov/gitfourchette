@@ -1651,6 +1651,112 @@ def testCommitTabShowsNoAvatarWhileAvatarsAreOff(tempDir, mainWindow):
 MERGE_COMMIT = "83834a7afdaa1a1260568567f6ad90020389f664"  # Merge branch 'a' into c
 
 
+def filePathsIn(fileList) -> list[str]:
+    """Every file the list shows, top to bottom, folders walked into."""
+    from gitfourchette.filelists.filelistmodel import FileListModel
+    model = fileList.model()
+    paths = []
+
+    def walk(parent: QModelIndex):
+        for row in range(model.rowCount(parent)):
+            index = model.index(row, 0, parent)
+            if index.data(FileListModel.Role.Delta) is None:
+                walk(index)
+            else:
+                paths.append(index.data(FileListModel.Role.FilePath))
+
+    walk(QModelIndex())
+    return paths
+
+
+def selectedPathIn(fileList) -> list[str]:
+    from gitfourchette.filelists.filelistmodel import FileListModel
+    return qlvGetSelection(fileList, FileListModel.Role.FilePath)
+
+
+def clickPath(fileList, path: str):
+    index = fileList.indexForPath(path)
+    assert index.isValid(), path
+    fileList.scrollTo(index)
+    rect = fileList.visualRect(index)
+    QTest.mouseClick(fileList.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     pos=rect.center())
+
+
+def testFileTreeTabShowsTheSameFilesUnderTheirFolders(tempDir, mainWindow):
+    """
+    The third tab is the commit's files again, this time as a tree. It's the
+    tab's own doing: the preference that the working directory's lists follow
+    stays exactly where the user left it.
+    """
+
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(fileTreeView=False)  # flat lists everywhere
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    files = rw.committedFiles
+
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+    tabs = diffArea.commitTabs
+    assert [tabs.tabText(i) for i in range(tabs.count())] == ["Commit", "Changes", "File Tree"]
+
+    assert not files.treeMode
+    changes = filePathsIn(files)
+    assert changes, "the commit touched something"
+
+    tabs.setCurrentIndex(diffArea.FileTreeTab)
+    assert files.isVisibleTo(rw), "the same files, on the same page"
+    assert files.treeMode
+    assert filePathsIn(files) == changes, "the same files, under their folders"
+    assert not diffArea.committedFileViewButton.isVisibleTo(rw), "the tab already says it's a tree"
+
+    # None of this reached the preference, nor the working directory's lists
+    assert not settings.prefs.fileTreeView
+    assert not rw.dirtyFiles.treeMode
+    assert not rw.stagedFiles.treeMode
+
+    # Back to Changes, and the flat list is back
+    tabs.setCurrentIndex(diffArea.ChangesTab)
+    assert not files.treeMode
+    assert filePathsIn(files) == changes
+    assert diffArea.committedFileViewButton.isVisibleTo(rw)
+
+    # Someone who wants trees everywhere still gets them in both tabs
+    GFApplication.applyPrefs(fileTreeView=True)
+    assert files.treeMode
+    tabs.setCurrentIndex(diffArea.FileTreeTab)
+    assert files.treeMode
+    tabs.setCurrentIndex(diffArea.ChangesTab)
+    assert files.treeMode
+
+
+def testCommitTabsAreNamedAndReachableFromTheKeyboard(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    rw = mainWindow.openRepo(wd)
+    tabs = rw.diffArea.commitTabs
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+
+    # Tab reaches the tab bar, and the arrow keys walk it
+    assert tabs.focusPolicy().value & Qt.FocusPolicy.TabFocus.value
+    assert tabs in tabStops(rw.graphView)
+    tabs.setFocus()
+    QTest.keyClick(tabs, Qt.Key.Key_Right)
+    assert tabs.currentIndex() == rw.diffArea.FileTreeTab
+
+    # A screen reader gets a name for the bar, and a name and a line about each tab
+    assert accessibleNameOf(tabs) == "Views of this commit"
+    for i in range(tabs.count()):
+        assert tabs.accessibleTabName(i) == tabs.tabText(i)
+        assert re.search(r"\w\w \w\w", tabs.tabToolTip(i)), tabs.tabText(i)
+
+    assertTranslatedInForkLanguages("File Tree", context="noun")
+    assertTranslatedInForkLanguages(
+        "Views of this commit",
+        "What this commit says, and who made it",
+        "The files this commit touched",
+        "The files this commit touched, under their folders")
+
+
 def testNeutralDrawsTheCommitTabsAsASegmentedControl(tempDir, mainWindow):
     """Neutral: a pill on a track that stops at the last tab, like the repo tabs above."""
     from gitfourchette.themes import NEUTRAL_DARK

@@ -224,6 +224,7 @@ class RepoWidget(QWidget):
             self.sidebar,
             self.graphView.searchBar.lineEdit,
             self.graphView,
+            self.diffArea.commitTabs,
             self.diffArea.committedFiles.searchBar.lineEdit,
             self.diffArea.committedFiles,
             self.diffArea.dirtyFiles.searchBar.lineEdit,

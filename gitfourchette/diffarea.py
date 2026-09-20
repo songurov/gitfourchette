@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 class DiffArea(QWidget):
     CommitTab = 0
     ChangesTab = 1
+    FileTreeTab = 2
 
     def __init__(self, repoModel, parent):
         super().__init__(parent)
@@ -92,14 +93,24 @@ class DiffArea(QWidget):
         pageStack.addWidget(commitPage)
         pageStack.addWidget(splitter)
 
+        # Three ways to look at the commit, as Fork lays them out: its own
+        # story, the files it touched, and those files under their folders.
         commitTabs = QTabBar(self)
         commitTabs.setObjectName("CommitTabs")
         commitTabs.setDrawBase(False)
         commitTabs.setExpanding(False)
-        commitTabs.addTab(_p("noun", "Commit"))
-        commitTabs.addTab(_p("noun", "Changes"))
+        commitTabs.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        commitTabs.setAccessibleName(_("Views of this commit"))
+        for title, description in [
+            (_p("noun", "Commit"), _("What this commit says, and who made it")),
+            (_p("noun", "Changes"), _("The files this commit touched")),
+            (_p("noun", "File Tree"), _("The files this commit touched, under their folders")),
+        ]:
+            tabIndex = commitTabs.addTab(title)
+            commitTabs.setTabToolTip(tabIndex, description)
+            commitTabs.setAccessibleTabName(tabIndex, title)
         commitTabs.setCurrentIndex(self.ChangesTab)
-        commitTabs.currentChanged.connect(pageStack.setCurrentIndex)
+        commitTabs.currentChanged.connect(self.setCommitTabPage)
 
         # Neutral hugs the tabs with a track (see refreshTheme); the other
         # looks let them run the width of the pane, as they always have.
@@ -1027,6 +1038,7 @@ class DiffArea(QWidget):
 
         self.committedFiles = committedFiles
         self.committedHeader = header
+        self.committedFileViewButton = fileViewButton
         return container
 
     def _makeCommitPatchStack(self):
@@ -1369,7 +1381,20 @@ class DiffArea(QWidget):
 
     def showChangesTab(self):
         self.commitTabs.setCurrentIndex(DiffArea.ChangesTab)
-        self.pageStack.setCurrentIndex(DiffArea.ChangesTab)
+        self.setCommitTabPage(DiffArea.ChangesTab)
+
+    def setCommitTabPage(self, index: int):
+        """
+        Changes and File Tree are one page with two faces: the commit's files
+        as a flat list, or under their folders. Which face a tab wears is the
+        tab's own business, so the preference that the working directory's
+        lists follow stays where the user put it.
+        """
+        self.pageStack.setCurrentIndex(min(index, DiffArea.ChangesTab))
+        tree = index == DiffArea.FileTreeTab
+        self.committedFiles.setTreeModeOverride(True if tree else None)
+        # The tab already says it's a tree: nothing left for the switch to say
+        self.committedFileViewButton.setVisible(not tree)
 
     # -------------------------------------------------------------------------
     # Clear
