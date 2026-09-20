@@ -527,3 +527,30 @@ def testImagesReachBothClis(tmp_path):
     assert str(shot) in instructions
     assert "Read each of them" in instructions
     assert aichat.imageInstructions([]) == ""
+
+
+def testEditingModeIsOffUnlessAskedFor():
+    # By default the assistant may only read
+    claude = aichat.cliArguments("claude")
+    assert claude[claude.index("--tools") + 1] == "Read,Grep,Glob"
+    assert claude[claude.index("--permission-mode") + 1] == "dontAsk"
+    codex = aichat.cliArguments("codex")
+    assert codex[codex.index("--sandbox") + 1] == "read-only"
+
+    prompt = aichat.makePrompt(["abc123"], "context", [], "English")
+    assert "Do not edit files" in prompt
+
+    # Asked for, it may change files in the working tree — never Git's state
+    claude = aichat.cliArguments("claude", allowEdits=True)
+    assert "Edit" in claude[claude.index("--tools") + 1]
+    assert claude[claude.index("--permission-mode") + 1] == "acceptEdits"
+    codex = aichat.cliArguments("codex", allowEdits=True)
+    assert codex[codex.index("--sandbox") + 1] == "workspace-write"
+
+    prompt = aichat.makePrompt(["abc123"], "context", [], "English", allowEdits=True)
+    assert "You may change files in the working tree" in prompt
+    assert "Do not run Git write operations" in prompt
+    assert "Do not edit files" not in prompt
+
+    worktreePrompt = aichat.makeWorktreePrompt(["a.py"], "context", [], allowEdits=True)
+    assert "You may change files in the working tree" in worktreePrompt
