@@ -78,6 +78,8 @@ class DirtyFiles(FileList):
                     _n("Merge Conflict", "{n} Merge Conflicts", n),
                     kind=ActionDef.Kind.Section,
                 ),
+                ActionDef(_("Resolve here") + "\u2026", self.resolveHere,
+                          icon="git-merge", enabled=n == 1),
                 ActionDef(_("Keep OUR version") + "\u2026", lambda: self.hardSolve(True)),
                 ActionDef(_("Accept THEIR version") + "\u2026", lambda: self.hardSolve(False)),
             ]
@@ -139,6 +141,11 @@ class DirtyFiles(FileList):
     def discardModeChanges(self):
         deltas = list(self.selectedDeltas())
         DiscardModeChanges.invoke(self, deltas)
+
+    def resolveHere(self):
+        conflicts = [delta.conflict for delta in self.selectedDeltas()]
+        assert len(conflicts) == 1, "QAction bound to resolveHere should be disabled"
+        ResolveConflictHere.invoke(self, conflicts[0])
 
     def hardSolve(self, keepOurs: bool):
         conflicts = [delta.conflict for delta in self.selectedDeltas()]

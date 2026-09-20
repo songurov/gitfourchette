@@ -666,6 +666,12 @@ def testResolveConflictInTheApp(tempDir, mainWindow):
     assert rw.repo.index.conflicts
     assert cv.resolveHereButton.isVisible()
 
+    # The same way in from the file list, for one conflicted file at a time
+    menu = rw.dirtyFiles.makeContextMenu()
+    resolveAction = next(a for a in menu.actions() if a.text().startswith("Resolve here"))
+    assert resolveAction.isEnabled()
+    menu.deleteLater()
+
     cv.resolveHereButton.click()
     editor = findQDialog(rw, "resolve conflict", MergeEditor)
 
