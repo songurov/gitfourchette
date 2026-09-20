@@ -604,6 +604,9 @@ class Jump(RepoTask):
         else:
             raise NotImplementedError(f"Can't display {type(document)}")
 
+        # The Commit tab has a patch pane of its own: keep it on this file too
+        area.mirrorPatchInCommitTab(self.repo, result.delta, result.locator, document)
+
     @staticmethod
     def makeHeaderText(
             document: TAbstractDiffDocument | None,

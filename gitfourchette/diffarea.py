@@ -64,6 +64,8 @@ class DiffArea(QWidget):
         self.repoModel = repoModel
         self.commitAiProcess = None
         self.inlineCommitPending = False
+        self.commitTabFollowsFile = False
+        "Once a file has been picked in the Commit tab, its patch pane keeps up with the file the user is on."
         self.commitAiProviders = availableProviders()
         self.fileViewActions = []
         self.fileListHeaders: list[FileListHeader] = []
@@ -1349,7 +1351,26 @@ class DiffArea(QWidget):
     def hideCommitPatch(self):
         """Back to just the commit's story, until a file is picked again."""
         self.commitPatchStack.setVisible(False)
-        self.commitPatchView.clear()
+        # The patch we were mirroring is the Changes tab's own document: give
+        # it back rather than clear it, which would empty it over there too.
+        self.commitPatchView.dropDocument(heir=self.diffView)
+        self.commitTabFollowsFile = False
+
+    def followFileInCommitTab(self):
+        """A file was picked in the Commit tab: from now on its pane keeps up with the locator."""
+        self.commitTabFollowsFile = True
+
+    def mirrorPatchInCommitTab(self, repo, delta, locator: NavLocator, document):
+        """
+        Feed the Commit tab's patch pane the file the user just went to, so
+        the three tabs stay on one file without loading its diff twice. Only
+        once a file has been picked there: a commit opens on its story.
+        """
+        if not self.commitTabFollowsFile:
+            return
+        if delta is None or document is None or locator.context != NavContext.COMMITTED:
+            return
+        self.showCommitPatch(repo, delta, locator, document)
 
     def showCommitPatch(self, repo, delta, locator, document):
         """A file picked in the Commit tab: show its diff without leaving it."""
@@ -1367,6 +1388,7 @@ class DiffArea(QWidget):
             self.commitPatchStack.setCurrentIndex(1)
 
         self.commitPatchStack.setVisible(True)
+        self.commitTabFollowsFile = True
 
         # The patch pane just took half the room; once the layout settles,
         # bring the file list up so the next file is still one click away
@@ -1404,8 +1426,10 @@ class DiffArea(QWidget):
         self.specialDiffView.clear()
         self.setDiffStackPage("special")
 
-        # Might as well free up any memory taken by DiffView document
-        self.diffView.clear()
+        # Might as well free up any memory taken by DiffView document - unless
+        # the Commit tab's pane is still showing it, in which case let go of it
+        # without emptying it
+        self.diffView.dropDocument()
 
         self.diffHeader.setText(" ")
 

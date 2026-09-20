@@ -398,12 +398,16 @@ class RepoWidget(QWidget):
         self.jump(locator)
 
     def openFileFromCommitDetail(self, deltaIndex: int):
-        """A file clicked in the Commit tab: show its diff right there."""
+        """
+        A file clicked in the Commit tab: go to it. Its diff shows up right
+        there, and the Changes and File Tree tabs come along, so all three
+        are looking at the same file when the user switches between them.
+        """
         detailView = self.diffArea.commitDetailView
         delta = detailView.deltas[deltaIndex]
         path = delta.new.path or delta.old.path
-        locator = NavLocator.inCommit(self.navLocator.commit, path)
-        tasks.LoadPatchInCommitTab.invoke(self, delta, locator)
+        self.diffArea.followFileInCommitTab()
+        self.jump(NavLocator.inCommit(self.navLocator.commit, path))
 
     def processLinkFromCommitTab(self, url: QUrl | str):
         """

@@ -1649,6 +1649,7 @@ def testCommitTabShowsNoAvatarWhileAvatarsAreOff(tempDir, mainWindow):
 
 
 MERGE_COMMIT = "83834a7afdaa1a1260568567f6ad90020389f664"  # Merge branch 'a' into c
+OTHER_COMMIT = "6e1475206e57110fcef4b92320436c1e9872a322"  # Merge branch 'b' into c
 
 
 def filePathsIn(fileList) -> list[str]:
@@ -1728,6 +1729,102 @@ def testFileTreeTabShowsTheSameFilesUnderTheirFolders(tempDir, mainWindow):
     assert files.treeMode
     tabs.setCurrentIndex(diffArea.ChangesTab)
     assert files.treeMode
+
+
+def testCommitTabsStayOnTheSameFile(tempDir, mainWindow):
+    """Commit, Changes and File Tree follow one locator: the file picked in one is the file the others are on."""
+
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(fileTreeView=False)
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    tabs = diffArea.commitTabs
+    files = rw.committedFiles
+
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+    paths = filePathsIn(files)
+    assert paths == ["a/a1.txt", "a/a2.txt", "master.txt"]
+    assert selectedPathIn(files) == ["a/a1.txt"]
+
+    # Changes to File Tree: the same file, now under its folder
+    tabs.setCurrentIndex(diffArea.FileTreeTab)
+    assert selectedPathIn(files) == ["a/a1.txt"]
+
+    # A file picked in the tree is the file the Changes tab shows
+    clickPath(files, "a/a2.txt")
+    rw.taskRunner.joinWorkerThread()
+    assert rw.navLocator.path == "a/a2.txt"
+    tabs.setCurrentIndex(diffArea.ChangesTab)
+    assert selectedPathIn(files) == ["a/a2.txt"]
+    assert "a/a2.txt" in rw.diffArea.diffHeader.text()
+
+    # A file picked in the Commit tab takes the other two with it
+    tabs.setCurrentIndex(diffArea.CommitTab)
+    qteClickLink(diffArea.commitDetailView, "a/a1.txt")
+    rw.taskRunner.joinWorkerThread()
+    assert tabs.currentIndex() == diffArea.CommitTab, "no detour through Changes"
+    assert diffArea.commitPatchStack.isVisible(), "its diff, right there"
+    assert rw.navLocator.path == "a/a1.txt"
+    for tab in diffArea.ChangesTab, diffArea.FileTreeTab:
+        tabs.setCurrentIndex(tab)
+        assert selectedPathIn(files) == ["a/a1.txt"]
+
+    # And from there on, the Commit tab's pane keeps up with the locator
+    clickPath(files, "a/a2.txt")
+    rw.taskRunner.joinWorkerThread()
+    tabs.setCurrentIndex(diffArea.CommitTab)
+    assert "a2" in diffArea.commitPatchView.toPlainText()
+
+    # A different commit opens on its story again, with no patch showing
+    rw.jump(NavLocator.inCommit(Oid(hex=OTHER_COMMIT), "b/b2.txt"), check=True)
+    assert tabs.currentIndex() == diffArea.CommitTab, "the tab the user chose stays chosen"
+    assert not diffArea.commitPatchStack.isVisible()
+
+
+def testCommitTabLetsGoOfThePatchWithoutTakingItAway(tempDir, mainWindow):
+    """
+    Both panes are fed the one document, so neither may free it or empty it
+    while the other still shows it: leaving the commit behind used to take
+    the Changes tab's diff down with it.
+    """
+
+    wd = unpackRepo(tempDir)
+    writeFile(f"{wd}/newfile.txt", "hello\n")
+    rw = mainWindow.openRepo(wd)
+    diffArea = rw.diffArea
+    tabs = diffArea.commitTabs
+
+    tabs.setCurrentIndex(diffArea.CommitTab)
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+    qteClickLink(diffArea.commitDetailView, "a/a1.txt")
+    rw.taskRunner.joinWorkerThread()
+    shared = diffArea.commitPatchView.document()
+    assert shared is diffArea.diffView.document(), "one load feeds both panes"
+
+    # Off to the working directory: no commit left to show, so the Commit tab
+    # lets the patch go - while the Changes tab is still showing it
+    rw.jump(NavLocator.inUnstaged("newfile.txt"), check=True)
+    QTest.qWait(1)
+    assert "hello" in diffArea.diffView.toPlainText(), "the Changes tab moved on in one piece"
+    assert diffArea.commitPatchView.toPlainText() == ""
+    assert isObjectAlive(diffArea.commitPatchView.document())
+    assert not isObjectAlive(shared), "and nobody is hoarding the old one"
+
+    # Back to a commit, and pick a file in its tab: this is where it went down
+    rw.jump(NavLocator.inCommit(Oid(hex=MERGE_COMMIT), "a/a1.txt"), check=True)
+    QTest.qWait(1)
+    qteClickLink(diffArea.commitDetailView, "a/a2.txt")
+    rw.taskRunner.joinWorkerThread()
+    assert "a2" in diffArea.commitPatchView.toPlainText()
+
+    # Straight on to another commit's file, without the detour through the
+    # working directory
+    rw.jump(NavLocator.inCommit(Oid(hex=OTHER_COMMIT), "b/b2.txt"), check=True)
+    QTest.qWait(1)
+    qteClickLink(diffArea.commitDetailView, "b/b2.txt")
+    rw.taskRunner.joinWorkerThread()
+    assert "b2" in diffArea.commitPatchView.toPlainText()
+    assert diffArea.commitPatchView.document() is diffArea.diffView.document()
 
 
 def testCommitTabsAreNamedAndReachableFromTheKeyboard(tempDir, mainWindow):

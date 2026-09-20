@@ -184,6 +184,31 @@ class DiffView(CodeView):
         # Clear the actual contents
         super().clear()
 
+    def dropDocument(self, heir: QPlainTextEdit | None = None):
+        """
+        Stop showing our document without emptying it: it may be the very one
+        another view is showing (see DiffArea.mirrorPatchInCommitTab), and
+        clear() would blank it there too. If `heir` still shows it, the
+        document becomes theirs; otherwise it goes.
+        """
+        stale = self.document()
+        # Qt owns the document a fresh QPlainTextEdit made for itself and
+        # frees it as soon as we swap in another; only a document we took
+        # up ourselves (see replaceDocument) is ours to hand on or to free.
+        isOurs = stale is not None and stale.parent() is self
+
+        blank = QTextDocument(self)
+        blank.setDocumentLayout(QPlainTextDocumentLayout(blank))  # what QPlainTextEdit takes
+        self.setDocument(blank)
+        self.currentDiffDocument = None
+        self.clear()
+
+        if isOurs:
+            if heir is not None and stale is heir.document():
+                stale.setParent(heir)
+            else:
+                stale.deleteLater()
+
     @benchmark
     def replaceDocument(self, repo: Repo, delta: GitDelta, locator: NavLocator, newDoc: DiffDocument):
         assert newDoc.document is not None
@@ -195,8 +220,12 @@ class DiffView(CodeView):
             return
 
         oldDocument = self.document()
-        if oldDocument:
-            oldDocument.deleteLater()  # avoid leaking memory/objects, even though we do set QTextDocument's parent to this QTextEdit
+        # Only free a document that is ours. Taking one up makes us its parent,
+        # but the Commit tab's patch pane takes that over when it mirrors the
+        # same document: freeing it from under that pane would leave it a
+        # dangling pointer, and Qt goes down the next time anything touches it.
+        if oldDocument is not None and oldDocument.parent() is self:
+            oldDocument.deleteLater()  # avoid leaking memory/objects
 
         self.repo = repo
         self.currentDelta = delta
