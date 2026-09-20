@@ -9205,3 +9205,15 @@ msgstr "Отмечать пробелы и табуляции в коде"
 #: diffbuttons.py:49
 msgid "Show the picture instead of the markup that draws it"
 msgstr "Показывать изображение вместо кода, который его рисует"
+
+#: forms/aichatdialog.py
+msgid "Attach an image"
+msgstr "Прикрепить изображение"
+
+#: forms/aichatdialog.py
+msgid "Attach an image to your question — a screenshot of what went wrong, a diagram. You can also paste or drop one into the question."
+msgstr "Прикрепите изображение к вопросу — снимок того, что пошло не так, схему. Можно также вставить или перетащить его в вопрос."
+
+#: forms/aichatdialog.py
+msgid "{0} — click to leave it out"
+msgstr "{0} — нажмите, чтобы убрать"

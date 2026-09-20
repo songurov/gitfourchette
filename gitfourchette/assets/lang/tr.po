@@ -9069,3 +9069,15 @@ msgstr "Koddaki boşlukları ve sekmeleri işaretle"
 #: diffbuttons.py:49
 msgid "Show the picture instead of the markup that draws it"
 msgstr "Görüntüyü, onu çizen işaretleme yerine göster"
+
+#: forms/aichatdialog.py
+msgid "Attach an image"
+msgstr "Görsel ekle"
+
+#: forms/aichatdialog.py
+msgid "Attach an image to your question — a screenshot of what went wrong, a diagram. You can also paste or drop one into the question."
+msgstr "Sorunuza bir görsel ekleyin — neyin ters gittiğinin ekran görüntüsü, bir şema. Soruya yapıştırabilir veya sürükleyebilirsiniz de."
+
+#: forms/aichatdialog.py
+msgid "{0} — click to leave it out"
+msgstr "{0} — çıkarmak için tıklayın"

@@ -9083,3 +9083,15 @@ msgstr ""
 #: diffbuttons.py:49
 msgid "Show the picture instead of the markup that draws it"
 msgstr ""
+
+#: forms/aichatdialog.py
+msgid "Attach an image"
+msgstr ""
+
+#: forms/aichatdialog.py
+msgid "Attach an image to your question — a screenshot of what went wrong, a diagram. You can also paste or drop one into the question."
+msgstr ""
+
+#: forms/aichatdialog.py
+msgid "{0} — click to leave it out"
+msgstr ""

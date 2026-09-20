@@ -5,17 +5,19 @@ import os
 import signal
 import re
 from datetime import datetime, timedelta
+from contextlib import suppress
 from pathlib import Path
 
 from gitfourchette import settings
 from gitfourchette.exttools.aichat import availableProviders, configuredModel, modelChoices, cliArguments, ResponseStream, makePrompt, makeWorktreePrompt
-from gitfourchette.exttools.aichat import CHANGE_REQUEST_PROMPT, PRESETS
+from gitfourchette.exttools.aichat import CHANGE_REQUEST_PROMPT, PRESETS, imageInstructions
 from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.forms.chattranscript import answerHtml
 from gitfourchette.forms.commitarea import CommitDescriptionEdit
 from gitfourchette.localization import _, _n
 from gitfourchette.qt import *
-from gitfourchette.toolbox import QElidedLabel, QFlowLayout, escape, makeWidgetShortcut, stockIcon
+from gitfourchette.toolbox import (
+    PersistentFileDialog, QElidedLabel, QFlowLayout, escape, makeWidgetShortcut, stockIcon)
 from gitfourchette.webhost import WebHost
 
 
@@ -77,7 +79,42 @@ class ChatInput(CommitDescriptionEdit):
     but it starts at two lines and stops at six, so that a long question never
     eats the conversation above it. It keeps its frame: nothing else draws a
     box around it here.
+
+    A screenshot pasted or dropped here becomes an attachment, the way it
+    would in a terminal: imageDropped carries the file it was saved to.
     """
+
+    imageDropped = Signal(str)
+
+    def canInsertFromMimeData(self, source: QMimeData) -> bool:  # override
+        return source.hasImage() or source.hasUrls() or super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source: QMimeData):  # override
+        if self._takeImages(source):
+            return
+        super().insertFromMimeData(source)
+
+    def _takeImages(self, source: QMimeData) -> bool:
+        """Save what was pasted or dropped, and say whether it was a picture."""
+        took = False
+        for url in source.urls():
+            path = url.toLocalFile()
+            if path and QImageReader(path).canRead():
+                self.imageDropped.emit(path)
+                took = True
+        if took:
+            return True
+        if source.hasImage():
+            image = QImage(source.imageData())
+            if not image.isNull():
+                file = QTemporaryFile(str(Path(qTempDir(), "pasted-XXXXXX.png")), self)
+                file.setAutoRemove(False)
+                file.open()
+                file.close()
+                if image.save(file.fileName(), "PNG"):
+                    self.imageDropped.emit(file.fileName())
+                    return True
+        return False
 
     MinLines = 2
     RestLines = 2
@@ -362,13 +399,32 @@ class AiChatDialog(QDialog):
         presets.setAlignment(self.activityButton, Qt.AlignmentFlag.AlignRight)
         layout.addLayout(presets)
 
+        self.attachments: list[str] = []
+        self.attachmentsRow = QWidget()
+        self.attachmentsRow.setObjectName("AiChatAttachments")
+        attachmentsLayout = QFlowLayout(self.attachmentsRow)
+        attachmentsLayout.setContentsMargins(QMargins())
+        attachmentsLayout.setSpacing(4)
+        self.attachmentsRow.setVisible(False)
+        layout.addWidget(self.attachmentsRow)
+
         self.input = ChatInput()
         self.input.setPlaceholderText(
             _("Ask about these changes…  /model to choose a model. Ctrl+Enter to send.") if self.worktreePaths
             else _("Ask about these commits…  /model to choose a model. Ctrl+Enter to send."))
+        self.input.imageDropped.connect(self.attachImage)
         layout.addWidget(self.input)
         buttons = QHBoxLayout()
         buttons.setSpacing(6)
+        self.attachButton = QToolButton()
+        self.attachButton.setIcon(stockIcon("attach-image"))
+        self.attachButton.setAutoRaise(True)
+        self.attachButton.setAccessibleName(_("Attach an image"))
+        self.attachButton.setToolTip(
+            _("Attach an image to your question — a screenshot of what went wrong, a diagram. "
+              "You can also paste or drop one into the question."))
+        self.attachButton.clicked.connect(self.chooseImages)
+        buttons.addWidget(self.attachButton)
         self.status = ElapsedStatusLabel(_("Ready"))
         buttons.addWidget(self.status, 1)
         self.stopButton = QPushButton(_("Stop"))
@@ -744,6 +800,44 @@ class AiChatDialog(QDialog):
         for button in self.presetButtons:
             button.setEnabled(not busy)
 
+    def chooseImages(self):
+        """Pick images from disk. The CLI reads them; we only pass the paths."""
+        readable = " ".join("*." + bytes(fmt).decode() for fmt in QImageReader.supportedImageFormats())
+        dialog = PersistentFileDialog.openFile(
+            self, "AttachImage", _("Attach an image"), filter=_("Images") + f" ({readable})")
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+        dialog.filesSelected.connect(lambda paths: [self.attachImage(path) for path in paths])
+        dialog.show()
+
+    def attachImage(self, path: str):
+        if path in self.attachments:
+            return
+        self.attachments.append(path)
+        self.refreshAttachments()
+
+    def removeAttachment(self, path: str):
+        with suppress(ValueError):
+            self.attachments.remove(path)
+        self.refreshAttachments()
+
+    def refreshAttachments(self):
+        """One chip per image, each its own way out."""
+        layout = self.attachmentsRow.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        for path in self.attachments:
+            chip = QPushButton(f"{Path(path).name}  \u00d7")
+            chip.setObjectName("AiChatAttachmentChip")
+            chip.setToolTip(_("{0} — click to leave it out", path))
+            chip.setAutoDefault(False)
+            chip.setIcon(stockIcon("attach-image"))
+            chip.clicked.connect(lambda _checked=False, p=path: self.removeAttachment(p))
+            layout.addWidget(chip)
+        self.attachmentsRow.setVisible(bool(self.attachments))
+
     def send(self):
         if self.process is not None or not self.providers:
             return
@@ -819,7 +913,12 @@ class AiChatDialog(QDialog):
         else:
             prompt = makePrompt(
                 self.commits, context, self.messages[:-1], self.languageCombo.currentText().strip(), guidance)
-        self.startProcess(self.providers[self.provider()], cliArguments(self.provider(), self.model()), "assistant", prompt)
+        images = list(self.attachments)
+        if images:
+            prompt += imageInstructions(images)
+        self.startProcess(self.providers[self.provider()],
+                          cliArguments(self.provider(), self.model(), images=images),
+                          "assistant", prompt)
 
     def startProcess(self, program, args, phase, prompt=""):
         self.phase = phase

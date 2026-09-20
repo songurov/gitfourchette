@@ -279,7 +279,7 @@ def fakeCli(monkeypatch, code):
     # 'Français' would then differ from the NFC text that the dialog writes to stdin.
     # Escape non-ASCII characters so the script's string literals reach Python unchanged.
     code = code.encode("ascii", "backslashreplace").decode("ascii")
-    monkeypatch.setattr(aichatdialog, "cliArguments", lambda *args: ["-c", code])
+    monkeypatch.setattr(aichatdialog, "cliArguments", lambda *args, **kwargs: ["-c", code])
 
 
 def fakeProviders(monkeypatch, providers):
@@ -751,3 +751,36 @@ def testAnswersShowCodeAsCode(aiDialog):
     aiDialog.messages = [{"role": "user", "content": "# not a heading"}]
     aiDialog.render()
     assert "# not a heading" in aiDialog.chat.toPlainText()
+
+
+def testImagesRideAlongWithTheQuestion(aiDialog, monkeypatch, tmp_path):
+    """A screenshot pasted into the question reaches the CLI."""
+    started = []
+    monkeypatch.setattr(AiChatDialog, "startProcess",
+                        lambda self, program, args, phase, prompt="": started.append((args, prompt)))
+    monkeypatch.setattr(aichatdialog, "makePrompt", lambda *a, **k: "PROMPT")
+    monkeypatch.setattr(aichatdialog, "makeWorktreePrompt", lambda *a, **k: "PROMPT")
+
+    shot = tmp_path / "crash.png"
+    QImage(4, 4, QImage.Format.Format_RGB32).save(str(shot))
+
+    # Dropping one in shows a chip you can take back out
+    aiDialog.input.imageDropped.emit(str(shot))
+    assert aiDialog.attachments == [str(shot)]
+    assert aiDialog.attachmentsRow.isVisibleTo(aiDialog)
+    chip = aiDialog.attachmentsRow.findChildren(QPushButton)[0]
+    assert "crash.png" in chip.text()
+
+    aiDialog.context = "diff --git a/x b/x"
+    aiDialog.input.setPlainText("what went wrong here?")
+    aiDialog.messages.append({"role": "user", "content": "what went wrong here?"})
+    aiDialog.startAssistant()
+    args, prompt = started[-1]
+    assert str(shot) in prompt, "Claude Code is told where the image is"
+    if "--image" in args:  # Codex takes the file itself
+        assert args[args.index("--image") + 1] == str(shot)
+
+    # And the chip comes back out on request
+    aiDialog.removeAttachment(str(shot))
+    assert aiDialog.attachments == []
+    assert not aiDialog.attachmentsRow.isVisibleTo(aiDialog)

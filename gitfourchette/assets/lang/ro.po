@@ -9165,3 +9165,15 @@ msgstr "Marchează spațiile și taburile din cod"
 #: diffbuttons.py:49
 msgid "Show the picture instead of the markup that draws it"
 msgstr "Arată imaginea în loc de codul care o desenează"
+
+#: forms/aichatdialog.py
+msgid "Attach an image"
+msgstr "Atașează o imagine"
+
+#: forms/aichatdialog.py
+msgid "Attach an image to your question — a screenshot of what went wrong, a diagram. You can also paste or drop one into the question."
+msgstr "Atașează o imagine la întrebare — o captură cu ce n-a mers, o diagramă. Poți și să lipești sau să tragi una în întrebare."
+
+#: forms/aichatdialog.py
+msgid "{0} — click to leave it out"
+msgstr "{0} — clic pentru a o scoate"
