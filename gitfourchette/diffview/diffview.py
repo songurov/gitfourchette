@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 _emptyDelta = GitDelta()
 
 
+_noClump = (-1, -1)
+"No clump of changed lines under the pointer."
+
+
 class DiffView(CodeView):
     contextualHelp = Signal(str)
     selectionActionable = Signal(bool)
@@ -52,7 +56,7 @@ class DiffView(CodeView):
         self.currentDelta = _emptyDelta
         self.currentDiffDocument = None
         self.repo = None
-        self._hoverSelectionActive = False
+        self.hoveredClump = _noClump
         self.viewport().setMouseTracking(True)
 
         # Emit contextual help with non-empty selection
@@ -118,55 +122,55 @@ class DiffView(CodeView):
         if event.button() == Qt.MouseButton.MiddleButton:
             self.onMiddleClick()
 
-    def mousePressEvent(self, event: QMouseEvent):
-        self._hoverSelectionActive = False
-        super().mousePressEvent(event)
-
     def mouseMoveEvent(self, event: QMouseEvent):
-        # Never replace a selection the user made by dragging. A selection
-        # created by hover, however, follows the actionable clump beneath
-        # the pointer so its Stage/Discard controls need no preliminary click.
-        if (event.buttons() == Qt.MouseButton.NoButton
-                and (self._hoverSelectionActive or not self.textCursor().hasSelection())):
-            self._selectActionableClumpOnHover(event.position().toPoint())
+        if event.buttons() == Qt.MouseButton.NoButton:
+            self.setHoveredClump(self.clumpExtentsAt(event.position().toPoint()))
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event: QEvent):
-        if self._hoverSelectionActive:
-            cursor = self.textCursor()
-            cursor.clearSelection()
-            self.replaceCursor(cursor)
-            self._hoverSelectionActive = False
+        self.setHoveredClump(_noClump)
         super().leaveEvent(event)
 
-    def _selectActionableClumpOnHover(self, point: QPoint):
+    def setHoveredClump(self, extents: tuple[int, int]):
+        """
+        Outline the changed lines under the pointer, so that their Stage,
+        Unstage and Discard controls need no preliminary click. Only the
+        outline moves: the text is left unselected, and a selection the user
+        made himself keeps the controls to itself.
+        """
+        if extents == self.hoveredClump:
+            return
+        self.hoveredClump = extents
+        if not self.textCursor().hasSelection():
+            self.updateRubberBand()
+            self.emitSelectionHelp()
+
+    def clumpExtentsAt(self, point: QPoint) -> tuple[int, int]:
+        """First and last line of the clump of changed lines at this point."""
         blockNumber = self.document().findBlock(self.getStartOfLineAt(point)).blockNumber()
         if blockNumber < 0 or blockNumber >= len(self.lineData):
-            return
+            return _noClump
 
-        line = self.lineData[blockNumber]
-        if line.clumpID < 0:
-            if self._hoverSelectionActive:
-                cursor = self.textCursor()
-                cursor.clearSelection()
-                self.replaceCursor(cursor)
-                self._hoverSelectionActive = False
-            return
+        clumpID = self.lineData[blockNumber].clumpID
+        if clumpID < 0:  # context line: nothing to stage there
+            return _noClump
 
         start = blockNumber
         end = blockNumber
-        while start > 0 and self.lineData[start - 1].clumpID == line.clumpID:
+        while start > 0 and self.lineData[start - 1].clumpID == clumpID:
             start -= 1
-        while end < len(self.lineData) - 1 and self.lineData[end + 1].clumpID == line.clumpID:
+        while end < len(self.lineData) - 1 and self.lineData[end + 1].clumpID == clumpID:
             end += 1
+        return start, end
 
-        cursor = self.textCursor()
-        cursor.setPosition(self.lineData[start].cursorStart)
-        cursor.setPosition(
-            min(self.getMaxPosition(), self.lineData[end].cursorEnd),
-            QTextCursor.MoveMode.KeepAnchor)
-        self._hoverSelectionActive = True
-        self.replaceCursor(cursor)
+    def actionableLineExtents(self) -> tuple[int, int]:
+        """
+        The lines that Stage, Unstage and Discard act on: what the user
+        selected, or else the clump under the pointer.
+        """
+        if self.hoveredClump != _noClump and not self.textCursor().hasSelection():
+            return self.hoveredClump
+        return self.getSelectedLineExtents()
 
     # ---------------------------------------------
     # Document replacement
@@ -175,6 +179,7 @@ class DiffView(CodeView):
         # Clear info about the current patch - necessary for document reuse detection to be correct when the user
         # clears the selection in a FileList and then reselects the last-displayed document.
         self.currentDelta = _emptyDelta
+        self.hoveredClump = _noClump
 
         # Clear the actual contents
         super().clear()
@@ -198,6 +203,7 @@ class DiffView(CodeView):
         self.currentLocator = locator
         self.currentDiffDocument = newDoc
         self.lineData = newDoc.lineData
+        self.hoveredClump = _noClump  # the lines under the pointer aren't those lines any more
 
         # The document was built on a worker thread: the theme may have changed since
         newDoc.recolor()
@@ -379,7 +385,7 @@ class DiffView(CodeView):
             return -1
 
     def isSelectionActionable(self):
-        start, end = self.getSelectedLineExtents()
+        start, end = self.actionableLineExtents()
         numAdds = 0
         numDels = 0
         for i in range(start, end+1):
@@ -395,7 +401,7 @@ class DiffView(CodeView):
         return numAdds, numDels
 
     def extractSelection(self, reverse=False) -> str:
-        i, j = self.getSelectedLineExtents()
+        i, j = self.actionableLineExtents()
         return extractSubpatch(self.currentDelta, self.lineData, i, j, reverse)
 
     def extractHunk(self, hunkID: int, reverse=False) -> str:
@@ -499,15 +505,13 @@ class DiffView(CodeView):
 
     def updateRubberBand(self):
         textCursor: QTextCursor = self.textCursor()
-        start = textCursor.selectionStart()
-        end = textCursor.selectionEnd()
-        assert start <= end
+        hasSelection = textCursor.hasSelection()
 
-        startLine, endLine = self.getSelectedLineExtents()
+        startLine, endLine = self.actionableLineExtents()
         numAdds, numDels = self.isSelectionActionable()
         actionable = numAdds + numDels > 0
 
-        if startLine < 0 or endLine < 0 or (not actionable and start == end):
+        if startLine < 0 or endLine < 0 or (not actionable and not hasSelection):
             self.rubberBand.hide()
             self.rubberBandButtonGroup.hide()
             return

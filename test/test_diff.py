@@ -124,10 +124,24 @@ def testDiffActionsAppearOnHover(tempDir, mainWindow):
     cursor = QTextCursor(view.document().findBlockByNumber(1))
     QTest.mouseMove(view.viewport(), view.cursorRect(cursor).center())
 
-    assert view.textCursor().hasSelection()
+    # The changed lines are outlined and their buttons come out, but the text
+    # under the pointer isn't selected: the eye should go to the change, not
+    # to a selection the user never made
+    assert not view.textCursor().hasSelection()
+    assert view.rubberBand.isVisible()
     assert view.rubberBandButtonGroup.isVisible()
     assert view.stageButton.isVisible()
     assert view.discardButton.isVisible()
+
+    # The buttons act on the lines under the pointer, with no preliminary click
+    view.stageButton.click()
+    assert rw.repo.status() == {"Hover.txt": FileStatus.INDEX_NEW}
+
+    # Away from any change, nothing is offered
+    QTest.mouseMove(view.viewport(), QPoint(2, view.viewport().height() - 2))
+    view.leaveEvent(QEvent(QEvent.Type.Leave))
+    assert not view.rubberBand.isVisible()
+    assert not view.rubberBandButtonGroup.isVisible()
 
 
 def testSideBySideDiff(tempDir, mainWindow):
