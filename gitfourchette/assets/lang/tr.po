@@ -9093,3 +9093,31 @@ msgstr "Asistan, istediğinizde çalışma dizinindeki dosyaları düzenleyebili
 #: forms/aichatdialog.py
 msgid "may change files"
 msgstr "dosyaları değiştirebilir"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Slim"
+msgstr "İnce"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Medium"
+msgstr "Orta"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Wide"
+msgstr "Geniş"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Graph Look"
+msgstr "Grafik görünümü"
+
+#: trtables.py
+msgid "Lanes"
+msgstr "Şeritler"
+
+#: trtables.py
+msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
+msgstr "Geniş şeritler daha kalın çizilir ve commit noktaları büyür. Grafiğe hiçbir zaman üç şeritten az yer kalmaz."

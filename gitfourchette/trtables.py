@@ -113,6 +113,7 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         WhitespaceMode,
         CommitFormPlacement,
         FileListClick,
+        GraphLaneWidth,
         GraphRefBoxWidth,
         GraphRowHeight,
         GraphRowLayout,
@@ -190,6 +191,12 @@ def _enumTable() -> dict[type[Enum], dict[Enum, str]]:
         GpgStatus.RevokedKey: _("Good signature; Key revoked"),
         GpgStatus.Bad: _("Bad signature"),
         GpgStatus.ProcessError: _("Failed to start verification process"),
+    }
+
+    table[GraphLaneWidth] = {
+        GraphLaneWidth.Slim: _p("graph lanes", "Slim"),
+        GraphLaneWidth.Medium: _p("graph lanes", "Medium"),
+        GraphLaneWidth.Wide: _p("graph lanes", "Wide"),
     }
 
     table[GraphRefBoxWidth] = {
@@ -380,6 +387,7 @@ def _prefKeyTable() -> dict[str, str]:
         "content": _p("Prefs", "Content"),
         "largeFiles": _p("Prefs", "Large Files and Images"),
         "sorting": _p("Prefs", "Sorting"),
+        "graphLook": _p("Prefs", "Graph Look"),
         "graph": _p("Prefs", "Graph"),
         "commitRows": _p("Prefs", "Commit Rows"),
         "signatures": _p("Prefs", "Signatures"),
@@ -489,6 +497,9 @@ def _prefKeyTable() -> dict[str, str]:
               "message column, and the hash moves to the right, next to the author."),
         ),
         "graphRowHeight": _("Row spacing"),
+        "graphLaneWidth": _("Lanes"),
+        "graphLaneWidth_note": _("Wider lanes are drawn thicker, with bigger commit dots. "
+                                 "The graph never gets less room than three lanes."),
         "flattenLanes": _("Avoid gaps between branches"),
         "alternatingRowColors": _("Alternate row backgrounds"),
         "maxCommits": _("Load up to # commits"),

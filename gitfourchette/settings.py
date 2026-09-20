@@ -56,6 +56,14 @@ class GraphRowHeight(enum.IntEnum):
     Spacious = 175
 
 
+class GraphLaneWidth(enum.IntEnum):
+    """Room between two lanes of the graph, in pixels at 1x."""
+
+    Slim = 10
+    Medium = 15
+    Wide = 20
+
+
 class GraphRefBoxWidth(enum.IntEnum):
     IconsOnly = 0
     Standard = 120
@@ -182,6 +190,10 @@ class Prefs(PrefsFile):
     """In a wide window, author, hash and date sit a set distance past the
     commit messages instead of at the far right, 900 px away from them."""
     graphRowHeight              : GraphRowHeight        = GraphRowHeight.Relaxed
+    graphLaneWidth              : GraphLaneWidth        = GraphLaneWidth.Slim
+    """How far apart the graph's lanes sit, which also sets how thick they are
+    drawn and how big the commit dots get. The lane column never falls below
+    three lanes of this width, so the shape of the history is always readable."""
     refBoxMaxWidth              : GraphRefBoxWidth      = GraphRefBoxWidth.Standard
     authorDisplayStyle          : AuthorDisplayStyle    = AuthorDisplayStyle.FullName
     showAvatars                 : bool                  = True

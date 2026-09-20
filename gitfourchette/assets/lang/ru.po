@@ -9229,3 +9229,31 @@ msgstr "Ассистент может править файлы в рабоче�
 #: forms/aichatdialog.py
 msgid "may change files"
 msgstr "может менять файлы"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Slim"
+msgstr "Тонкие"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Medium"
+msgstr "Средние"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Wide"
+msgstr "Широкие"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Graph Look"
+msgstr "Вид графа"
+
+#: trtables.py
+msgid "Lanes"
+msgstr "Дорожки"
+
+#: trtables.py
+msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
+msgstr "Широкие дорожки рисуются толще, с более крупными точками коммитов. Графу всегда остаётся место минимум под три дорожки."

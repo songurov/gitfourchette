@@ -13,12 +13,14 @@ from gitfourchette.graph import GraphDiagram, MockOid
 from gitfourchette.graphview import commitlogdelegate
 from gitfourchette.graphview.commitlogdelegate import MAX_GRAPH_COLUMNS, MIN_GRAPH_COLUMNS, NARROW_WIDTH, XMARGIN
 from gitfourchette.graphview.commitlogmodel import CommitLogModel, SpecialRow
-from gitfourchette.graphview.graphpaint import LANE_WIDTH, flattenLanes, getColor, getCommitBulletColumn
+from gitfourchette.graphview.graphpaint import (
+    DOT_RADIUS, HOLLOW_RADIUS, LANE_THICKNESS, LANE_WIDTH,
+    flattenLanes, getColor, getCommitBulletColumn, graphColumnWidth, laneMetrics)
 from gitfourchette.repomodel import UC_FAKEID, findUnpushedCommits
 from gitfourchette.graphview.graphview import GraphView
 from gitfourchette.nav import NavLocator
 from gitfourchette.avatars import AVATAR_SIZE, AVATAR_SPACING, avatarColor, avatarInitials
-from gitfourchette.settings import GraphRefBoxWidth, GraphRowLayout, Prefs
+from gitfourchette.settings import GraphLaneWidth, GraphRefBoxWidth, GraphRowLayout, Prefs
 from gitfourchette.sidebar.sidebarmodel import SYMBOL_AHEAD
 from gitfourchette.themes import ThemeName, formatStyle
 from gitfourchette.tasks import QueryCommitsTouchingPath
@@ -959,6 +961,62 @@ def testGraphColumnStopsGrowingAtMaxWidth(tempDir, mainWindow):
     assert delegate.graphColumns == MIN_GRAPH_COLUMNS
 
 
+def measureGraphColumn(delegate, oid: Oid, rowWidth: int) -> int:
+    """Paint one row's graph column into a pixmap and report how wide it came out."""
+    pixmap = QPixmap(max(1, rowWidth), 30)
+    painter = QPainter(pixmap)
+    rect = QRect(0, 0, rowWidth, 30)
+    try:
+        delegate._paintGraphColumn(painter, rect, oid)
+    finally:
+        painter.end()
+        delegate._transientToolTipZones = None  # painting outside paint() leaves them dangling
+    return rect.left()
+
+
+def testLaneColumnKeepsAFloorInACrampedRow(tempDir, mainWindow):
+    """A cramped row may elide the commit message; it may not shave the lanes away."""
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+    oid = rw.repoModel.commitSequence[1].id
+
+    floor = graphColumnWidth(MIN_GRAPH_COLUMNS)
+    assert measureGraphColumn(delegate, oid, 60) == floor, "half of a 60 px row is under three lanes"
+    assert measureGraphColumn(delegate, oid, 2000) > floor, "a roomy row gives the lanes what they ask for"
+
+    # Nothing is reserved beyond the row itself, however cramped it gets
+    assert measureGraphColumn(delegate, oid, 20) == 20
+
+
+def testWiderLanesGiveTheGraphMoreRoom(tempDir, mainWindow):
+    """The lane width is how you widen the column: the floor grows with it."""
+    wd = unpackRepo(tempDir)
+    GFApplication.applyPrefs(graphRowLayout=GraphRowLayout.GraphFirst, graphLaneWidth=GraphLaneWidth.Slim)
+    rw = mainWindow.openRepo(wd)
+    delegate = rw.graphView.clDelegate
+    oid = rw.repoModel.commitSequence[1].id
+
+    slim = laneMetrics()
+    assert (slim.width, slim.thickness, slim.dotRadius, slim.hollowRadius) \
+        == (LANE_WIDTH, LANE_THICKNESS, DOT_RADIUS, HOLLOW_RADIUS), "the slim lane draws what it always did"
+    slimCramped = measureGraphColumn(delegate, oid, 60)
+    slimRoomy = measureGraphColumn(delegate, oid, 2000)
+
+    GFApplication.applyPrefs(graphLaneWidth=GraphLaneWidth.Wide)
+    QTest.qWait(0)
+    wide = laneMetrics()
+    assert wide.width > slim.width
+    assert wide.thickness > slim.thickness, "a wide lane is drawn thicker"
+    assert wide.dotRadius > slim.dotRadius, "and its commit dots are bigger"
+    assert measureGraphColumn(delegate, oid, 60) > slimCramped
+    assert measureGraphColumn(delegate, oid, 2000) > slimRoomy
+
+    assertTranslatedInForkLanguages("Lanes")
+    assertTranslatedInForkLanguages("Slim", "Medium", "Wide", context="graph lanes")
+
+
 def testAuthorAvatarInitials():
     def sig(name, email="someone@example.com"):
         return Signature(name, email)
@@ -1264,7 +1322,8 @@ def bulletPoint(repoModel, oid: Oid, graphRect: QRect) -> tuple[QPoint, QColor]:
     frame = repoModel.graph.getCommitFrame(oid)
     lanes, numColumns = flattenLanes(frame, repoModel.hiddenCommits)
     column, _numColumns = getCommitBulletColumn(frame.homeLane(), numColumns, lanes)
-    x = graphRect.left() + LANE_WIDTH // 2 + column * LANE_WIDTH
+    laneWidth = laneMetrics().width
+    x = graphRect.left() + laneWidth // 2 + column * laneWidth
     y = (graphRect.top() + graphRect.top() + graphRect.height()) // 2
     return QPoint(x, y), getColor(frame.homeLane())
 

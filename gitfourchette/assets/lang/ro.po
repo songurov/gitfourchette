@@ -9189,3 +9189,31 @@ msgstr "Asistentul poate modifica fișiere în directorul de lucru, când îi ce
 #: forms/aichatdialog.py
 msgid "may change files"
 msgstr "poate modifica fișiere"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Slim"
+msgstr "Subțiri"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Medium"
+msgstr "Medii"
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Wide"
+msgstr "Late"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Graph Look"
+msgstr "Aspectul grafului"
+
+#: trtables.py
+msgid "Lanes"
+msgstr "Benzi"
+
+#: trtables.py
+msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
+msgstr "Benzile late sunt desenate mai groase, cu puncte de commit mai mari. Graful nu primește niciodată mai puțin spațiu decât trei benzi."

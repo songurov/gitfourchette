@@ -169,10 +169,14 @@ PANES: list[Pane] = [
             Row("refSort", note="refSort_note"),
         ),
         _section(
+            "graphLook",
+            Row("graphRowHeight"),
+            Row("graphLaneWidth", note="graphLaneWidth_note"),
+        ),
+        _section(
             "graph",
             Row("graphRowLayout", control="radio"),
             Row("metadataNearMessage"),
-            Row("graphRowHeight"),
             Row("flattenLanes"),
             Row("alternatingRowColors"),
             Row("maxCommits"),

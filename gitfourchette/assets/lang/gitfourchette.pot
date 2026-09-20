@@ -9107,3 +9107,31 @@ msgstr ""
 #: forms/aichatdialog.py
 msgid "may change files"
 msgstr ""
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Slim"
+msgstr ""
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Medium"
+msgstr ""
+
+#: trtables.py
+msgctxt "graph lanes"
+msgid "Wide"
+msgstr ""
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Graph Look"
+msgstr ""
+
+#: trtables.py
+msgid "Lanes"
+msgstr ""
+
+#: trtables.py
+msgid "Wider lanes are drawn thicker, with bigger commit dots. The graph never gets less room than three lanes."
+msgstr ""

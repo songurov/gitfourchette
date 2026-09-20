@@ -1194,7 +1194,7 @@ class CommitLogDelegate(QStyledItemDelegate):
         that every commit message starts at the same x.
         """
 
-        width = min(graphColumnWidth(self.graphColumns) + XSPACING, rect.width() // 2)
+        width = self.graphColumnPixels(rect.width())
 
         if self.wantGraph(oid):
             graphRect = QRect(rect)
@@ -1206,6 +1206,20 @@ class CommitLogDelegate(QStyledItemDelegate):
                 self.newToolTipZone(CommitToolTipZone(rect.left(), rect.left() + width, "unpushed"))
 
         rect.setLeft(rect.left() + width)
+
+    def graphColumnPixels(self, available: int) -> int:
+        """
+        How wide the graph's own column is in a row `available` pixels wide.
+
+        The lanes get the room they need, up to half the row, but never less
+        than MIN_GRAPH_COLUMNS lanes: a cramped window may elide a commit
+        message, it may not shave the history's shape down to a smear. Wider
+        lanes raise that floor with them, so graphLaneWidth is also how you
+        give the column more room.
+        """
+        floor = min(graphColumnWidth(MIN_GRAPH_COLUMNS), max(0, available))
+        natural = graphColumnWidth(self.graphColumns) + XSPACING
+        return max(floor, min(natural, available // 2))
 
     def reserveGraphColumns(self, columns: int):
         """

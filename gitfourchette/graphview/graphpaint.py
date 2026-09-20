@@ -6,6 +6,7 @@
 
 import logging
 from collections.abc import Set
+from dataclasses import dataclass
 
 from gitfourchette import colors
 from gitfourchette import settings
@@ -17,6 +18,8 @@ from gitfourchette.repomodel import UC_FAKEID
 logger = logging.getLogger(__name__)
 
 LANE_WIDTH = 10
+"""The narrowest a lane may be, and the width the app has always drawn.
+graphLaneWidth may ask for more; see laneMetrics()."""
 LANE_THICKNESS = 2
 DOT_RADIUS = 3
 HOLLOW_RADIUS = 4
@@ -30,6 +33,29 @@ UC_COLOR = colors.gray
 UC_STIPPLE = 12
 
 _dummyEmptyList: list = []
+
+
+@dataclass(frozen=True)
+class LaneMetrics:
+    """Everything the graph's size depends on, derived from one setting."""
+
+    width: int
+    thickness: int
+    dotRadius: int
+    hollowRadius: int
+
+
+def laneMetrics() -> LaneMetrics:
+    """
+    How the lanes are drawn at the width the user picked. Wider lanes need a
+    thicker stroke and a bigger dot, or a roomy graph reads as thin threads
+    lost in whitespace; the proportions are the ones the slim lane has always
+    had, so the narrowest setting draws exactly what the app drew before.
+    """
+    width = max(LANE_WIDTH, int(settings.prefs.graphLaneWidth))
+    thickness = max(LANE_THICKNESS, round(width / 5))
+    dotRadius = max(DOT_RADIUS, round(width * 3 / 10))
+    return LaneMetrics(width, thickness, dotRadius, dotRadius + 1)
 
 
 def getColor(laneID):
@@ -86,7 +112,8 @@ def graphColumnWidth(numColumns: int) -> int:
     Horizontal room that paintGraphFrame consumes for the given number of lane
     columns (including the padding it leaves on the right).
     """
-    return numColumns * LANE_WIDTH + LANE_WIDTH // 2
+    width = laneMetrics().width
+    return numColumns * width + width // 2
 
 
 def paintGraphFrame(
@@ -115,13 +142,14 @@ def paintGraphFrame(
 
     painter.save()
     outlineColor = painter.background().color()
+    lane = laneMetrics()
 
     # Lines are drawn with SquareCap to fill in gaps at fractional display scaling factors.
     # This may cause the painter to overflow to neighboring rows, so set a clip rect.
     painter.setClipRect(rect)
 
     # Ensure all coordinates below are integers so our straight lines don't look blurry
-    x = int(rect.left() + LANE_WIDTH // 2)
+    x = int(rect.left() + lane.width // 2)
     top = int(rect.y())
     bottom = int(rect.y() + rect.height())  # Don't use rect.bottom(), which for historical reasons doesn't return what we want (see Qt docs)
     middle = (top + bottom) // 2
@@ -141,14 +169,14 @@ def paintGraphFrame(
     # Get column (horizontal position) of commit bullet point.
     myColumn, numFlattenedColumns = getCommitBulletColumn(commitLane, numFlattenedColumns, laneColumnsAB)
 
-    rect.setRight(x + (numFlattenedColumns - 1) * LANE_WIDTH)
-    mx = x + myColumn * LANE_WIDTH  # the screen X of this commit's bullet point
+    rect.setRight(x + (numFlattenedColumns - 1) * lane.width)
+    mx = x + myColumn * lane.width  # the screen X of this commit's bullet point
 
-    radius = DOT_RADIUS if not hollow else HOLLOW_RADIUS
+    radius = lane.dotRadius if not hollow else lane.hollowRadius
 
     # draw bullet point _outline_ for this commit, beneath everything else
     # (a hollow bullet point is a ring as thick as a lane, so outline it like a lane)
-    outlineThickness = 2 if not hollow else LANE_THICKNESS + 2
+    outlineThickness = 2 if not hollow else lane.thickness + 2
     painter.setPen(QPen(outlineColor, outlineThickness, Qt.PenStyle.SolidLine))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawEllipse(QPoint(mx, middle), radius, radius)
@@ -158,16 +186,16 @@ def paintGraphFrame(
     def submitPath(path: QPainterPath, column, stipple=False, dashOffset = 0):
         assert not path.isEmpty()
         # white outline
-        painter.setPen(QPen(outlineColor, LANE_THICKNESS + 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.BevelJoin))
+        painter.setPen(QPen(outlineColor, lane.thickness + 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.BevelJoin))
         painter.drawPath(path)
         # actual color
         color = UC_COLOR if stipple else getColor(column)
         cap = Qt.PenCapStyle.FlatCap if stipple else Qt.PenCapStyle.SquareCap
-        pen = QPen(color, LANE_THICKNESS, Qt.PenStyle.SolidLine, cap, Qt.PenJoinStyle.BevelJoin)
+        pen = QPen(color, lane.thickness, Qt.PenStyle.SolidLine, cap, Qt.PenJoinStyle.BevelJoin)
         if stipple:
-            interval = rect.height()/(UC_STIPPLE*LANE_THICKNESS)
+            interval = rect.height()/(UC_STIPPLE*lane.thickness)
             pen.setDashPattern([interval, interval])
-            pen.setDashOffset(dashOffset * 0.5 * rect.height()/(LANE_THICKNESS))
+            pen.setDashOffset(dashOffset * 0.5 * rect.height()/(lane.thickness))
         painter.setPen(pen)
         painter.drawPath(path)
         # clear path for next iteration
@@ -200,8 +228,8 @@ def paintGraphFrame(
         cy2 = top
     for arc in arcsPassingByCommit:
         columnA, columnB = laneColumnsAB[arc.lane]  # column above, column below
-        ax = x + columnA * LANE_WIDTH
-        bx = x + columnB * LANE_WIDTH
+        ax = x + columnA * lane.width
+        bx = x + columnB * lane.width
         path.moveTo(ax, top)
         path.cubicTo(ax, cy1, bx, cy2, bx, bottom)
         submitPath(path, arc.lane, arc.openedBy == UC_FAKEID)
@@ -209,7 +237,7 @@ def paintGraphFrame(
     # draw arcs CLOSED BY commit (from above)
     for arc in reversed(arcsClosedByCommit):
         columnA, _dummy = laneColumnsAB[arc.lane]  # column above, column below
-        ax = x + columnA * LANE_WIDTH
+        ax = x + columnA * lane.width
         # Path from above does elbow shape to merge into commit bullet point
         path.moveTo(ax, top)
         path.quadTo(ax, middle, mx, middle)
@@ -218,7 +246,7 @@ def paintGraphFrame(
     # draw arcs OPENED BY commit (downwards)
     for arc in reversed(arcsOpenedByCommit):
         _dummy, columnB = laneColumnsAB[arc.lane]  # column above, column below
-        bx = x + columnB * LANE_WIDTH
+        bx = x + columnB * lane.width
         # Path forks downward from commit bullet point
         path.moveTo(mx, middle)
         path.quadTo(bx, middle, bx, bottom)
@@ -227,8 +255,8 @@ def paintGraphFrame(
     # draw arc junctions
     for arc, _junction in junctionsAtCommit:
         columnA, columnB = laneColumnsAB[arc.lane]
-        ax = x + columnA * LANE_WIDTH
-        bx = x + columnB * LANE_WIDTH
+        ax = x + columnA * lane.width
+        bx = x + columnB * lane.width
         path.moveTo(mx, middle)
         path.quadTo(bx, middle, bx, bottom)
         submitPath(path, arc.lane)
@@ -242,7 +270,7 @@ def paintGraphFrame(
         # to hide the ends of the lines that meet at the commit. On a selected
         # row, that keeps the hole apart from a ring whose lane color is close
         # to the selection's.
-        painter.setPen(QPen(getColor(commitLane), LANE_THICKNESS))
+        painter.setPen(QPen(getColor(commitLane), lane.thickness))
         painter.setBrush(outlineColor)
     painter.drawEllipse(QPoint(mx, middle), radius, radius)
 
@@ -250,7 +278,7 @@ def paintGraphFrame(
     painter.restore()
 
     # add some padding to the right
-    rect.setRight(rect.right() + LANE_WIDTH)
+    rect.setRight(rect.right() + lane.width)
 
     return numFlattenedColumns
 
