@@ -913,6 +913,91 @@ ${sourceListOnly}Sidebar::item:hover,
 ${sourceListOnly}Sidebar::item:selected,
 ${sourceListOnly}Sidebar::item:selected:active {
     background: transparent;
+/* Short dividers between fetch, pull and push, level with the icons */
+${neutralOnly}QToolBar#GFToolbar::separator {
+    background: ${toolbarDivider};
+    width: 1px;
+    margin: 4px 2px 24px 2px;
+}
+
+${neutralOnly}QToolBar#GFToolbar[compact="true"]::separator {
+    margin: 5px 2px;
+}
+
+/* The box in the middle: the repo in bold, over its branch */
+#GFRepoBox {
+    background: ${tabTrack};
+    border-radius: ${outerRadius};
+}
+
+#GFRepoBox QLabel {
+    color: ${text};
+}
+
+#GFRepoBox QToolButton {
+    color: ${repoBoxDim};
+    background: transparent;
+    border: none;
+    padding: 0px 12px 0px 0px;
+}
+
+#GFRepoBox QToolButton:hover,
+#GFRepoBox QToolButton:pressed {
+    color: ${text};
+    background: transparent;
+}
+
+#GFRepoBox QToolButton#GFRepoBoxActivity {
+    padding: 0px;
+    border-radius: ${innerRadius};
+}
+
+#GFRepoBox QToolButton#GFRepoBoxActivity:hover {
+    background: ${hover};
+}
+
+#GFRepoBox QToolButton#GFRepoBoxActivity::menu-indicator {
+    image: none;
+    width: 0px;
+}
+
+#GFRepoBox QToolButton#GFRepoBoxBranch::menu-indicator {
+    image: url(assets:icons/qss-chevron-down.svg);
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 8px;
+    height: 8px;
+}
+
+/* Stash and Branch: a small chevron beside the icon opens their menu */
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"] {
+    padding-right: 10px;
+}
+
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"]::menu-button {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 11px;
+    height: 20px;
+    border: none;
+    border-radius: ${innerRadius};
+    background: transparent;
+}
+
+${neutralOnly}#GFToolbar QToolButton[popupMode="1"]::menu-button:hover {
+    background: ${hover};
+}
+
+${neutralOnly}#GFToolbar QToolButton::menu-arrow {
+    image: url(assets:icons/qss-chevron-down.svg);
+    width: 8px;
+    height: 8px;
+}
+
+/* No drop-down marks under Open In, Theme and Workspace: a click opens their menu */
+${neutralOnly}#GFToolbar QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
 }
 
 /* Short dividers between fetch, pull and push, level with the icons */
