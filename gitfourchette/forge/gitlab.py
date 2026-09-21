@@ -174,7 +174,10 @@ def notesUrl(project: ForgeProject, iid: int) -> str:
     return f"{project.mergeRequestRoot(iid)}/notes"
 
 
-DIFF_PAGE_SIZE = 100
+DIFF_PAGE_SIZE = 20
+"""Files per page of a merge request's diff. Small on purpose: asking a
+GitLab 17.7 instance for 100 files of a 68-file merge request answered 500
+Internal Server Error, while 20 came back fine."""
 
 
 def mergeRequestDiffsUrl(project: ForgeProject, iid: int, page=1) -> str:
@@ -182,9 +185,21 @@ def mergeRequestDiffsUrl(project: ForgeProject, iid: int, page=1) -> str:
     return f"{project.mergeRequestRoot(iid)}/diffs?{query}"
 
 
+def mergeRequestChangesUrl(project: ForgeProject, iid: int) -> str:
+    """
+    The older endpoint that returns every changed file in one answer.
+
+    Deprecated by GitLab in favour of /diffs, and still the one that works when
+    /diffs fails on a big merge request.
+    """
+    return f"{project.mergeRequestRoot(iid)}/changes"
+
+
 def readDiffIndex(payload, index: dict[str, FileDiff] | None = None) -> dict[str, FileDiff]:
     """The host's own diff, as the lines a comment may be anchored to."""
     index = {} if index is None else index
+    if isinstance(payload, dict):  # /changes wraps the same entries
+        payload = payload.get("changes")
     for entry in payload if isinstance(payload, list) else []:
         if not isinstance(entry, dict) or entry.get("deleted_file"):
             continue

@@ -135,7 +135,7 @@ class FakeSession:
         self.posts = []
         self.gets = []
         self.failOn = ""
-        self.failGet = ""
+        self.failGet = ()
         self.abandoned = False
 
     def abandon(self):
@@ -152,11 +152,13 @@ class FakeSession:
 
     def get(self, url, callback):
         self.gets.append(url)
-        if self.failGet and self.failGet in url:
+        if any(fragment in url for fragment in self.failGet):
             callback(None, "HTTP 404: not found")
             return
         if "/diffs" in url:
             callback(self.HOST_DIFF, "")
+        elif "/changes" in url:
+            callback({"changes": self.HOST_DIFF}, "")  # the older endpoint wraps them
         elif "?" in url:
             callback([self.MERGE_REQUEST], "")  # the list endpoint answers with an array
         else:
@@ -414,10 +416,26 @@ def testPosterAnchorsOnTheHostsDiffNotTheLocalOne(monkeypatch):
     assert poster.session.posts[0][1]["position"]["new_line"] == 3
 
 
-def testPosterFallsBackToTheLocalDiffWhenTheHostWontSayS(monkeypatch):
+def testPosterFallsBackToTheOlderDiffEndpoint(monkeypatch):
+    # A big merge request can make the paginated endpoint fail outright: a
+    # 68-file one answered 500 on GitLab 17.7. The older endpoint returns every
+    # file in one answer and still works, so it is worth asking before giving up.
     finding = Finding(file="src/a.cs", line=2, problem="on an added line")
     poster = makePoster(monkeypatch, [finding])
-    poster.session.failGet = "/diffs"
+    poster.session.failGet = ("/diffs",)
+    results = []
+    poster.finished.connect(results.extend)
+    poster.start()
+
+    assert any("/changes" in url for url in poster.session.gets)
+    assert poster.onHostDiff
+    assert [r.state for r in results] == [PostState.Posted]
+
+
+def testPosterFallsBackToTheLocalDiffWhenTheHostWontSay(monkeypatch):
+    finding = Finding(file="src/a.cs", line=2, problem="on an added line")
+    poster = makePoster(monkeypatch, [finding])
+    poster.session.failGet = ("/diffs", "/changes")
     results = []
     poster.finished.connect(results.extend)
     poster.start()

@@ -16,7 +16,7 @@ from gitfourchette.exttools.aireview import Finding, formatFinding
 from gitfourchette.forge.diffindex import diffLineIndex, resolvePosition
 from gitfourchette.forge.gitlab import (
     ChangeRequest, ForgeProject, canApplySuggestion, discussionPayload,
-    discussionsUrl, isFullDiffPage, mergeRequestDiffsUrl, notePayload, notesUrl,
+    discussionsUrl, isFullDiffPage, mergeRequestChangesUrl, mergeRequestDiffsUrl, notePayload, notesUrl,
     readDiffIndex, readMergeRequest)
 from gitfourchette.forge.session import ForgeSession
 from gitfourchette.localization import *
@@ -73,6 +73,7 @@ class ReviewPoster(QObject):
         with, and replaced by the host's own diff before anything is posted."""
         self.onHostDiff = False
         self.diffPage = 1
+        self.triedChanges = False
         self.results: list[PostResult] = []
         self.cursor = 0
         self.posted = 0
@@ -116,6 +117,13 @@ class ReviewPoster(QObject):
 
     def _gotDiff(self, payload, error):
         if error:
+            if not self.triedChanges:
+                # A big merge request can make the paginated endpoint fail
+                # outright (a 68-file one answered 500 here). The older endpoint
+                # returns every file in one answer and still works.
+                self.triedChanges = True
+                self.session.get(mergeRequestChangesUrl(self.project, self.changeRequest.iid), self._gotDiff)
+                return
             # Better to try the local diff and report each refusal than to
             # refuse to post anything at all.
             self.progress.emit(0, self.total(), _("Couldn’t read the merge request’s diff: {0}", error))
@@ -125,7 +133,7 @@ class ReviewPoster(QObject):
         readDiffIndex(payload, index)
         self.onHostDiff = True
         self.index = index
-        if isFullDiffPage(payload) and self.diffPage < MAX_DIFF_PAGES:
+        if not self.triedChanges and isFullDiffPage(payload) and self.diffPage < MAX_DIFF_PAGES:
             self.diffPage += 1
             self._fetchDiff()
             return
