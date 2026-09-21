@@ -1,5 +1,6 @@
 """Reviewing a branch, keeping what's worth posting, and posting it."""
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -133,6 +134,10 @@ class FakeSession:
         self.posts = []
         self.gets = []
         self.failOn = ""
+        self.abandoned = False
+
+    def abandon(self):
+        self.abandoned = True
 
     MERGE_REQUEST: ClassVar[dict] = {
         "iid": 7, "title": "Localize the tab", "source_branch": "topic",
@@ -271,3 +276,74 @@ def testAccountsAreKeptOutOfTheSettingsFile(mainWindow, monkeypatch):
     dialog.table.cellWidget(0, 1).setText("")
     dialog.save()
     assert accountsModule.loadAccounts().hosts() == []
+
+
+class FakeReply:
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def read(self):
+        return self.data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+def testTransportAsksForNothingBeyondTheStandardLibrary(mainWindow, monkeypatch):
+    # The packaged AppImage strips QtNetwork out (pkg/appimage/junklist.txt), so
+    # a transport built on it works from source and fails in front of the user.
+    from gitfourchette.forge import session as sessionModule
+    from gitfourchette.forge.session import ForgeSession
+
+    assert "QNetworkAccessManager" not in Path(sessionModule.__file__).read_text(encoding="utf-8")
+
+    sent = {}
+
+    def fakeUrlopen(request, timeout=None):
+        sent["url"] = request.full_url
+        sent["method"] = request.get_method()
+        sent["headers"] = {key.lower(): value for key, value in request.header_items()}
+        sent["body"] = request.data
+        return FakeReply(b'{"iid": 7}')
+
+    monkeypatch.setattr(sessionModule.urllib.request, "urlopen", fakeUrlopen)
+    session = ForgeSession("s3cret", mainWindow)
+    seen = []
+    session.post("https://gitlab.example.com/api/v4/x", {"body": "hi"}, lambda payload, error: seen.append((payload, error)))
+
+    # The answer comes back on the GUI thread, so a callback may touch widgets
+    waitUntilTrue(lambda: bool(seen))
+    assert seen[0] == ({"iid": 7}, "")
+    assert sent["method"] == "POST"
+    assert sent["headers"]["private-token"] == "s3cret"
+    assert json.loads(sent["body"]) == {"body": "hi"}
+
+
+def testTransportRefusesPlainHttpAndNeverEchoesTheToken(mainWindow, monkeypatch):
+    import urllib.error
+
+    from gitfourchette.forge import session as sessionModule
+    from gitfourchette.forge.session import ForgeSession
+
+    session = ForgeSession("s3cret", mainWindow)
+    seen = []
+    session.get("http://gitlab.example.com/api/v4/x", lambda payload, error: seen.append((payload, error)))
+    # A credential that can write to the company's repositories never travels in the clear
+    assert seen[0][0] is None and "insecure" in seen[0][1].lower()
+
+    def failingUrlopen(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {},
+                                     io.BytesIO(b'{"message": "401 Unauthorized for token s3cret"}'))
+
+    monkeypatch.setattr(sessionModule.urllib.request, "urlopen", failingUrlopen)
+    seen.clear()
+    session.get("https://gitlab.example.com/api/v4/x", lambda payload, error: seen.append((payload, error)))
+    waitUntilTrue(lambda: bool(seen))
+    payload, error = seen[0]
+    assert payload is None
+    assert "HTTP 401" in error
+    # The host echoed the token back at us; it must not reach the status line
+    assert "s3cret" not in error and "***token***" in error

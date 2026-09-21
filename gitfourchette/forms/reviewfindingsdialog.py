@@ -20,7 +20,7 @@ from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.forge import gitlab
 from gitfourchette.forge.accounts import loadAccounts
 from gitfourchette.forge.poster import PostState, ReviewPoster
-from gitfourchette.forge.session import ForgeSession
+from gitfourchette.forge.session import ForgeError, ForgeSession
 from gitfourchette.localization import *
 from gitfourchette.porcelain import RefPrefix, split_remote_branch_shorthand
 from gitfourchette.qt import *
@@ -503,7 +503,11 @@ class ReviewFindingsDialog(QDialog):
             return
         self.pendingPost = thenPost
         self.setStatus(_("Looking for an open merge request from {0}…", self.sourceBranch))
-        self.session = ForgeSession(token, self)
+        try:
+            self.session = ForgeSession(token, self)
+        except ForgeError as error:
+            self.setStatus(str(error))
+            return
         self.session.get(gitlab.openMergeRequestsUrl(self.project, self.sourceBranch), self.gotMergeRequests)
 
     def gotMergeRequests(self, payload, error):
@@ -577,11 +581,15 @@ class ReviewFindingsDialog(QDialog):
         language = self.language()
         bodies = {item.finding.fingerprint(): item.postedBody(language, provider, marker=False)
                   for item in items if item.body.strip()}
-        self.poster = ReviewPoster(
-            self.project, token, self.changeRequest, self.diffText,
-            [item.finding for item in items], provider=provider, language=language,
-            summaryBuilder=self.summaryText if self.summaryCheck.isChecked() else None,
-            bodies=bodies, parent=self)
+        try:
+            self.poster = ReviewPoster(
+                self.project, token, self.changeRequest, self.diffText,
+                [item.finding for item in items], provider=provider, language=language,
+                summaryBuilder=self.summaryText if self.summaryCheck.isChecked() else None,
+                bodies=bodies, parent=self)
+        except ForgeError as error:
+            self.setStatus(str(error))
+            return
         self.poster.progress.connect(lambda done, total, message: self.setStatus(f"{message} ({done}/{total})"))
         self.poster.finished.connect(self.posted)
         self.poster.failed.connect(self.postingFailed)
@@ -627,6 +635,9 @@ class ReviewFindingsDialog(QDialog):
     # --- Leaving --------------------------------------------------------------
 
     def reject(self):  # override
+        for session in (getattr(self, "session", None), getattr(self.poster, "session", None) if self.poster else None):
+            if session is not None:
+                session.abandon()
         if self.process is not None:
             process, self.process = self.process, None
             process.kill()

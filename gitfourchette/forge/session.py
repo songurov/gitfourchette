@@ -1,6 +1,13 @@
 """
 The transport: one conversation with a hosting service.
 
+Deliberately built on Python's own HTTP client rather than QtNetwork. The
+packaged builds strip QtNetwork out (see pkg/appimage/junklist.txt: the Qt
+network module, its libraries and the TLS plugins all go), because until now
+nothing but optional avatars wanted it. A feature that only works when the app
+was built one particular way is a feature that breaks in front of the person
+using it, so this asks for nothing beyond the standard library.
+
 Every request carries the token and nothing else identifying; every reply comes
 back as parsed JSON or as an error message that has been scrubbed of the token.
 Plain HTTP is refused outright - a credential that can write to the company's
@@ -11,13 +18,16 @@ from __future__ import annotations
 
 import json
 import logging
-from contextlib import suppress
+import threading
+import urllib.error
+import urllib.request
 
+from gitfourchette.localization import *
 from gitfourchette.qt import *
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT_MS = 30000
+TIMEOUT = 30.0
 
 
 class ForgeError(Exception):
@@ -26,75 +36,79 @@ class ForgeError(Exception):
 
 class ForgeSession(QObject):
     """
-    Calls the host's REST API, one request at a time, asynchronously.
+    Calls the host's REST API asynchronously, one request at a time.
 
-    Callbacks get (payload, error): exactly one of them is meaningful. The
-    session never raises into the event loop and never logs the token.
+    The work happens on a worker thread; the answer is delivered on the GUI
+    thread through a signal, so callbacks can touch widgets. Callbacks get
+    (payload, error): exactly one of them is meaningful. The session never
+    raises into the event loop and never logs the token.
     """
+
+    replied = Signal(object, str, object)
+    "Payload, error, callback - emitted from the worker, received on the GUI thread."
 
     def __init__(self, token: str, parent=None):
         super().__init__(parent)
-        if not HAS_QTNETWORK:  # pragma: no cover - depends on the Qt build
-            raise ForgeError("QtNetwork isn't available in this build of Qt.")
         self.token = token
-        self.netman = QNetworkAccessManager(self)
-        self.netman.setTransferTimeout(TIMEOUT_MS)
-        self.replies: list = []
+        self.cancelled = False
+        self.replied.connect(self._deliver)
+
+    def abandon(self):
+        """Stop delivering: the dialog that asked is going away."""
+        self.cancelled = True
 
     def scrub(self, text: str) -> str:
         return text.replace(self.token, "***token***") if self.token else text
 
-    def makeRequest(self, url: str) -> QNetworkRequest:
-        if not url.lower().startswith("https://"):
-            raise ForgeError(f"Refusing to send the token over an insecure URL: {url}")
-        request = QNetworkRequest(QUrl(url))
-        request.setRawHeader(b"PRIVATE-TOKEN", self.token.encode("utf-8"))
-        request.setRawHeader(b"Accept", b"application/json")
-        request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
-                             QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy)
-        return request
-
     def get(self, url: str, callback):
-        self._run(url, callback, self.netman.get)
+        self._run("GET", url, None, callback)
 
     def post(self, url: str, payload: dict, callback):
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self._run("POST", url, payload, callback)
 
-        def send(request):
-            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json; charset=utf-8")
-            return self.netman.post(request, body)
+    def _run(self, method: str, url: str, payload, callback):
+        if not url.lower().startswith("https://"):
+            callback(None, _("Refusing to send the token over an insecure URL: {0}", url))
+            return
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
+        headers = {"PRIVATE-TOKEN": self.token, "Accept": "application/json"}
+        if body is not None:
+            headers["Content-Type"] = "application/json; charset=utf-8"
+        thread = threading.Thread(target=self._work, args=(method, url, headers, body, callback), daemon=True)
+        thread.start()
 
-        self._run(url, callback, send)
-
-    def _run(self, url: str, callback, send):
+    def _work(self, method, url, headers, body, callback):
+        request = urllib.request.Request(url, data=body, headers=headers, method=method)
+        payload, error = None, ""
         try:
-            request = self.makeRequest(url)
-        except ForgeError as error:
-            callback(None, str(error))
-            return
-        reply = send(request)
-        self.replies.append(reply)
-        reply.finished.connect(lambda: self._finish(reply, callback))
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as reply:
+                payload = decodeJson(reply.read())
+        except urllib.error.HTTPError as failure:
+            error = describeFailure(failure.code, decodeJson(failure.read()), failure.reason)
+        except urllib.error.URLError as failure:
+            error = _("Couldn’t reach the server: {0}", failure.reason)
+        except (OSError, ValueError) as failure:
+            error = str(failure)
+        except Exception as failure:  # A transport must never take the app down with it
+            logger.warning("Unexpected failure talking to the host", exc_info=True)
+            error = str(failure)
+        try:
+            self.replied.emit(payload, self.scrub(error), callback)
+        except RuntimeError:  # The session was deleted while the request was in flight
+            pass
 
-    def _finish(self, reply, callback):
-        with suppress(ValueError):
-            self.replies.remove(reply)
-        status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) or 0
-        data = bytes(reply.readAll())
-        error = reply.error()
-        reply.deleteLater()
+    def _deliver(self, payload, error, callback):
+        if not self.cancelled:
+            callback(payload, error)
 
-        payload = None
-        if data:
-            try:
-                payload = json.loads(data.decode("utf-8", errors="replace"))
-            except ValueError:
-                payload = None
 
-        if error != QNetworkReply.NetworkError.NoError or not (200 <= status < 300):
-            callback(None, self.scrub(describeFailure(status, payload, reply.errorString())))
-            return
-        callback(payload, "")
+def decodeJson(data: bytes):
+    if not data:
+        return None
+    try:
+        return json.loads(data.decode("utf-8", errors="replace"))
+    except ValueError:
+        return None
 
 
 def describeFailure(status: int, payload, fallback: str) -> str:
@@ -116,13 +130,13 @@ def describeFailure(status: int, payload, fallback: str) -> str:
                 detail = json.dumps(value, ensure_ascii=False)[:400]
                 break
     if status == 401:
-        detail = detail or "the token was rejected"
+        detail = detail or _("the token was rejected")
     elif status == 403:
-        detail = detail or "the token isn't allowed to do this (it needs the 'api' scope)"
+        detail = detail or _("the token isn’t allowed to do this (it needs the “api” scope)")
     elif status == 404:
-        detail = detail or "not found (wrong project path, or the token can't see it)"
+        detail = detail or _("not found (wrong project path, or the token can’t see it)")
     if status and detail:
         return f"HTTP {status}: {detail}"
     if status:
         return f"HTTP {status}: {fallback}"
-    return fallback
+    return str(fallback)
