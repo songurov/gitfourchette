@@ -7,6 +7,8 @@ how long ago anyone touched it. Nothing is ticked for you - deleting a branch
 for everyone is the kind of thing a person should have to say yes to, twice.
 """
 
+import datetime
+
 from gitfourchette.forge import branchaudit, gitlab
 from gitfourchette.forge.accounts import loadAccounts
 from gitfourchette.forge.branchaudit import Verdict
@@ -27,6 +29,39 @@ VERDICT_WORDS = {
     Verdict.Stale: lambda: _p("branch verdict", "Stale"),
     Verdict.Unclear: lambda: _p("branch verdict", "Unclear"),
 }
+
+
+class BranchRow(QTreeWidgetItem):
+    """
+    A branch in the table, sorted by what each column means.
+
+    Qt sorts by the text it shows, which would put "9" after "29" and order
+    verdicts alphabetically. Each row therefore carries the facts it was built
+    from and compares on those instead.
+    """
+
+    EPOCH = datetime.datetime(1970, 1, 1, tzinfo=datetime.UTC)
+
+    def __init__(self, fact, verdict, columns):
+        super().__init__(columns)
+        self.fact = fact
+        self.verdict = verdict
+
+    def __lt__(self, other):  # override
+        if not isinstance(other, BranchRow):
+            return super().__lt__(other)
+        column = self.treeWidget().sortColumn() if self.treeWidget() else 0
+        if column == 2:
+            return (self.fact.lastCommit or self.EPOCH) < (other.fact.lastCommit or self.EPOCH)
+        if column == 3:
+            return self.fact.ahead < other.fact.ahead
+        if column == 4:
+            return self.fact.mergeRequest < other.fact.mergeRequest
+        if column == 5:
+            # What can go first: that is what the column is read for.
+            return ((not self.verdict.deletable, str(self.verdict.verdict))
+                    < (not other.verdict.deletable, str(other.verdict.verdict)))
+        return self.text(column).casefold() < other.text(column).casefold()
 
 
 class BranchAuditWindow(QDialog):
@@ -55,6 +90,8 @@ class BranchAuditWindow(QDialog):
         self.tree.setAlternatingRowColors(True)
         self.tree.setUniformRowHeights(True)
         self.tree.header().setStretchLastSection(True)
+        self.tree.setSortingEnabled(True)
+        self.tree.sortByColumn(0, Qt.SortOrder.AscendingOrder)
         self.tree.itemChanged.connect(lambda *_args: self.refreshButtons())
         layout.addWidget(self.tree, 1)
 
@@ -122,9 +159,12 @@ class BranchAuditWindow(QDialog):
     def fill(self):
         facts = branchaudit.collectFacts(self.repo, self.remoteName, self.mergeRequests)
         self.rows = [(fact, branchaudit.judge(fact)) for fact in facts]
+        # Sorting stays off while the rows go in, or every insertion re-sorts
+        # the table under the previous one.
+        self.tree.setSortingEnabled(False)
         self.tree.clear()
         for fact, verdict in self.rows:
-            row = QTreeWidgetItem([
+            row = BranchRow(fact, verdict, [
                 fact.name,
                 fact.author,
                 fact.lastCommit.strftime("%Y-%m-%d") if fact.lastCommit else "",
@@ -141,6 +181,7 @@ class BranchAuditWindow(QDialog):
             row.setTextAlignment(3, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             row.setToolTip(6, verdict.reason)
             self.tree.addTopLevelItem(row)
+        self.tree.setSortingEnabled(True)
         for column in range(6):
             self.tree.resizeColumnToContents(column)
         self.refreshButtons()
@@ -154,8 +195,9 @@ class BranchAuditWindow(QDialog):
         return [item.text(0) for item in self.items() if item.checkState(0) == Qt.CheckState.Checked]
 
     def selectDeletable(self):
-        for item, (_fact, verdict) in zip(self.items(), self.rows, strict=False):
-            item.setCheckState(0, Qt.CheckState.Checked if verdict.deletable else Qt.CheckState.Unchecked)
+        for item in self.items():
+            deletable = isinstance(item, BranchRow) and item.verdict.deletable
+            item.setCheckState(0, Qt.CheckState.Checked if deletable else Qt.CheckState.Unchecked)
 
     def refreshButtons(self):
         ticked = len(self.ticked())

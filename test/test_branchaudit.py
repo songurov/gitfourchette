@@ -120,3 +120,46 @@ def testTheWindowTicksNothingByItself(tempDir, mainWindow):
     assert window.deleteButton.isEnabled()
     assert "1" in window.deleteButton.text()
     window.close()
+
+
+def testTheTableSortsByWhatEachColumnMeans(tempDir, mainWindow, monkeypatch):
+    from gitfourchette.forms.branchauditwindow import BranchAuditWindow, BranchRow
+
+    wd = unpackRepo(tempDir)
+    makeBareCopy(wd, addAsRemote="localfs", preFetch=True, deleteOtherRemotes=True)
+    rw = mainWindow.openRepo(wd)
+
+    window = BranchAuditWindow(rw.repo, "localfs", rw)
+    # Stand-in rows, so the ordering rules are what is under test
+    window.tree.setSortingEnabled(False)
+    window.tree.clear()
+    made = [
+        (BranchFacts(name="localfs/b", ahead=9, mergeRequest=9, lastCommit=daysAgo(1)),
+         branchaudit.BranchVerdict(Verdict.Active, "", deletable=False)),
+        (BranchFacts(name="localfs/a", ahead=29, mergeRequest=100, lastCommit=daysAgo(100)),
+         branchaudit.BranchVerdict(Verdict.Merged, "", deletable=True)),
+    ]
+    for fact, verdict in made:
+        row = BranchRow(fact, verdict, [fact.name, "", "", str(fact.ahead), f"!{fact.mergeRequest}", "", ""])
+        window.tree.addTopLevelItem(row)
+    window.rows = made
+    window.tree.setSortingEnabled(True)
+
+    def order(column, ascending=True):
+        window.tree.sortByColumn(column, Qt.SortOrder.AscendingOrder if ascending
+                                 else Qt.SortOrder.DescendingOrder)
+        return [window.tree.topLevelItem(i).fact.name for i in range(window.tree.topLevelItemCount())]
+
+    assert order(0) == ["localfs/a", "localfs/b"]
+    # 29 is more than 9, whatever alphabetical order thinks
+    assert order(3) == ["localfs/b", "localfs/a"]
+    assert order(2) == ["localfs/a", "localfs/b"]        # oldest commit first
+    assert order(4) == ["localfs/b", "localfs/a"]        # !9 before !100
+    assert order(5)[0] == "localfs/a"                    # what can go, first
+
+    # Ticking follows the row, not its position in the table
+    window.selectDeletable()
+    assert window.ticked() == ["localfs/a"]
+    order(0, ascending=False)
+    assert window.ticked() == ["localfs/a"]
+    window.close()
