@@ -9468,3 +9468,20 @@ msgstr "Пропускать черновики"
 #: trtables.py
 msgid "Skip what the pipeline already reviewed"
 msgstr "Пропускать то, что уже проверил конвейер"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "What the Assistant Charges"
+msgstr "Стоимость ассистента"
+
+#: trtables.py
+msgid "Input tokens, per million"
+msgstr "Входные токены, за миллион"
+
+#: trtables.py
+msgid "Output tokens, per million"
+msgstr "Выходные токены, за миллион"
+
+#: trtables.py
+msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
+msgstr "Используется для расчёта стоимости ревью, когда ассистент сообщает только токены. CLI Claude сообщает стоимость сам, и тогда эти значения игнорируются."

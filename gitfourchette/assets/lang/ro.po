@@ -9428,3 +9428,20 @@ msgstr "Sari peste draft-uri"
 #: trtables.py
 msgid "Skip what the pipeline already reviewed"
 msgstr "Sari peste ce a recenzat deja pipeline-ul"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "What the Assistant Charges"
+msgstr "Cât costă asistentul"
+
+#: trtables.py
+msgid "Input tokens, per million"
+msgstr "Tokeni de intrare, pe milion"
+
+#: trtables.py
+msgid "Output tokens, per million"
+msgstr "Tokeni de ieșire, pe milion"
+
+#: trtables.py
+msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
+msgstr "Folosit ca să pună preț pe un review atunci când asistentul raportează doar tokeni. CLI-ul lui Claude raportează el însuși costul, iar atunci acestea sunt ignorate."

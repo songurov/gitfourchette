@@ -9330,3 +9330,20 @@ msgstr "Taslakları atla"
 #: trtables.py
 msgid "Skip what the pipeline already reviewed"
 msgstr "İş hattının zaten incelediklerini atla"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "What the Assistant Charges"
+msgstr "Asistan ücretleri"
+
+#: trtables.py
+msgid "Input tokens, per million"
+msgstr "Girdi belirteçleri, milyon başına"
+
+#: trtables.py
+msgid "Output tokens, per million"
+msgstr "Çıktı belirteçleri, milyon başına"
+
+#: trtables.py
+msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
+msgstr "Asistan yalnızca belirteç bildirdiğinde incelemenin maliyetini hesaplamak için kullanılır. Claude’un CLI’si maliyeti kendisi bildirir; o durumda bunlar yok sayılır."
