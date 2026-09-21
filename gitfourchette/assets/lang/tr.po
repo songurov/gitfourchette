@@ -9347,3 +9347,7 @@ msgstr "Çıktı belirteçleri, milyon başına"
 #: trtables.py
 msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
 msgstr "Asistan yalnızca belirteç bildirdiğinde incelemenin maliyetini hesaplamak için kullanılır. Claude’un CLI’si maliyeti kendisi bildirir; o durumda bunlar yok sayılır."
+
+#: trtables.py
+msgid "Leave this off if your team marks a merge request as a draft precisely to ask for review, and takes the mark off once it passes."
+msgstr "Ekibiniz bir birleştirme isteğini tam da inceleme istemek için taslak olarak işaretliyor ve geçtikten sonra işareti kaldırıyorsa bunu kapalı bırakın."

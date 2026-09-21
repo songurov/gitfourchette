@@ -15,7 +15,6 @@ import logging
 import time
 
 from gitfourchette.exttools.aichat import ResponseStream, cliArguments
-from gitfourchette import settings
 from gitfourchette.exttools.aireview import formatFinding, makeReviewPrompt, parseReview, summaryNote
 from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.forge import audit, gitlab
@@ -46,8 +45,6 @@ class RunOutcome:
     inputTokens: int = 0
     cachedInputTokens: int = 0
     outputTokens: int = 0
-    costUsd: float = 0.0
-    "What the assistant said it cost, or what its prices say it cost; 0 when neither is known."
     comments: list = dataclasses.field(default_factory=list)
     "Every comment this run posted, as it was posted (see PostedComment)."
     decision: audit.Decision = dataclasses.field(default_factory=lambda: audit.Decision(audit.Verdict.Due))
@@ -310,8 +307,6 @@ class ReviewRun(QObject):
             self.outcome.inputTokens = usage.inputTokens
             self.outcome.cachedInputTokens = usage.cachedInputTokens
             self.outcome.outputTokens = usage.outputTokens
-            self.outcome.costUsd = usage.estimate(settings.prefs.reviewPriceInput,
-                                                  settings.prefs.reviewPriceOutput)
         self.finished.emit(self.outcome)
 
     def stop(self):

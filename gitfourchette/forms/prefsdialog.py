@@ -1054,16 +1054,6 @@ class PrefsDialog(QDialog):
             return control
         elif key == "tabSpaces":
             return self.boundedIntControl(key, value, 1, 16)
-        elif key in ("reviewPriceInput", "reviewPriceOutput"):
-            control = QDoubleSpinBox(self)
-            control.setRange(0.0, 9999.0)
-            control.setDecimals(2)
-            control.setSingleStep(0.5)
-            control.setPrefix("$ ")
-            control.setSpecialValueText(_p("no price set, so no cost is shown", "Unknown"))
-            control.setValue(float(value))
-            control.valueChanged.connect(lambda newValue: self.assign(key, float(newValue)))
-            return control
         elif key == "auditIntervalMinutes":
             return self.boundedIntControl(key, value, 5, 1440, 5)
         elif key == "autoFetchMinutes":

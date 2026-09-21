@@ -27,14 +27,6 @@ def formatTokens(tokens: int) -> str:
     return _("{0}k", round(tokens / 1000))
 
 
-def formatCost(cost: float) -> str:
-    # Nothing rather than "$0.00": a review whose price nobody supplied did not
-    # cost nothing, we just don't know what it cost.
-    if cost <= 0:
-        return ""
-    return f"${cost:.2f}" if cost >= 0.01 else f"${cost:.4f}"
-
-
 STATE_WORDS = {
     ItemState.Queued: lambda: _p("audit state", "Waiting"),
     ItemState.Running: lambda: _p("audit state", "Reviewing"),
@@ -63,8 +55,8 @@ class AuditWindow(QDialog):
         layout.addWidget(splitter, 1)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels([_("Merge request"), _("Project"), _("State"),
-                                   _("Time"), _("Tokens"), _("Cost"), _("Detail")])
+        self.tree.setHeaderLabels([_("Merge request"), _("Author"), _("Project"), _("State"),
+                                   _("Time"), _("Tokens"), _("Detail")])
         self.tree.setRootIsDecorated(False)
         self.tree.setAlternatingRowColors(True)
         self.tree.setUniformRowHeights(True)
@@ -112,21 +104,18 @@ class AuditWindow(QDialog):
         if self.tree.topLevelItemCount() != len(items):
             self.tree.clear()
             for item in items:
-                row = QTreeWidgetItem([item.caption(), item.project, "", "", "", "", ""])
+                row = QTreeWidgetItem([item.caption(), item.author, item.project, "", "", "", ""])
                 row.setData(0, Qt.ItemDataRole.UserRole, item.webUrl())
                 row.setToolTip(0, item.webUrl())
                 self.tree.addTopLevelItem(row)
         for index, item in enumerate(items):
             row = self.tree.topLevelItem(index)
-            row.setText(2, STATE_WORDS[item.state]())
-            row.setText(3, formatElapsed(item.elapsed))
-            row.setText(4, formatTokens(item.tokens))
-            row.setText(5, formatCost(item.cost))
+            row.setText(1, item.author)
+            row.setText(3, STATE_WORDS[item.state]())
+            row.setText(4, formatElapsed(item.elapsed))
+            row.setText(5, formatTokens(item.tokens))
             row.setText(6, item.detail)
             row.setToolTip(6, item.detail)
-            if item.cost <= 0 and item.tokens > 0:
-                row.setToolTip(5, _("Set what your assistant charges in Settings to see the cost."))
-            row.setTextAlignment(3, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             row.setTextAlignment(4, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             row.setTextAlignment(5, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         for column in range(6):
@@ -145,15 +134,12 @@ class AuditWindow(QDialog):
                                      "Reviewing {0} merge requests, {n} still waiting.", waiting, running))
         elif self.watcher.items:
             posted = sum(1 for item in self.watcher.items if item.state == ItemState.Posted)
-            spent = sum(item.cost for item in self.watcher.items)
             seconds = sum(item.elapsed for item in self.watcher.items)
+            tokens = sum(item.tokens for item in self.watcher.items)
             tail = ""
             if seconds:
                 tail = _(" Took {0}", formatElapsed(seconds))
-                if spent:
-                    tail += _(", cost {0}.", formatCost(spent))
-                else:
-                    tail += "."
+                tail += _(", {0} tokens.", formatTokens(tokens)) if tokens else "."
             self.headline.setText(_n("Last sweep: {n} merge request looked at, {0} reviewed.",
                                      "Last sweep: {n} merge requests looked at, {0} reviewed.",
                                      len(self.watcher.items), posted) + tail)

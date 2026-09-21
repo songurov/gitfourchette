@@ -3,7 +3,6 @@
 import json
 import os
 import tomllib
-from contextlib import suppress
 from pathlib import Path
 
 
@@ -113,20 +112,15 @@ def modelChoices(provider):
 
 class Usage:
     """
-    What a turn cost, as the CLI itself reported it.
-
-    Only one of the two assistants prices the turn for you (Claude reports
-    total_cost_usd); the other reports tokens and leaves the arithmetic to
-    whoever knows what they are paying. So both are kept, and the money is
-    computed only where there is something to compute it from.
+    What a turn spent, as the CLI itself reported it: tokens, never money.
+    Pricing them would mean carrying a price list for every model either
+    assistant can run, and a stale one lies rather than informs.
     """
 
     def __init__(self):
         self.inputTokens = 0
         self.cachedInputTokens = 0
         self.outputTokens = 0
-        self.costUsd = 0.0
-        "Only when the CLI said so; zero means 'it didn't', not 'free'."
 
     @property
     def totalTokens(self) -> int:
@@ -141,15 +135,6 @@ class Usage:
         cached = (usage.get("cached_input_tokens") or usage.get("cache_read_input_tokens")
                   or self.cachedInputTokens or 0)
         self.cachedInputTokens = int(cached)
-
-    def estimate(self, inputPricePerMillion: float, outputPricePerMillion: float) -> float:
-        """What this turn cost, from prices someone had to supply."""
-        if self.costUsd:
-            return self.costUsd
-        if not (inputPricePerMillion or outputPricePerMillion):
-            return 0.0
-        billedInput = max(0, self.inputTokens - self.cachedInputTokens)
-        return (billedInput * inputPricePerMillion + self.outputTokens * outputPricePerMillion) / 1_000_000
 
 
 class ResponseStream:
@@ -198,8 +183,6 @@ class ResponseStream:
                 self.text = "\n\n".join(self.items.values())
             elif kind == "result":
                 self.usage.absorb(event.get("usage"))
-                with suppress(TypeError, ValueError):
-                    self.usage.costUsd = float(event.get("total_cost_usd") or 0.0)
                 if event.get("is_error"):
                     self.error = event.get("result") or "\n".join(event.get("errors", [])) or "Request failed"
                 elif not self.text:

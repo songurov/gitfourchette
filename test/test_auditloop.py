@@ -303,7 +303,7 @@ def testStoppingLeavesTheRestUnreviewedAndSaysSo(mainWindow):
     window.show()
     assert window.tree.topLevelItemCount() == 3
     assert window.tree.topLevelItem(0).text(0) == "!1 Done"
-    assert window.tree.topLevelItem(1).text(2) == "Reviewing"
+    assert window.tree.topLevelItem(1).text(3) == "Reviewing"
     assert window.stopButton.isEnabled() and not window.runButton.isEnabled()
 
     window.stopButton.click()
@@ -311,23 +311,18 @@ def testStoppingLeavesTheRestUnreviewedAndSaysSo(mainWindow):
     # What was posted stays posted; what hadn't run is dropped, and says so
     assert [item.state for item in watcher.items] == [
         ItemState.Posted, ItemState.Cancelled, ItemState.Cancelled]
-    assert window.tree.topLevelItem(2).text(2) == "Stopped"
+    assert window.tree.topLevelItem(2).text(3) == "Stopped"
     assert window.runButton.isEnabled() and not window.stopButton.isEnabled()
     window.close()
 
 
 def testARunRecordsWhatItSpentAndWhatItSaid(repo, monkeypatch):
-    monkeypatch.setattr(settings.prefs, "reviewPriceInput", 1.25)
-    monkeypatch.setattr(settings.prefs, "reviewPriceOutput", 10.0)
     fakeCli(monkeypatch)
 
     outcome = runToEnd(makeRun(monkeypatch, repo))
 
     assert outcome.elapsed > 0
     assert (outcome.inputTokens, outcome.cachedInputTokens, outcome.outputTokens) == (120000, 100000, 3000)
-    # 20k billed input at $1.25/M plus 3k output at $10/M: the cached tokens
-    # are not paid for twice
-    assert round(outcome.costUsd, 4) == round((20000 * 1.25 + 3000 * 10.0) / 1_000_000, 4)
 
     # The comments are kept as they were posted, the summary note included
     assert [c.where for c in outcome.comments] == ["src/a.cs:2", ""]
@@ -335,21 +330,14 @@ def testARunRecordsWhatItSpentAndWhatItSaid(repo, monkeypatch):
     assert outcome.comments[-1].state == "summary"
 
 
-def testWithoutPricesTheCostIsUnknownRatherThanZero(repo, monkeypatch):
-    monkeypatch.setattr(settings.prefs, "reviewPriceInput", 0.0)
-    monkeypatch.setattr(settings.prefs, "reviewPriceOutput", 0.0)
+def testTokensAreShownWithoutPretendingToKnowTheirPrice(repo, monkeypatch):
     fakeCli(monkeypatch)
-
     outcome = runToEnd(makeRun(monkeypatch, repo))
-
     assert outcome.inputTokens == 120000
-    assert outcome.costUsd == 0.0
 
-    from gitfourchette.forms.auditwindow import formatCost, formatElapsed, formatTokens
-    assert formatCost(0.0) == ""          # nothing, not "$0.00"
-    assert formatCost(0.0551) == "$0.06"
-    assert formatCost(0.0004) == "$0.0004"
+    from gitfourchette.forms.auditwindow import formatElapsed, formatTokens
     assert formatTokens(123000) == "123k"
+    assert formatTokens(0) == ""
     assert formatElapsed(72.4) == "1m 12s"
 
 
@@ -361,17 +349,53 @@ def testTheWindowLetsYouReadWhatWasPosted(mainWindow):
     watcher = AuditWatcher(mainWindow)
     watcher.items = [AuditItem(
         host="gitlab.example.com", project="group/one", iid=1, title="Localize the tab",
-        state=ItemState.Posted, detail="2 comments posted", elapsed=72.4, tokens=123000, cost=0.0551,
+        author="Dorin Triboi", state=ItemState.Posted, detail="2 comments posted",
+        elapsed=72.4, tokens=123000,
         comments=[PostedComment(where="src/a.cs:2", state="posted", body="**Problem:** Reads every row."),
                   PostedComment(where="", state="summary", body="## Code Review\n\nAll good.")])]
 
     window = AuditWindow(watcher, mainWindow)
     window.show()
     row = window.tree.topLevelItem(0)
-    assert (row.text(3), row.text(4), row.text(5)) == ("1m 12s", "123k", "$0.06")
+    # Whose merge request it is, how long it took, what it spent - no invented price
+    assert (row.text(1), row.text(4), row.text(5)) == ("Dorin Triboi", "1m 12s", "123k")
 
     window.tree.setCurrentItem(row)
     shown = window.commentView.toPlainText()
     assert "src/a.cs:2" in shown and "Reads every row." in shown
     assert "Summary note" in shown and "All good." in shown
     window.close()
+
+
+def testTheListSaysWhichOnesAreStillDrafts(mainWindow):
+    from gitfourchette.forge.watcher import AuditItem, AuditWatcher
+    from gitfourchette.forms.auditwindow import AuditWindow
+
+    watcher = AuditWatcher(mainWindow)
+    watcher.items = [
+        AuditItem(iid=1, title="Localize the tab", draft=True),
+        AuditItem(iid=2, title="Draft: already says so", draft=True),
+        AuditItem(iid=3, title="Ready for merge"),
+    ]
+    window = AuditWindow(watcher, mainWindow)
+    window.show()
+
+    # A draft is worth seeing at a glance, whichever way the setting is set
+    assert window.tree.topLevelItem(0).text(0) == "!1 Draft: Localize the tab"
+    assert window.tree.topLevelItem(1).text(0) == "!2 Draft: already says so"
+    assert window.tree.topLevelItem(2).text(0) == "!3 Ready for merge"
+    window.close()
+
+
+def testDraftsAreReviewedUnlessYouSaySkipThem(repo, monkeypatch):
+    from gitfourchette.forge import audit
+
+    fakeCli(monkeypatch)
+    # The default suits a team that drafts a merge request to ask for review
+    assert settings.prefs.auditSkipDrafts is False
+
+    outcome = runToEnd(makeRun(monkeypatch, repo, draft=True, skipDrafts=settings.prefs.auditSkipDrafts))
+    assert outcome.decision.due and outcome.posted == 1
+
+    outcome = runToEnd(makeRun(monkeypatch, repo, draft=True, skipDrafts=True))
+    assert outcome.decision.verdict == audit.Verdict.Draft

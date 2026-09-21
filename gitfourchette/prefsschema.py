@@ -248,13 +248,8 @@ PANES: list[Pane] = [
             Row("auditEnabled", note="auditEnabled_note"),
             Row("auditRepos", parent="auditEnabled"),
             Row("auditIntervalMinutes", parent="auditEnabled"),
-            Row("auditSkipDrafts", parent="auditEnabled"),
+            Row("auditSkipDrafts", parent="auditEnabled", note="auditSkipDrafts_note"),
             Row("auditSkipCiReviewed", parent="auditEnabled"),
-        ),
-        _section(
-            "assistantPrices",
-            Row("reviewPriceInput"),
-            Row("reviewPriceOutput"),
         ),
     ),
     _pane(

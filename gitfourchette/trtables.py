@@ -408,7 +408,6 @@ def _prefKeyTable() -> dict[str, str]:
         "codeHosting": _p("Prefs", "Code Hosting"),
         "mergeRequestAudit": _p("Prefs", "Merge Request Audit"),
         "review": _p("Prefs", "Code Review"),
-        "assistantPrices": _p("Prefs", "What the Assistant Charges"),
         "trash": _p("Prefs", "Trash"),
         "interface": _p("Prefs", "Interface"),
         "troubleshooting": _p("Prefs", "Troubleshooting"),
@@ -646,16 +645,14 @@ def _prefKeyTable() -> dict[str, str]:
             "condense the font before truncating the text."),
         "animations": _("Animate the sidebar"),
         "smoothScroll": _("Smooth scrolling"),
-        "reviewPriceInput": _("Input tokens, per million"),
-        "reviewPriceOutput": _("Output tokens, per million"),
-        "reviewPriceInput_help": _("Used to price a review when the assistant reports only tokens. "
-                                   "Claude’s CLI reports the cost itself, and then these are ignored."),
         "auditEnabled": _("Review open merge requests automatically"),
         "auditEnabled_note": _("Reviews every open merge request of the chosen projects, again whenever "
                                "its author pushes. Comments are posted under your own name."),
         "auditRepos": _("Projects to audit…"),
         "auditIntervalMinutes": _("Check every # minutes"),
         "auditSkipDrafts": _("Skip drafts"),
+        "auditSkipDrafts_note": _("Leave this off if your team marks a merge request as a draft precisely "
+                                  "to ask for review, and takes the mark off once it passes."),
         "auditSkipCiReviewed": _("Skip what the pipeline already reviewed"),
         "manageForgeAccounts": _("Code Hosting Accounts…"),
         "manageForgeAccounts_note": _("An access token lets {app} post review comments on your merge requests. "

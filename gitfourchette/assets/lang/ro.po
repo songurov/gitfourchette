@@ -9445,3 +9445,7 @@ msgstr "Tokeni de ieșire, pe milion"
 #: trtables.py
 msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
 msgstr "Folosit ca să pună preț pe un review atunci când asistentul raportează doar tokeni. CLI-ul lui Claude raportează el însuși costul, iar atunci acestea sunt ignorate."
+
+#: trtables.py
+msgid "Leave this off if your team marks a merge request as a draft precisely to ask for review, and takes the mark off once it passes."
+msgstr "Lasă nebifat dacă în echipa ta un merge request e pus în draft tocmai ca să ceară review, iar marcajul se scoate după ce trece."

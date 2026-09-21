@@ -9485,3 +9485,7 @@ msgstr "Выходные токены, за миллион"
 #: trtables.py
 msgid "Used to price a review when the assistant reports only tokens. Claude’s CLI reports the cost itself, and then these are ignored."
 msgstr "Используется для расчёта стоимости ревью, когда ассистент сообщает только токены. CLI Claude сообщает стоимость сам, и тогда эти значения игнорируются."
+
+#: trtables.py
+msgid "Leave this off if your team marks a merge request as a draft precisely to ask for review, and takes the mark off once it passes."
+msgstr "Оставьте выключенным, если в вашей команде merge request помечают черновиком именно для того, чтобы запросить ревью, и снимают пометку после проверки."

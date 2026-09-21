@@ -46,17 +46,20 @@ class AuditItem:
     project: str = ""
     iid: int = 0
     title: str = ""
+    author: str = ""
+    draft: bool = False
     state: ItemState = ItemState.Queued
     detail: str = ""
     elapsed: float = 0.0
     tokens: int = 0
-    cost: float = 0.0
-    "What the review cost, when the assistant or its prices say; 0 when unknown."
     comments: list = dataclasses.field(default_factory=list)
     "The comments this review posted, kept so they can be read here."
 
     def caption(self) -> str:
-        return f"!{self.iid} {self.title}" if self.iid else self.title
+        if not self.iid:
+            return self.title
+        draft = "" if not self.draft or self.title.lower().startswith("draft") else _("Draft: ")
+        return f"!{self.iid} {draft}{self.title}"
 
     def webUrl(self) -> str:
         return f"https://{self.host}/{self.project}/-/merge_requests/{self.iid}" if self.host and self.iid else ""
@@ -186,8 +189,9 @@ class AuditWatcher(QObject):
             self.progress.emit(_("{0}: {1}", project.path, error))
         else:
             for changeRequest in gitlab.readMergeRequests(payload):
-                item = AuditItem(host=project.host, project=project.path,
-                                 iid=changeRequest.iid, title=changeRequest.title)
+                item = AuditItem(host=project.host, project=project.path, iid=changeRequest.iid,
+                                 title=changeRequest.title, author=changeRequest.author,
+                                 draft=changeRequest.draft)
                 self.items.append(item)
                 self.queue.append((repo, project, token, changeRequest, item))
         self.pending -= 1
@@ -235,7 +239,6 @@ class AuditWatcher(QObject):
         if item is not None:
             item.elapsed = outcome.elapsed
             item.tokens = outcome.inputTokens + outcome.outputTokens
-            item.cost = outcome.costUsd
             item.comments = outcome.comments
             if outcome.error:
                 item.state, item.detail = ItemState.Failed, outcome.error
