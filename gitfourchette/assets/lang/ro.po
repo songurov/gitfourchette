@@ -9394,3 +9394,37 @@ msgstr "Conturi de găzduire cod…"
 #: trtables.py
 msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
 msgstr "Un token de acces îi permite lui {app} să publice comentarii de review pe merge request-urile tale. Tokenurile sunt păstrate într-un fișier pe care doar tu îl poți citi."
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Review"
+msgstr "Review de cod"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Merge Request Audit"
+msgstr "Audit de merge request-uri"
+
+#: trtables.py
+msgid "Review open merge requests automatically"
+msgstr "Fă review automat la merge request-urile deschise"
+
+#: trtables.py
+msgid "Reviews every open merge request of the chosen projects, again whenever its author pushes. Comments are posted under your own name."
+msgstr "Trece prin fiecare merge request deschis al proiectelor alese, din nou ori de câte ori autorul lui împinge commit-uri noi. Comentariile apar sub numele tău."
+
+#: trtables.py
+msgid "Projects to audit…"
+msgstr "Proiecte auditate…"
+
+#: trtables.py
+msgid "Check every # minutes"
+msgstr "Verifică la fiecare # minute"
+
+#: trtables.py
+msgid "Skip drafts"
+msgstr "Sari peste draft-uri"
+
+#: trtables.py
+msgid "Skip what the pipeline already reviewed"
+msgstr "Sari peste ce a recenzat deja pipeline-ul"

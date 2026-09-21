@@ -58,7 +58,7 @@ class ReviewPoster(QObject):
 
     def __init__(self, project: ForgeProject, token: str, changeRequest: ChangeRequest,
                  diffText: str, findings: list[Finding], provider: str, language="",
-                 summaryBuilder=None, bodies=None, parent=None):
+                 summaryBuilder=None, bodies=None, index=None, parent=None):
         super().__init__(parent)
         self.project = project
         self.changeRequest = changeRequest
@@ -68,10 +68,11 @@ class ReviewPoster(QObject):
         self.summaryBuilder = summaryBuilder
         self.bodies = dict(bodies or {})
         """Fingerprint -> the reviewer's own wording, when they rewrote a finding."""
-        self.index = diffLineIndex(diffText)
+        self.index = index if index else diffLineIndex(diffText)
         """Where a finding may be anchored. Built from the local diff to begin
-        with, and replaced by the host's own diff before anything is posted."""
-        self.onHostDiff = False
+        with, and replaced by the host's own diff before anything is posted -
+        unless the caller already read that diff and handed it over."""
+        self.onHostDiff = bool(index)
         self.diffPage = 1
         self.triedChanges = False
         self.results: list[PostResult] = []
@@ -85,7 +86,7 @@ class ReviewPoster(QObject):
     def start(self):
         refs = self.changeRequest.refs
         if refs.isComplete():
-            self._fetchDiff()
+            self._postNext() if self.onHostDiff else self._fetchDiff()
             return
         # The list endpoint doesn't carry diff_refs; without them an inline
         # comment has nothing to anchor to, so fetch the merge request itself.
@@ -101,7 +102,7 @@ class ReviewPoster(QObject):
             self.failed.emit(_("This merge request didn’t return the diff revisions needed to place comments."))
             return
         self.changeRequest.refs = fresh.refs
-        self._fetchDiff()
+        self._postNext() if self.onHostDiff else self._fetchDiff()
 
     def _fetchDiff(self):
         """

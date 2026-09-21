@@ -406,6 +406,8 @@ def _prefKeyTable() -> dict[str, str]:
         "ssh": _p("Prefs", "SSH"),
         "externalTools": _p("Prefs", "External Tools"),
         "codeHosting": _p("Prefs", "Code Hosting"),
+        "mergeRequestAudit": _p("Prefs", "Merge Request Audit"),
+        "review": _p("Prefs", "Code Review"),
         "trash": _p("Prefs", "Trash"),
         "interface": _p("Prefs", "Interface"),
         "troubleshooting": _p("Prefs", "Troubleshooting"),
@@ -643,6 +645,13 @@ def _prefKeyTable() -> dict[str, str]:
             "condense the font before truncating the text."),
         "animations": _("Animate the sidebar"),
         "smoothScroll": _("Smooth scrolling"),
+        "auditEnabled": _("Review open merge requests automatically"),
+        "auditEnabled_note": _("Reviews every open merge request of the chosen projects, again whenever "
+                               "its author pushes. Comments are posted under your own name."),
+        "auditRepos": _("Projects to audit…"),
+        "auditIntervalMinutes": _("Check every # minutes"),
+        "auditSkipDrafts": _("Skip drafts"),
+        "auditSkipCiReviewed": _("Skip what the pipeline already reviewed"),
         "manageForgeAccounts": _("Code Hosting Accounts…"),
         "manageForgeAccounts_note": _("An access token lets {app} post review comments on your merge requests. "
                                       "Tokens are kept in a file only you can read."),

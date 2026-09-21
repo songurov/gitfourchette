@@ -9434,3 +9434,37 @@ msgstr "Учётные записи хостинга кода…"
 #: trtables.py
 msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
 msgstr "Токен доступа позволяет {app} публиковать комментарии ревью в ваших merge request’ах. Токены хранятся в файле, который можете прочитать только вы."
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Review"
+msgstr "Ревью кода"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Merge Request Audit"
+msgstr "Аудит merge request’ов"
+
+#: trtables.py
+msgid "Review open merge requests automatically"
+msgstr "Автоматически ревьюить открытые merge request’ы"
+
+#: trtables.py
+msgid "Reviews every open merge request of the chosen projects, again whenever its author pushes. Comments are posted under your own name."
+msgstr "Проверяет каждый открытый merge request выбранных проектов и повторяет проверку после новых коммитов автора. Комментарии публикуются от вашего имени."
+
+#: trtables.py
+msgid "Projects to audit…"
+msgstr "Проекты для аудита…"
+
+#: trtables.py
+msgid "Check every # minutes"
+msgstr "Проверять каждые # минут"
+
+#: trtables.py
+msgid "Skip drafts"
+msgstr "Пропускать черновики"
+
+#: trtables.py
+msgid "Skip what the pipeline already reviewed"
+msgstr "Пропускать то, что уже проверил конвейер"

@@ -263,3 +263,76 @@ def testTokensAreWrittenOwnerOnly(tmp_path, monkeypatch):
     vault.setToken("gitlab.example.com", "")
     vault.write()
     assert not os.path.exists(path)
+
+
+# --- The iterative loop ------------------------------------------------------
+
+def makeChangeRequest(head="abc123", draft=False):
+    from gitfourchette.forge.gitlab import ChangeRequest, DiffRefs
+    return ChangeRequest(iid=7, draft=draft, refs=DiffRefs("base", "start", head))
+
+
+def notesWith(*bodies):
+    return [{"body": body, "system": False, "created_at": "2026-09-21T10:00:00Z"} for body in bodies]
+
+
+def testAMergeRequestIsOwedAReviewUntilItIsReviewedAtThisCommit():
+    from gitfourchette.forge import audit
+
+    changeRequest = makeChangeRequest(head="cafe1234")
+    assert audit.decide(changeRequest, []).due
+
+    # Our own summary note from an earlier commit doesn't settle the new one:
+    # the author pushed, so the review is owed again.
+    old = notesWith("## Code Review\n\n" + audit.runMarker("codex", "0ld0ld0ld"))
+    assert audit.decide(changeRequest, old).due
+
+    reviewed = notesWith("## Code Review\n\n" + audit.runMarker("codex", "cafe1234"))
+    decision = audit.decide(changeRequest, reviewed)
+    assert not decision.due
+    assert decision.verdict == audit.Verdict.ReviewedHere
+    assert "cafe1234" in decision.reason
+
+    # Another assistant's pass is not ours
+    assert audit.decide(changeRequest, reviewed, provider="claude").due
+
+
+def testDraftsAndPipelineReviewsAreLeftAlone():
+    from gitfourchette.forge import audit
+
+    assert audit.decide(makeChangeRequest(draft=True), []).verdict == audit.Verdict.Draft
+    assert audit.decide(makeChangeRequest(draft=True), [], skipDrafts=False).due
+
+    ciNote = notesWith("## \U0001F916 DeepSeek Code Review\n\n> Comentarii de review")
+    assert audit.decide(makeChangeRequest(), ciNote).verdict == audit.Verdict.ReviewedByCi
+    assert audit.decide(makeChangeRequest(), ciNote, skipCiReviewed=False).due
+
+    # A pipeline note written before the commit it would have to be about
+    # reviewed something else
+    assert audit.decide(makeChangeRequest(), ciNote, headCommitDate="2026-09-21T12:00:00Z").due
+    assert not audit.decide(makeChangeRequest(), ciNote, headCommitDate="2026-09-21T08:00:00Z").due
+
+    # Our own note is not mistaken for the pipeline's
+    ours = notesWith("## Code Review\n\n" + audit.runMarker("codex", "zzz"))
+    assert audit.decide(makeChangeRequest(), ours).due
+
+
+def testAFindingIsSaidOnce():
+    from gitfourchette.forge import audit
+
+    kept = Finding(file="a.cs", line=2, severity="high", category="Performance", problem="loads everything")
+    other = Finding(file="b.cs", line=9, problem="something else")
+    posted = notesWith(aireview.formatFinding(kept, provider="codex"))
+
+    assert audit.unsaidFindings([kept, other], posted) == [other]
+    assert audit.unsaidFindings([kept, other], []) == [kept, other]
+
+
+def testTheSummaryNoteRemembersWhichCommitItReviewed():
+    from gitfourchette.forge import audit
+
+    note = aireview.summaryNote(aireview.Review(summary="s"), "Code Review",
+                                marker=audit.runMarker("codex", "cafe1234"))
+    assert audit.reviewedShas(notesWith(note)) == {"cafe1234"}
+    # Without one, a later pass has no way to know and reviews again
+    assert audit.reviewedShas(notesWith(aireview.summaryNote(aireview.Review(), "Code Review"))) == set()

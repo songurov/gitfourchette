@@ -236,9 +236,20 @@ PANES: list[Pane] = [
             Row("externalDiff"),
             Row("externalMerge"),
         ),
+    ),
+    _pane(
+        "review", "prefs-review",
         _section(
             "codeHosting",
             Row("manageForgeAccounts", note="manageForgeAccounts_note"),
+        ),
+        _section(
+            "mergeRequestAudit",
+            Row("auditEnabled", note="auditEnabled_note"),
+            Row("auditRepos", parent="auditEnabled"),
+            Row("auditIntervalMinutes", parent="auditEnabled"),
+            Row("auditSkipDrafts", parent="auditEnabled"),
+            Row("auditSkipCiReviewed", parent="auditEnabled"),
         ),
     ),
     _pane(

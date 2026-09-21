@@ -350,7 +350,7 @@ def severityHistogram(findings) -> str:
     return "  •  ".join(parts)
 
 
-def summaryNote(review: Review, title: str, headerLines=(), inlineCount=-1, language="") -> str:
+def summaryNote(review: Review, title: str, headerLines=(), inlineCount=-1, language="", marker="") -> str:
     """
     The one note that carries the whole review: verdict, counts, what the branch
     does, what it does well, and every finding grouped by area. Posted beside
@@ -407,6 +407,11 @@ def summaryNote(review: Review, title: str, headerLines=(), inlineCount=-1, lang
     else:
         lines.append("> ✅ " + ("Nicio problema blocanta - sugestiile de mai sus sunt optionale."
                                     if romanian else "Nothing blocking - the suggestions above are optional."))
+    if marker:
+        # Invisible, and the whole memory of the loop: a later pass reads it
+        # back to know which commit was reviewed, without keeping state of its
+        # own anywhere.
+        lines += ["", marker]
     return "\n".join(lines)
 
 

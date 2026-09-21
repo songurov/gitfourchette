@@ -211,3 +211,28 @@ def readDiffIndex(payload, index: dict[str, FileDiff] | None = None) -> dict[str
 def isFullDiffPage(payload) -> bool:
     """Whether another page of files may follow this one."""
     return isinstance(payload, list) and len(payload) >= DIFF_PAGE_SIZE
+
+
+def readDiffText(payload) -> str:
+    """
+    The host's diff as a unified diff the model can read.
+
+    The same answer feeds both halves of a review: the text that is reviewed and
+    the index a finding is anchored to. One source for both is what keeps a
+    comment on the line it was written about.
+    """
+    if isinstance(payload, dict):
+        payload = payload.get("changes")
+    parts = []
+    for entry in payload if isinstance(payload, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        newPath = str(entry.get("new_path") or "")
+        oldPath = str(entry.get("old_path") or newPath)
+        hunks = str(entry.get("diff") or "")
+        if not newPath or not hunks:
+            continue
+        old = "/dev/null" if entry.get("new_file") else f"a/{oldPath}"
+        new = "/dev/null" if entry.get("deleted_file") else f"b/{newPath}"
+        parts.append(f"diff --git a/{oldPath} b/{newPath}\n--- {old}\n+++ {new}\n{hunks.rstrip()}\n")
+    return "".join(parts)

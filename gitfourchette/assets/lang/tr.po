@@ -9296,3 +9296,37 @@ msgstr "Kod Barındırma Hesapları…"
 #: trtables.py
 msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
 msgstr "Erişim belirteci, {app} uygulamasının birleştirme isteklerinize inceleme yorumları göndermesini sağlar. Belirteçler yalnızca sizin okuyabileceğiniz bir dosyada saklanır."
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Review"
+msgstr "Kod İncelemesi"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Merge Request Audit"
+msgstr "Birleştirme İsteği Denetimi"
+
+#: trtables.py
+msgid "Review open merge requests automatically"
+msgstr "Açık birleştirme isteklerini otomatik incele"
+
+#: trtables.py
+msgid "Reviews every open merge request of the chosen projects, again whenever its author pushes. Comments are posted under your own name."
+msgstr "Seçilen projelerin her açık birleştirme isteğini inceler; yazarı yeni işleme gönderdiğinde yeniden inceler. Yorumlar sizin adınızla gönderilir."
+
+#: trtables.py
+msgid "Projects to audit…"
+msgstr "Denetlenecek projeler…"
+
+#: trtables.py
+msgid "Check every # minutes"
+msgstr "Her # dakikada bir denetle"
+
+#: trtables.py
+msgid "Skip drafts"
+msgstr "Taslakları atla"
+
+#: trtables.py
+msgid "Skip what the pipeline already reviewed"
+msgstr "İş hattının zaten incelediklerini atla"

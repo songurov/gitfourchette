@@ -370,6 +370,8 @@ class MainWindow(QMainWindow):
             ActionDef(_("&Overview"), lambda: self.openAnalysis(AnalysisDialog.OVERVIEW_TAB)),
             ActionDef(_("Developer &KPI"), lambda: self.openAnalysis(AnalysisDialog.DEVELOPER_TAB)),
             ActionDef(_("Developer &Commits"), lambda: self.openAnalysis(AnalysisDialog.COMMITS_TAB)),
+            ActionDef.SEPARATOR,
+            ActionDef(_("&Audit Open Merge Requests Now"), self.auditMergeRequestsNow),
         )
 
         # -------------------------------------------------------------
@@ -1033,6 +1035,18 @@ class MainWindow(QMainWindow):
         if not isinstance(rw, RepoWidget):  # it might be a RepoStub
             raise NoRepoWidgetError()
         return rw
+
+    def auditMergeRequestsNow(self):
+        """Sweep the configured projects right now, whatever the timer says."""
+        from gitfourchette.application import GFApplication
+        watcher = GFApplication.instance().auditWatcher
+        if not settings.prefs.auditRepos:
+            self.statusBar2.showMessage(_("Choose the projects to audit in Settings first."))
+            return
+        if watcher.sweeping:
+            self.statusBar2.showMessage(_("The audit is already running."))
+            return
+        watcher.sweep()
 
     def openAnalysis(self, tabIndex: int = 0) -> None:
         """Open the local repository analysis dashboard for the active tab."""

@@ -1128,7 +1128,7 @@ def testSettingsHaveTheEightPanesOfTheMap(mainWindow):
     for index in range(dlg.stackedWidget.count()):
         dlg.setCategory(index)
         names.append(dlg.windowTitle())
-    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Commands", "Advanced"]
+    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Code Review", "Commands", "Advanced"]
     for pane in prefsschema.PANES:
         assert len(pane.sections) <= 5, pane.id
         for section in pane.sections:
@@ -1234,8 +1234,8 @@ def testPaneToolbarItemsAreNamedAndKeyboardReachable(mainWindow, monkeypatch):
 
     buttons = [bar.widgetForAction(action) for action in dlg.paneActions]
     names = [button.accessibleName() for button in buttons]
-    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Commands", "Advanced"]
-    assert [button.isChecked() for button in buttons] == [True] + [False] * 7
+    assert names == ["General", "Diff", "History", "Commit", "Git", "Integration", "Code Review", "Commands", "Advanced"]
+    assert [button.isChecked() for button in buttons] == [True] + [False] * 8
 
     buttons[4].click()
     assert dlg.windowTitle() == "Git"

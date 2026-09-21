@@ -347,6 +347,19 @@ class Prefs(PrefsFile):
     pygmentsPlugins             : bool                  = False
     verbosity                   : LoggingLevel          = LoggingLevel.Debug if APP_TESTMODE else LoggingLevel.Warning
     forceQtApi                  : QtApiNames            = QtApiNames.Automatic
+    auditEnabled                : bool                  = False
+    """Whether the standing audit sweeps the chosen projects' open merge
+    requests and reviews the ones that are owed a review."""
+    auditIntervalMinutes        : int                   = 30
+    auditRepos                  : list[str]             = dataclasses.field(default_factory=list)
+    """Local repositories whose GitLab projects the audit watches. A repository
+    is here because you have it: the review reads its rules, and its clone is
+    where the assistant runs."""
+    auditSkipDrafts             : bool                  = True
+    auditSkipCiReviewed         : bool                  = True
+    """Leave a merge request alone when a pipeline reviewer has already covered
+    the commit it is on."""
+
     manageForgeAccounts         : bool                  = False
     """Not a setting: the Settings row for it is a button that opens the code
     hosting accounts. The tokens themselves live in forge.json, which only the

@@ -135,7 +135,7 @@ def localeCodeToLanguageName(code: str) -> str:
     return name
 
 
-BUTTON_ROWS = {"resetDontShowAgain", "manageForgeAccounts"}
+BUTTON_ROWS = {"resetDontShowAgain", "manageForgeAccounts", "auditRepos"}
 """Rows whose 'control' is a push button that does something, rather than an
 editor for the pref's value: they carry their own caption, and the value behind
 them is never shown."""
@@ -661,6 +661,8 @@ class PrefsDialog(QDialog):
             rowWidgets.append(self.dontShowAgainCountLabel(control))
         elif key == "manageForgeAccounts":
             rowWidgets.append(self.forgeAccountsCountLabel(control))
+        elif key == "auditRepos":
+            rowWidgets.append(self.auditReposCountLabel(control))
 
         # Any help text? Then make a help button for it & set tooltip text on the main control.
         # A row with a note says the gist under the control already: the tooltip is enough there.
@@ -1052,6 +1054,8 @@ class PrefsDialog(QDialog):
             return control
         elif key == "tabSpaces":
             return self.boundedIntControl(key, value, 1, 16)
+        elif key == "auditIntervalMinutes":
+            return self.boundedIntControl(key, value, 5, 1440, 5)
         elif key == "autoFetchMinutes":
             return self.boundedIntControl(key, value, 1, 9999)
         elif key == "syntaxHighlighting":
@@ -1203,6 +1207,27 @@ class PrefsDialog(QDialog):
         control.setPlainText(prefValue)
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
         return control
+
+    def auditReposCountLabel(self, button: QPushButton) -> QLabel:
+        """Say how many projects the audit watches, next to the button that picks them."""
+        countLabel = QLabel(self)
+        countLabel.setProperty("class", "secondary")
+
+        def refresh():
+            chosen = self.prefDiff.get("auditRepos", prefs.auditRepos)
+            countLabel.setText(_n("{n} project.", "{n} projects.", len(chosen)) if chosen
+                               else _("No projects yet."))
+
+        def choose():
+            from gitfourchette.forms.auditreposdialog import AuditReposDialog
+            dialog = AuditReposDialog(self, chosen=self.prefDiff.get("auditRepos", prefs.auditRepos))
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.assign("auditRepos", dialog.chosen())
+                refresh()
+
+        button.clicked.connect(choose)
+        refresh()
+        return countLabel
 
     def forgeAccountsCountLabel(self, button: QPushButton) -> QLabel:
         """Say how many hosts have a token, next to the button that edits them."""

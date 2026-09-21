@@ -381,6 +381,15 @@ class GFApplication(QApplication):
         self.mountManager.mountPointsChanged.connect(self.mainWindow.update)  # redraw GraphView
         self.mountManager.statusMessage.connect(self.mainWindow.statusBar2.showMessage)
 
+        # The standing audit of open merge requests. It does nothing at all
+        # until Settings says otherwise, and says what it is doing in the
+        # status bar while it runs.
+        from gitfourchette.forge.watcher import AuditWatcher
+        self.auditWatcher = AuditWatcher(self)
+        self.auditWatcher.progress.connect(self.mainWindow.statusBar2.showMessage)
+        self.prefsChanged.connect(self.auditWatcher.reschedule)
+        self.auditWatcher.reschedule()
+
         # To prevent flashing a window with incorrect dimensions,
         # restore the geometry BEFORE calling show()
         if not GNOME:  # Skip this on GNOME (issue #50)
