@@ -12,6 +12,9 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import shutil
+import subprocess
+import tempfile
 import time
 
 from gitfourchette.exttools.aichat import ResponseStream, cliArguments
@@ -99,6 +102,11 @@ class ReviewRun(QObject):
         self.stopped = False
         self.startedAt = 0.0
         self.summaryBody = ""
+        self.checkout = ""
+        """A worktree holding exactly the commit under review, so the assistant
+        reads the code this merge request produces - not the branch that
+        happens to be checked out here."""
+        self.gitProcess = None
 
     # --- Reading the merge request -------------------------------------------
 
@@ -177,7 +185,7 @@ class ReviewRun(QObject):
             self.diffPage += 1
             self._fetchDiff()
             return
-        self._review()
+        self._prepareCheckout()
 
     def _gotChanges(self, payload, error):
         if error:
@@ -185,7 +193,61 @@ class ReviewRun(QObject):
             return
         gitlab.readDiffIndex(payload, self.index)
         self.diffText = gitlab.readDiffText(payload)
+        self._prepareCheckout()
+
+    # --- Putting the reviewed commit on disk ----------------------------------
+
+    def _runGit(self, args: list[str], callback, workdir=""):
+        process = QProcess(self)
+        self.gitProcess = process
+        process.setWorkingDirectory(workdir or self.repo.workdir)
+        process.finished.connect(lambda code, _status: callback(code == 0))
+        process.errorOccurred.connect(lambda _error: callback(False))
+        process.start("git", args)
+
+    def _prepareCheckout(self):
+        """
+        Fetch the merge request's own commit, then check it out beside the clone.
+
+        A merge request lives on a ref the clone does not track
+        (refs/merge-requests/N/head), and its branch is usually not checked out
+        here at all. Without this the assistant would read whatever branch the
+        reviewer happens to be on and call it the change under review.
+        """
+        head = self.changeRequest.refs.headSha
+        remote = gitlab.preferredRemoteName(self.repo)
+        if not head or not remote:
+            self._review()
+            return
+        self.progress.emit(_("{0}: fetching the commit under review…", self.outcome.caption))
+        self._runGit(["fetch", "--no-tags", "--quiet", remote,
+                      f"+refs/merge-requests/{self.changeRequest.iid}/head"], self._fetched)
+
+    def _fetched(self, ok: bool):
+        head = self.changeRequest.refs.headSha
+        if not ok:
+            # Reviewing from the diff alone still works; it just cannot verify
+            # anything the diff doesn't show, and the prompt will say so.
+            logger.info("Couldn't fetch the merge request head; reviewing from the diff alone")
+            self._review()
+            return
+        self.checkout = tempfile.mkdtemp(prefix="gitfourchette-review-")
+        self._runGit(["worktree", "add", "--detach", "--quiet", self.checkout, head], self._checkedOut)
+
+    def _checkedOut(self, ok: bool):
+        if not ok:
+            self._dropCheckout()
         self._review()
+
+    def _dropCheckout(self):
+        """Take the worktree away again, whatever happened to the review."""
+        checkout, self.checkout = self.checkout, ""
+        if not checkout:
+            return
+        subprocess.run(["git", "worktree", "remove", "--force", checkout],
+                       cwd=self.repo.workdir, capture_output=True, check=False)
+        shutil.rmtree(checkout, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], cwd=self.repo.workdir, capture_output=True, check=False)
 
     # --- Asking the assistant -------------------------------------------------
 
@@ -193,7 +255,9 @@ class ReviewRun(QObject):
         if not self.rules:
             return ""
         try:
-            revision = str(self.repo.head_commit_id)
+            # The rules as they are in the merge request, when we have it:
+            # a change that edits a rule is reviewed against the rule it ships.
+            revision = self.changeRequest.refs.headSha if self.checkout else str(self.repo.head_commit_id)
             paths = set(self.index)
             text, _included, omitted = projectGuidance(self.repo, revision, paths)
             if omitted:
@@ -214,7 +278,8 @@ class ReviewRun(QObject):
         scope = _("merge request !{0}, {1} into {2}", self.changeRequest.iid,
                   self.changeRequest.sourceBranch, self.changeRequest.targetBranch)
         prompt = makeReviewPrompt(self.diffText, dimensions=self.dimensions, guidance=self.guidance(),
-                                  language=self.language, scope=scope)
+                                  language=self.language, scope=scope,
+                                  revision=self.changeRequest.refs.headSha if self.checkout else "")
         self.progress.emit(_("{0}: reviewing with {1}…", self.outcome.caption, self.provider.capitalize()))
         self.stream = ResponseStream(self.provider)
         process = QProcess(self)
@@ -223,7 +288,7 @@ class ReviewRun(QObject):
             parameters = QProcess.UnixProcessParameters()
             parameters.flags = QProcess.UnixProcessFlag.CreateNewSession
             process.setUnixProcessParameters(parameters)
-        process.setWorkingDirectory(self.repo.workdir)
+        process.setWorkingDirectory(self.checkout or self.repo.workdir)
         process.readyReadStandardOutput.connect(self._readOutput)
         process.finished.connect(self._reviewed)
         process.errorOccurred.connect(lambda _error: self._fail(process.errorString()))
@@ -299,7 +364,8 @@ class ReviewRun(QObject):
         self._finish()
 
     def _finish(self):
-        """Close the books: how long it took, and what it cost."""
+        """Close the books: how long it took, and what it spent."""
+        self._dropCheckout()
         if self.startedAt:
             self.outcome.elapsed = time.monotonic() - self.startedAt
         if self.stream is not None:
@@ -312,6 +378,7 @@ class ReviewRun(QObject):
     def stop(self):
         self.stopped = True
         self.session.abandon()
+        self._dropCheckout()
         if self.process is not None:
             process, self.process = self.process, None
             process.kill()

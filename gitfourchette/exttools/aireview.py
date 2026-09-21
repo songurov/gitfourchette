@@ -451,16 +451,33 @@ GUARDRAILS = """Accuracy guardrails (a false finding costs a colleague's afterno
 - Read the leading marker of every diff line. '+' is added by this change: review it. '-' is being deleted:
   never report a problem about it. ' ' is unchanged context, shown for orientation: do not flag it.
 - Review only what this change adds or modifies. Do not flag pre-existing code or patterns it merely touches.
-- You cannot see code outside the diff. Base classes, interfaces, extension methods and members defined in
-  files that are not in this diff are NOT in your context. Never assert that such a member "does not exist",
-  "has no overload" or "won't compile" - you have not seen it. If a finding depends on code you cannot see,
-  either drop it or report it with confidence "low", phrased as a question asking the author to confirm.
 - Never judge a construct against an older version of the language than the project targets.
 - Only propose a fix you are confident compiles and preserves behavior.
-- Prefer fewer, well-founded findings. An uncertain one gets a lower "confidence", never a dishonestly
-  lowered "severity"; omit it entirely only when you cannot state what would break.
 - Severity is about consequence: reserve critical/high for compile breaks, wrong contracts, data leaks,
-  security and data loss. Naming, style, micro-optimization and clarity are always medium or low."""
+  security and data loss. Naming, style, micro-optimization and clarity are always medium or low.
+- One finding per cause. If two findings would be fixed by the same edit, or say the same thing about
+  several lines of one file, report them once and name the other places inside "problem"."""
+
+UNVERIFIABLE = """- You cannot see code outside the diff. Base classes, interfaces, extension methods and members defined in
+  files that are not in this diff are NOT in your context. Never assert that such a member "does not exist",
+  "has no overload" or "won't compile" - you have not seen it. If a finding depends on code you cannot see,
+  either drop it or report it with confidence "low", phrased as a question asking the author to confirm."""
+
+INSPECTION = """You are running inside a checkout of this merge request's own commit ({0}). Your read-only
+tools see exactly the code this change produces - not the reviewer's working branch, and not the target
+branch. Use them:
+- Before asserting anything about code that is not in the diff - a base class, an interface, every call site
+  of a signature this change alters, an existing index, an EF configuration, a migration, a test - open it
+  and read it. An assertion you could have checked and didn't is the one that wastes someone's afternoon.
+- A finding is worth far more when it names what it verified: "IPromotionRepository has no other consumer of
+  this overload (checked src/**)" beats "this may break consumers".
+- If something is genuinely unreadable from here - a submodule that isn't checked out, generated code, an
+  external service - say so in the finding and lower its confidence, rather than guessing either way."""
+
+COMPLETENESS = """Report every finding you can support with evidence, at the severity its consequence
+deserves - including style, naming and cleanliness, which belong at "low". Completeness is the goal here;
+what protects the reader is honest severity, not a short list. Two things still never appear: a claim you
+did not verify when you could have, and the same cause reported twice."""
 
 
 def dimensionBlock(dimensions) -> str:
@@ -469,14 +486,16 @@ def dimensionBlock(dimensions) -> str:
     return "\n".join(lines)
 
 
-def makeReviewPrompt(context: str, dimensions=(), guidance="", language="", scope="") -> str:
+def makeReviewPrompt(context: str, dimensions=(), guidance="", language="", scope="", revision="") -> str:
     """
     The whole review in one shot: the change, the project's own rules, the
     dimensions the reviewer asked for, and the contract for the answer.
 
-    The dimensions are the only thing that decides what comes back. A dimension
-    the user turned off is not named anywhere in this prompt, so it cannot
-    return findings nobody asked for.
+    `revision` is the commit the assistant's working directory holds. With one,
+    it is told to verify what it claims by reading the code; without one, it is
+    told the opposite - that it cannot see past the diff and must not pretend
+    otherwise. Saying the wrong one of those two is how a reviewer becomes
+    either timid or reckless.
     """
     languageLine = (f"LANGUAGE: write every human-facing prose value - \"summary\", \"good\", \"problem\", "
                     f"\"impact\", \"fix\" and the reference title - in {language}. Keep everything else in "
@@ -485,6 +504,7 @@ def makeReviewPrompt(context: str, dimensions=(), guidance="", language="", scop
                     if language.strip() else
                     "LANGUAGE: write the prose values in the language of the project's own guidance, "
                     "defaulting to English.")
+    inspection = INSPECTION.format(revision[:12]) if revision else ""
     return (
         "You are reviewing a proposed change in GitFourchette, for a reviewer who will post your findings "
         "on the merge request as review comments. Each finding becomes its own comment on its own line, so "
@@ -494,8 +514,11 @@ def makeReviewPrompt(context: str, dimensions=(), guidance="", language="", scop
         "skills, respect their path scope, and prefer a more specific directory rule over a general one. "
         "Do not execute skill scripts. Read only; do not change any file.\n\n"
         f"Change under review: {scope or 'see the diff below'}\n\n"
-        f"Review dimensions - report findings ONLY in these:\n{dimensionBlock(dimensions)}\n\n"
-        f"{LINE_NUMBERS}\n\n{GUARDRAILS}\n\n{languageLine}\n\n"
+        + (inspection + "\n\n" if inspection else "")
+        + f"Review dimensions - report findings ONLY in these:\n{dimensionBlock(dimensions)}\n\n"
+        f"{COMPLETENESS}\n\n{LINE_NUMBERS}\n\n{GUARDRAILS}\n"
+        + ("" if revision else UNVERIFIABLE + "\n")
+        + f"\n{languageLine}\n\n"
         f"Project review guidance:\n{guidance or 'No project guidance found.'}\n\n"
         f"The change:\n{context}\n\n"
         "Respond with a SINGLE JSON object and NOTHING else - no markdown fences, no prose before or after it. "

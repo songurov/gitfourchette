@@ -1,6 +1,7 @@
 """The standing audit: what it reviews, what it leaves alone, and what it says twice (nothing)."""
 
 import json
+import os
 import sys
 from typing import ClassVar
 
@@ -467,3 +468,51 @@ class FinishedRun(QObject):
 
     def stop(self):
         pass
+
+
+def testItReviewsInsideACheckoutOfTheCommitUnderReview(repo, monkeypatch):
+    """
+    The assistant must read the code this merge request produces, not the
+    branch the reviewer happens to be on - and the checkout must not outlive
+    the review.
+    """
+    import subprocess
+
+    head = str(repo.head_commit_id)
+    FakeSession.MERGE_REQUEST = dict(FakeSession.MERGE_REQUEST,
+                                     diff_refs={"base_sha": "b", "start_sha": "s", "head_sha": head})
+
+    # The fake CLI answers with the directory it was run in, and the prompt it saw
+    code = ("import json, os, sys\n"
+            "prompt = sys.stdin.read()\n"
+            "review = {'verdict': 'comment', 'good': [], 'findings': [],\n"
+            "          'summary': os.getcwd() + ('|verify' if 'checkout of this merge request' in prompt else '|blind')}\n"
+            "print(json.dumps({'type': 'item.completed', 'item': {'id': '1', 'type': 'agent_message', "
+            "'text': json.dumps(review)}}))\n")
+    monkeypatch.setattr(reviewrun, "cliArguments", lambda *args, **kwargs: ["-c", code])
+
+    run = makeRun(monkeypatch, repo)
+    run.changeRequest.refs = DiffRefs("b", "s", head)  # the commit the merge request is on
+    # The fixture has no merge-request refs to fetch; pretend the fetch worked,
+    # which is what happens against a real GitLab
+    realRunGit = run._runGit
+    monkeypatch.setattr(run, "_runGit", lambda args, callback, workdir="":
+                        callback(True) if args[0] == "fetch" else realRunGit(args, callback, workdir))
+
+    outcomes = []
+    run.finished.connect(outcomes.append)
+    run.start()
+    waitUntilTrue(lambda: bool(outcomes))
+
+    where = json.loads(run.stream.text)["summary"]
+    directory, mode = where.split("|")
+    assert directory != repo.workdir.rstrip("/")
+    assert "gitfourchette-review-" in directory
+    # It was told to verify what it claims, because it could
+    assert mode == "verify"
+
+    # And the checkout is gone, both from git's list and from the disk
+    listed = subprocess.run(["git", "worktree", "list"], cwd=repo.workdir,
+                            capture_output=True, text=True, check=False).stdout
+    assert "gitfourchette-review-" not in listed
+    assert not os.path.exists(directory)
