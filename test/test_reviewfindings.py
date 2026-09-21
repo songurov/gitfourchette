@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -302,7 +303,7 @@ def testTransportAsksForNothingBeyondTheStandardLibrary(mainWindow, monkeypatch)
 
     sent = {}
 
-    def fakeUrlopen(request, timeout=None):
+    def fakeUrlopen(request, timeout=None, **kwargs):
         sent["url"] = request.full_url
         sent["method"] = request.get_method()
         sent["headers"] = {key.lower(): value for key, value in request.header_items()}
@@ -334,7 +335,7 @@ def testTransportRefusesPlainHttpAndNeverEchoesTheToken(mainWindow, monkeypatch)
     # A credential that can write to the company's repositories never travels in the clear
     assert seen[0][0] is None and "insecure" in seen[0][1].lower()
 
-    def failingUrlopen(request, timeout=None):
+    def failingUrlopen(request, timeout=None, **kwargs):
         raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {},
                                      io.BytesIO(b'{"message": "401 Unauthorized for token s3cret"}'))
 
@@ -347,3 +348,30 @@ def testTransportRefusesPlainHttpAndNeverEchoesTheToken(mainWindow, monkeypatch)
     assert "HTTP 401" in error
     # The host echoed the token back at us; it must not reach the status line
     assert "s3cret" not in error and "***token***" in error
+
+
+def testTransportFindsTheSystemCertificatesWhenItsOwnStoreIsEmpty(tmp_path, monkeypatch):
+    # A packaged build carries a Python compiled elsewhere: its OpenSSL looks for
+    # the certificate store at the path it was built with, finds nothing on this
+    # machine, and every HTTPS call dies with "unable to get local issuer
+    # certificate". That is exactly what the AppImage did.
+    import ssl
+
+    from gitfourchette.forge import session as sessionModule
+
+    systemBundle = next((path for path in sessionModule.CA_BUNDLES if os.path.isfile(path)), "")
+    if not systemBundle:
+        pytest.skip("no system certificate bundle on this machine")
+
+    bundle = tmp_path / "ca.pem"
+    bundle.write_bytes(Path(systemBundle).read_bytes())
+
+    monkeypatch.setattr(ssl, "create_default_context", lambda *a, **k: ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
+    monkeypatch.setattr(sessionModule, "CA_BUNDLES", (str(tmp_path / "absent.pem"), str(bundle)))
+    monkeypatch.setattr(sessionModule, "CA_DIRECTORIES", ())
+    sessionModule.sslContext.cache_clear()
+    try:
+        context = sessionModule.sslContext()
+        assert context.cert_store_stats()["x509_ca"] > 0
+    finally:
+        sessionModule.sslContext.cache_clear()

@@ -16,8 +16,13 @@ repositories does not travel in the clear, however the remote is spelled.
 
 from __future__ import annotations
 
+from contextlib import suppress
+
+import functools
 import json
 import logging
+import os
+import ssl
 import threading
 import urllib.error
 import urllib.request
@@ -28,6 +33,48 @@ from gitfourchette.qt import *
 logger = logging.getLogger(__name__)
 
 TIMEOUT = 30.0
+
+# Where Linux distributions keep the certificate authorities. A packaged build
+# carries its own Python, compiled somewhere else entirely: its OpenSSL looks
+# for the store at the path it was built with (/opt/_internal/... in the
+# manylinux image), finds nothing on the user's machine, and every HTTPS call
+# fails with "unable to get local issuer certificate". The host's own store is
+# right there - this is how to find it.
+CA_BUNDLES = (
+    "/etc/ssl/certs/ca-certificates.crt",      # Debian, Ubuntu, Arch
+    "/etc/pki/tls/certs/ca-bundle.crt",        # Fedora, RHEL
+    "/etc/ssl/ca-bundle.pem",                  # openSUSE
+    "/etc/pki/tls/cacert.pem",
+    "/etc/ssl/cert.pem",                       # Alpine, macOS
+)
+CA_DIRECTORIES = ("/etc/ssl/certs", "/etc/pki/tls/certs")
+
+
+@functools.cache
+def sslContext() -> ssl.SSLContext:
+    """
+    A context that can actually verify a certificate on this machine.
+
+    SSL_CERT_FILE and SSL_CERT_DIR are honored first because OpenSSL reads them
+    itself: someone who has pointed their environment at a corporate store has
+    already said where it is.
+    """
+    context = ssl.create_default_context()
+    if context.cert_store_stats()["x509_ca"] > 0:
+        return context
+    for path in CA_BUNDLES:
+        if os.path.isfile(path):
+            with suppress(OSError, ssl.SSLError):
+                context.load_verify_locations(cafile=path)
+                return context
+    for path in CA_DIRECTORIES:
+        if os.path.isdir(path):
+            with suppress(OSError, ssl.SSLError):
+                context.load_verify_locations(capath=path)
+                return context
+    logger.warning("No certificate authorities found; HTTPS verification will fail")
+    return context
+
 
 
 class ForgeError(Exception):
@@ -81,7 +128,7 @@ class ForgeSession(QObject):
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         payload, error = None, ""
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT) as reply:
+            with urllib.request.urlopen(request, timeout=TIMEOUT, context=sslContext()) as reply:
                 payload = decodeJson(reply.read())
         except urllib.error.HTTPError as failure:
             error = describeFailure(failure.code, decodeJson(failure.read()), failure.reason)
