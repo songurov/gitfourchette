@@ -439,6 +439,9 @@ class Sidebar(QTreeView):
 
                 TaskBook.action(self, FetchRemotes, accel="F", taskArgs=data),
 
+                # What is still work on this remote, and what is sediment
+                ActionDef(_("Re&view Branches…"), lambda: self.auditRemoteBranches(data)),
+
                 ActionDef.SEPARATOR,
 
                 TaskBook.action(self, DeleteRemote, accel="R", taskArgs=data),
@@ -653,6 +656,12 @@ class Sidebar(QTreeView):
         if preset:
             dialog.usePreset(preset)
         dialog.open()
+
+    def auditRemoteBranches(self, remoteName: str):
+        from gitfourchette.forms.branchauditwindow import BranchAuditWindow
+        window = BranchAuditWindow(self.sidebarModel.repo, remoteName, self)
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        window.show()
 
     def reviewBranch(self, ref):
         from gitfourchette.forms.reviewfindingsdialog import ReviewFindingsDialog

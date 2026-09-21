@@ -91,6 +91,38 @@ class DeleteRemoteBranch(RepoTask):
         self.epilog.status = _("Remote branch {0} deleted.", tquo(remoteBranchShorthand))
 
 
+class DeleteRemoteBranches(RepoTask):
+    """Delete several branches from a remote, asked once and pushed once."""
+
+    def flow(self, shorthands: list[str]):
+        shorthands = [name for name in shorthands if name]
+        if not shorthands:
+            raise AbortTask("")
+
+        byRemote: dict[str, list[str]] = {}
+        for shorthand in shorthands:
+            remoteName, branchName = split_remote_branch_shorthand(shorthand)
+            byRemote.setdefault(remoteName, []).append(branchName)
+
+        text = paragraphs(
+            _n("Really delete this branch from the remote repository?",
+               "Really delete these {n} branches from the remote repository?", len(shorthands)),
+            _("They will disappear for everyone who uses the remote.") + " " + _("This cannot be undone!"))
+        # The list is the point: this is the one moment to notice a branch that
+        # shouldn't be in it.
+        yield from self.flowConfirm(
+            text=text, verb=_("Delete on remote"), buttonIcon="SP_DialogDiscardButton",
+            detailList=sorted(shorthands))
+
+        self.epilog.effects |= TaskEffects.Remotes | TaskEffects.Refs
+        for remoteName, branchNames in byRemote.items():
+            yield from self.flowCallGit(
+                "push", "--porcelain", "--progress", "--delete", "--", remoteName, *sorted(branchNames))
+
+        self.epilog.status = _n("{n} branch deleted on the remote.",
+                                "{n} branches deleted on the remote.", len(shorthands))
+
+
 class RenameRemoteBranch(RepoTask):
     def flow(self, remoteBranchShorthand: str):
         assert not remoteBranchShorthand.startswith(RefPrefix.REMOTES)

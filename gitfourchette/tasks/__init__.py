@@ -65,6 +65,7 @@ from gitfourchette.tasks.loadtasks import (
 from gitfourchette.tasks.nettasks import (
     AutoFetchRemotes,
     DeleteRemoteBranch,
+    DeleteRemoteBranches,
     RenameRemoteBranch,
     FetchRemotes,
     FetchRemoteBranch,
