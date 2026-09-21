@@ -5,6 +5,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
+from contextlib import suppress
 
 from gitfourchette.forms.newbranchdialog import NewBranchDialog
 from gitfourchette.forms.resetheaddialog import ResetHeadDialog
@@ -209,10 +210,23 @@ class DeleteBranch(RepoTask):
         text = paragraphs(_("Really delete local branch {0}?", bquo(localBranchName)),
                           _("This cannot be undone!"))
 
+        # The copy on the remote is what everyone else sees; deleting the local
+        # one and leaving that behind is how a remote fills up with branches
+        # nobody meant to keep. Offer it here, unticked - one deletion is the
+        # question being answered, the other has to be asked for.
+        remoteBranch = self.remoteCopyOf(localBranchName)
+        checkbox = None
+        if remoteBranch:
+            checkbox = QCheckBox(_("Also delete {0} on the remote", lquo(remoteBranch)))
+            checkbox.setToolTip(_("The branch will disappear for everyone who uses this remote."))
+
         yield from self.flowConfirm(
             text=text,
             verb=_("Delete branch"),
-            buttonIcon="SP_DialogDiscardButton")
+            buttonIcon="SP_DialogDiscardButton",
+            checkbox=checkbox)
+
+        alsoRemote = bool(checkbox is not None and checkbox.isChecked())
 
         yield from self.flowEnterWorkerThread()
         target = self.repo.branches[localBranchName].target
@@ -221,6 +235,32 @@ class DeleteBranch(RepoTask):
 
         self.epilog.status = _("Branch {0} deleted (commit at tip was {1}).",
                                tquo(localBranchName), tquo(shortHash(target)))
+
+        if not alsoRemote:
+            return
+
+        # The push is a network operation, and it can fail on its own (a
+        # protected branch, no permission): the local deletion above stands
+        # either way, and the error says which half happened.
+        yield from self.flowEnterUiThread()
+        remoteName, branchNameOnRemote = split_remote_branch_shorthand(remoteBranch)
+        self.epilog.effects |= TaskEffects.Remotes | TaskEffects.Refs
+        yield from self.flowCallGit(
+            "push", "--porcelain", "--progress", "--delete", "--", remoteName, branchNameOnRemote)
+        self.epilog.status = _("Branch {0} deleted here and on {1}.",
+                               tquo(localBranchName), tquo(remoteName))
+
+    def remoteCopyOf(self, localBranchName: str) -> str:
+        """The branch this one tracks, or one of the same name on a remote."""
+        with suppress(KeyError, ValueError):
+            upstream = self.repo.branches.local[localBranchName].upstream
+            if upstream is not None:
+                return upstream.shorthand
+        for remoteName in self.repo.remotes.names():
+            candidate = f"{remoteName}/{localBranchName}"
+            if candidate in self.repo.branches.remote:
+                return candidate
+        return ""
 
 
 class DeleteBranchFolder(RepoTask):

@@ -1115,3 +1115,52 @@ def testTaskTerminationTerminatesProcess(tempDir, mainWindow, taskThread):
 
     # Check that the branch was not fetched
     assert "localfs/new-remote-branch" not in rw.repo.branches.remote
+
+
+def testDeletingALocalBranchOffersToDeleteItOnTheRemote(tempDir, mainWindow):
+    """
+    Deleting the local copy and leaving the remote one behind is how a remote
+    fills up with branches nobody meant to keep - so it is offered, unticked,
+    in the same question.
+    """
+    wd = unpackRepo(tempDir)
+    makeBareCopy(wd, addAsRemote="localfs", preFetch=True, deleteOtherRemotes=True)
+    rw = mainWindow.openRepo(wd)
+
+    with RepoContext(wd) as repo:
+        repo.create_branch_on_head("doomed")
+        repo.branches.local["doomed"].upstream = repo.branches.remote["localfs/no-parent"]
+
+    rw.refreshRepo()
+    node = rw.sidebar.findNodeByRef("refs/heads/doomed")
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), "delete")
+
+    box = findQMessageBox(rw, "really delete local branch")
+    checkbox = box.findChild(QCheckBox)
+    assert checkbox is not None
+    assert "localfs/no-parent" in checkbox.text()
+    # Unticked: one deletion is the question being answered, the other is asked for
+    assert not checkbox.isChecked()
+    checkbox.setChecked(True)
+    box.button(QMessageBox.StandardButton.Ok).click()
+
+    waitUntilTrue(lambda: "doomed" not in rw.repo.branches.local)
+    waitUntilTrue(lambda: "localfs/no-parent" not in rw.repo.branches.remote)
+
+
+def testDeletingALocalBranchLeavesTheRemoteAloneUnlessAsked(tempDir, mainWindow):
+    wd = unpackRepo(tempDir)
+    makeBareCopy(wd, addAsRemote="localfs", preFetch=True, deleteOtherRemotes=True)
+    rw = mainWindow.openRepo(wd)
+
+    with RepoContext(wd) as repo:
+        repo.create_branch_on_head("doomed")
+        repo.branches.local["doomed"].upstream = repo.branches.remote["localfs/no-parent"]
+
+    rw.refreshRepo()
+    node = rw.sidebar.findNodeByRef("refs/heads/doomed")
+    triggerMenuAction(rw.sidebar.makeNodeMenu(node), "delete")
+    acceptQMessageBox(rw, "really delete local branch")
+
+    waitUntilTrue(lambda: "doomed" not in rw.repo.branches.local)
+    assert "localfs/no-parent" in rw.repo.branches.remote
