@@ -37,6 +37,13 @@ popd
 # Package the AppImage ourselves
 wget -N https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage
 chmod +x appimagetool-$ARCH.AppImage
-./appimagetool-$ARCH.AppImage --no-appstream GitFourchette-$ARCH
+# appimagetool fetches the AppImage runtime from GitHub on every run, and a bad
+# day there (504 from the release CDN) fails a build that is otherwise finished.
+# Point APPIMAGE_RUNTIME_FILE at a copy to skip that download.
+runtimeArgs=()
+if [ -n "${APPIMAGE_RUNTIME_FILE:-}" ]; then
+    runtimeArgs=(--runtime-file "$APPIMAGE_RUNTIME_FILE")
+fi
+./appimagetool-$ARCH.AppImage --no-appstream "${runtimeArgs[@]}" GitFourchette-$ARCH
 chmod +x GitFourchette-$ARCH.AppImage
 mv -v GitFourchette{,-$APPVER}-$ARCH.AppImage
