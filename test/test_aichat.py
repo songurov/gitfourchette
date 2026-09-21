@@ -520,7 +520,8 @@ def testBranchPresetMenu(tempDir, mainWindow, monkeypatch, ref):
         "What changed…", "Code review…", "Bugs and regressions…", "Performance risks…", "Security risks…"]
     # The review that ends on the merge request closes the AI group, and the
     # test repo's origin is on GitHub: the pull request action follows it
-    assert menu.actions()[6].text() == "Review for Merge Request…"
+    # The review is named after what this remote's host calls it
+    assert menu.actions()[6].text() == "Review for Pull Request…"
     assert menu.actions()[7].text() == "Create or Open Pull Request…"
     assert menu.actions()[8].isSeparator()
     menu.actions()[1].trigger()

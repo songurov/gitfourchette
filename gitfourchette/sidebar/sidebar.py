@@ -620,13 +620,20 @@ class Sidebar(QTreeView):
             aiActions = [ActionDef(_("Ask AI about branch…"), lambda: self.askAiBranch(data), enabled=enabled)]
             aiActions.extend(ActionDef(_(caption) + "…", lambda key=command: self.askAiBranch(data, key), enabled=enabled)
                              for command, (caption, _prompt) in PRESETS.items())
+            changeRequest = self.changeRequestInfo(data)
             # The review that ends on the merge request, rather than in a chat
             # window: it comes back as findings to keep or drop one at a time.
-            aiActions.append(ActionDef(_("Review for Merge Request…"), lambda: self.reviewBranch(data), enabled=enabled))
-            changeRequest = self.changeRequestInfo(data)
+            # It is named after what the host calls the thing it lands on.
+            hostName = changeRequest[2] if changeRequest else ""
+            # Named after what the host calls the thing it lands on. With no
+            # host we can recognize, there is nothing to post to and nothing to
+            # name it after, so the caption says only what the review does.
+            reviewCaption = (_("Review for Pull Request…") if hostName == "GitHub"
+                             else _("Review for Merge Request…") if hostName
+                             else _("Review Branch Changes…"))
+            aiActions.append(ActionDef(reviewCaption, lambda: self.reviewBranch(data), enabled=enabled))
             changeRequestActions = []
             if changeRequest:
-                _remoteUrl, _sourceBranch, hostName = changeRequest
                 caption = _("Create or Open Pull Request…") if hostName == "GitHub" else _("Create or Open Merge Request…")
                 changeRequestActions = [ActionDef(caption, lambda: self.openChangeRequest(data),
                                                   icon="host-github" if hostName == "GitHub" else "host-gitlab")]
