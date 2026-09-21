@@ -141,13 +141,18 @@ class AuditWatcher(QObject):
             self.progress.emit(_("Choose the projects to audit in Settings first."))
             return
         providers = availableProviders()
-        provider = settings.history.aiProvider
-        if provider not in providers:
-            provider = next(iter(providers), "")
+        # Settings decides; the review window's last choice is the fallback, and
+        # whatever is installed is the last resort - with a word about it, so a
+        # reviewer isn't left wondering who wrote the comments.
+        wanted = settings.prefs.auditProvider or settings.history.aiProvider
+        provider = wanted if wanted in providers else next(iter(providers), "")
         if not provider:
             self.progress.emit(_("No assistant installed: the audit has nothing to review with."))
             self.reschedule()
             return
+        if wanted and provider != wanted:
+            self.progress.emit(_("{0} isn’t installed: reviewing with {1} instead.",
+                                 wanted.capitalize(), provider.capitalize()))
 
         self.sweeping = True
         self.queue = []
@@ -213,7 +218,7 @@ class AuditWatcher(QObject):
         self.itemsChanged.emit()
         self.run = ReviewRun(
             repo, project, token, changeRequest, self.providerPath, self.provider,
-            model=(settings.history.aiModels or {}).get(self.provider, ""),
+            model=settings.prefs.auditModel or (settings.history.aiModels or {}).get(self.provider, ""),
             language=settings.history.aiLanguage,
             dimensions=settings.history.reviewDimensions,
             skipDrafts=settings.prefs.auditSkipDrafts,

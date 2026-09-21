@@ -10,6 +10,7 @@ from gitfourchette import settings
 from gitfourchette.forge import audit, poster as posterModule, reviewrun
 from gitfourchette.forge.gitlab import ChangeRequest, DiffRefs, ForgeProject
 from gitfourchette.forge.reviewrun import ReviewRun
+from gitfourchette.qt import *
 from .util import *
 
 PROJECT = ForgeProject("gitlab.example.com", "group/project")
@@ -399,3 +400,70 @@ def testDraftsAreReviewedUnlessYouSaySkipThem(repo, monkeypatch):
 
     outcome = runToEnd(makeRun(monkeypatch, repo, draft=True, skipDrafts=True))
     assert outcome.decision.verdict == audit.Verdict.Draft
+
+
+def testTheAuditRunsTheAssistantYouChose(tempDir, mainWindow, monkeypatch):
+    from gitfourchette.forge import watcher as watcherModule
+    from gitfourchette.forge.accounts import loadAccounts, resetAccountsForTesting
+    from gitfourchette.forge.watcher import AuditWatcher
+
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    rw.repo.remotes.set_url("origin", "https://gitlab.example.com/group/project.git")
+    resetAccountsForTesting()
+    loadAccounts().setToken("gitlab.example.com", "token")
+    fakeCli(monkeypatch)
+    for module in (watcherModule, reviewrun, posterModule):
+        monkeypatch.setattr(module, "ForgeSession", FakeSession)
+    monkeypatch.setattr(watcherModule, "availableProviders",
+                        lambda: {"codex": sys.executable, "claude": sys.executable})
+    FakeSession.NOTES = []
+    FakeSession.POSTS = []
+    settings.prefs.auditRepos = [rw.repo.workdir]
+    settings.history.aiProvider = "codex"
+
+    # Settings wins over whatever the review window was last set to
+    settings.prefs.auditProvider = "claude"
+    settings.prefs.auditModel = "opus"
+    watcher = AuditWatcher(mainWindow)
+    runs = []
+    monkeypatch.setattr(watcherModule, "ReviewRun",
+                        lambda *args, **kwargs: runs.append((args, kwargs)) or FinishedRun(mainWindow))
+    watcher.sweep(force=True)
+    waitUntilTrue(lambda: bool(runs))
+
+    args, kwargs = runs[0]
+    assert args[5] == "claude"          # provider
+    assert kwargs["model"] == "opus"
+
+    # An assistant that isn't installed falls back, and says so
+    settings.prefs.auditProvider = "claude"
+    monkeypatch.setattr(watcherModule, "availableProviders", lambda: {"codex": sys.executable})
+    said = []
+    watcher = AuditWatcher(mainWindow)
+    watcher.progress.connect(said.append)
+    runs.clear()
+    watcher.sweep(force=True)
+    waitUntilTrue(lambda: bool(runs))
+    assert runs[0][0][5] == "codex"
+    assert any("isn’t installed" in message for message in said)
+
+    settings.prefs.auditProvider = ""
+    settings.prefs.auditModel = ""
+    settings.prefs.auditRepos = []
+    resetAccountsForTesting()
+
+
+class FinishedRun(QObject):
+    """A ReviewRun stand-in that reports an outcome and nothing else."""
+    progress = Signal(str)
+    finished = Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def start(self):
+        from gitfourchette.forge.reviewrun import RunOutcome
+        QTimer.singleShot(0, lambda: self.finished.emit(RunOutcome(iid=7, caption="!7")))
+
+    def stop(self):
+        pass

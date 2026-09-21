@@ -649,6 +649,11 @@ def _prefKeyTable() -> dict[str, str]:
         "auditEnabled_note": _("Reviews every open merge request of the chosen projects, again whenever "
                                "its author pushes. Comments are posted under your own name."),
         "auditRepos": _("Projects to audit…"),
+        "auditProvider": _("Assistant"),
+        "auditModel": _("Model"),
+        "auditModel_help": _("Leave empty for the assistant’s own default. A review is one long, "
+                             "one-shot question, so a bigger model costs more per merge request but "
+                             "argues less with itself."),
         "auditIntervalMinutes": _("Check every # minutes"),
         "auditSkipDrafts": _("Skip drafts"),
         "auditSkipDrafts_note": _("Leave this off if your team marks a merge request as a draft precisely "

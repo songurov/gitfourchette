@@ -9449,3 +9449,15 @@ msgstr "Folosit ca să pună preț pe un review atunci când asistentul raportea
 #: trtables.py
 msgid "Leave this off if your team marks a merge request as a draft precisely to ask for review, and takes the mark off once it passes."
 msgstr "Lasă nebifat dacă în echipa ta un merge request e pus în draft tocmai ca să ceară review, iar marcajul se scoate după ce trece."
+
+#: trtables.py
+msgid "Assistant"
+msgstr "Asistent"
+
+#: trtables.py
+msgid "Model"
+msgstr "Model"
+
+#: trtables.py
+msgid "Leave empty for the assistant’s own default. A review is one long, one-shot question, so a bigger model costs more per merge request but argues less with itself."
+msgstr "Lasă gol pentru modelul implicit al asistentului. Un review e o singură întrebare lungă, dintr-o bucată: un model mai mare costă mai mult per merge request, dar se contrazice mai puțin."

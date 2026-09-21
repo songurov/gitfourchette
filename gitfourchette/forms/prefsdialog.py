@@ -1054,6 +1054,10 @@ class PrefsDialog(QDialog):
             return control
         elif key == "tabSpaces":
             return self.boundedIntControl(key, value, 1, 16)
+        elif key == "auditProvider":
+            return self.auditProviderControl(key, value)
+        elif key == "auditModel":
+            return self.auditModelControl(key, value)
         elif key == "auditIntervalMinutes":
             return self.boundedIntControl(key, value, 5, 1440, 5)
         elif key == "autoFetchMinutes":
@@ -1207,6 +1211,54 @@ class PrefsDialog(QDialog):
         control.setPlainText(prefValue)
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
         return control
+
+    def auditProviderControl(self, prefKey: str, prefValue: str) -> QComboBox:
+        """Which assistant the audit runs, out of the ones installed."""
+        from gitfourchette.exttools.aichat import availableProviders
+
+        control = QComboBox(self)
+        installed = availableProviders()
+        control.addItem(_("Same as the review window"), "")
+        for provider in ("codex", "claude"):
+            caption = provider.capitalize() if provider in installed else _("{0} (not installed)", provider.capitalize())
+            control.addItem(caption, provider)
+        index = control.findData(prefValue)
+        control.setCurrentIndex(max(0, index))
+
+        def chosen(_index):
+            self.assign(prefKey, control.currentData() or "")
+            self.refreshAuditModels(control.currentData() or "")
+
+        control.currentIndexChanged.connect(chosen)
+        self.auditProviderCombo = control
+        return control
+
+    def auditModelControl(self, prefKey: str, prefValue: str) -> QComboBox:
+        control = QComboBox(self)
+        control.setEditable(True)
+        control.setMinimumWidth(220)
+        control.lineEdit().setPlaceholderText(_("The assistant’s default"))
+        control.setCurrentText(prefValue)
+        control.currentTextChanged.connect(lambda text: self.assign(prefKey, text.strip()))
+        self.auditModelCombo = control
+        chosen = getattr(self, "auditProviderCombo", None)
+        self.refreshAuditModels(chosen.currentData() if chosen is not None else "")
+        return control
+
+    def refreshAuditModels(self, provider: str):
+        """Offer the chosen assistant's models, without forbidding a new one."""
+        from gitfourchette.exttools.aichat import modelChoices
+        from gitfourchette import settings as settingsModule
+
+        control = getattr(self, "auditModelCombo", None)
+        if control is None:
+            return
+        provider = provider or settingsModule.history.aiProvider
+        typed = control.currentText()
+        with QSignalBlockerContext(control):
+            control.clear()
+            control.addItems(modelChoices(provider))
+            control.setCurrentText(typed)
 
     def auditReposCountLabel(self, button: QPushButton) -> QLabel:
         """Say how many projects the audit watches, next to the button that picks them."""

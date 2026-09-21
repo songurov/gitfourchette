@@ -355,6 +355,11 @@ class Prefs(PrefsFile):
     """Local repositories whose GitLab projects the audit watches. A repository
     is here because you have it: the review reads its rules, and its clone is
     where the assistant runs."""
+    auditProvider               : str                   = ""
+    """Which assistant the audit runs. Empty means the one the review window
+    used last, so the two don't drift apart unless you want them to."""
+    auditModel                  : str                   = ""
+    "Empty means that assistant's own default."
     auditSkipDrafts             : bool                  = False
     """Off by default: a team that marks a merge request as a draft to ask for
     review is asking this to review it. Teams where a draft means 'not ready
