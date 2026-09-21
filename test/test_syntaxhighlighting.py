@@ -296,3 +296,21 @@ def testSideBySideSyntaxHighlighting(tempDir, mainWindow):
     assert removed[1] == changed[1]
     # The old pane is colored too, not just the new one
     assert keyword(side.oldView, "return 1", "return")[1] == context[1]
+
+
+def testLineBeyondWhatWasLexedDoesNotRaise(tempDir, mainWindow):
+    """
+    A document can outrun the data its lexer was given - a last line with no
+    newline, a blob that changed under a view still showing it. Asking for a
+    line the lexer never produced must come back empty, not as an exception
+    dialog over the diff someone was reading.
+    """
+    from pygments.lexers import PythonLexer
+
+    job = LexJob(PythonLexer(), SAMPLE_CODE.encode(), "beyond.py")
+    while not job.lexingComplete:
+        job.lexChunk()
+
+    lastLexed = max(job.hqTokenMap)
+    assert job.tokens(lastLexed, "") is not None
+    assert job.tokens(lastLexed + 500, "whatever the document says") == []

@@ -63,7 +63,12 @@ class LexJob(QObject):
 
     def tokens(self, lineNumber: int, fallbackText: str) -> LineTokenization:
         if self.lexingComplete or self.currentLine > lineNumber:
-            return self.hqTokenMap[lineNumber]
+            # A line the lexer never produced degrades to no highlighting. The
+            # document can outrun the data it was lexed from - a file whose
+            # last line has no newline, a blob that changed under a view that
+            # is still open - and a KeyError here surfaces as an exception
+            # dialog over a diff the reader was just scrolling through.
+            return self.hqTokenMap.get(lineNumber, _EmptyLineTokenization)
 
         # Lex job hasn't reached this line yet.
         # Schedule high-quality lexing up to this line.
