@@ -16,10 +16,16 @@ from gitfourchette.exttools.aireview import Finding, formatFinding
 from gitfourchette.forge.diffindex import diffLineIndex, resolvePosition
 from gitfourchette.forge.gitlab import (
     ChangeRequest, ForgeProject, canApplySuggestion, discussionPayload,
-    discussionsUrl, notePayload, notesUrl, readMergeRequest)
+    discussionsUrl, isFullDiffPage, mergeRequestDiffsUrl, notePayload, notesUrl,
+    readDiffIndex, readMergeRequest)
 from gitfourchette.forge.session import ForgeSession
 from gitfourchette.localization import *
 from gitfourchette.qt import *
+
+
+MAX_DIFF_PAGES = 10
+"""A merge request past a thousand changed files is not one a person reviews a
+line at a time; the findings that don't land travel in the summary note."""
 
 
 class PostState(enum.StrEnum):
@@ -63,6 +69,10 @@ class ReviewPoster(QObject):
         self.bodies = dict(bodies or {})
         """Fingerprint -> the reviewer's own wording, when they rewrote a finding."""
         self.index = diffLineIndex(diffText)
+        """Where a finding may be anchored. Built from the local diff to begin
+        with, and replaced by the host's own diff before anything is posted."""
+        self.onHostDiff = False
+        self.diffPage = 1
         self.results: list[PostResult] = []
         self.cursor = 0
         self.posted = 0
@@ -74,7 +84,7 @@ class ReviewPoster(QObject):
     def start(self):
         refs = self.changeRequest.refs
         if refs.isComplete():
-            self._postNext()
+            self._fetchDiff()
             return
         # The list endpoint doesn't carry diff_refs; without them an inline
         # comment has nothing to anchor to, so fetch the merge request itself.
@@ -90,6 +100,35 @@ class ReviewPoster(QObject):
             self.failed.emit(_("This merge request didn’t return the diff revisions needed to place comments."))
             return
         self.changeRequest.refs = fresh.refs
+        self._fetchDiff()
+
+    def _fetchDiff(self):
+        """
+        Ask the host for its own version of the change.
+
+        A comment's position is only valid against the diff the host holds: it
+        generates a line code from that, and a local branch one commit ahead or
+        behind produces line numbers it rejects outright ("line_code can't be
+        blank"). Reviewing locally is fine; anchoring locally is not.
+        """
+        self.progress.emit(0, self.total(), _("Reading the merge request’s diff…"))
+        self.session.get(mergeRequestDiffsUrl(self.project, self.changeRequest.iid, self.diffPage), self._gotDiff)
+
+    def _gotDiff(self, payload, error):
+        if error:
+            # Better to try the local diff and report each refusal than to
+            # refuse to post anything at all.
+            self.progress.emit(0, self.total(), _("Couldn’t read the merge request’s diff: {0}", error))
+            self._postNext()
+            return
+        index = self.index if self.onHostDiff else {}
+        readDiffIndex(payload, index)
+        self.onHostDiff = True
+        self.index = index
+        if isFullDiffPage(payload) and self.diffPage < MAX_DIFF_PAGES:
+            self.diffPage += 1
+            self._fetchDiff()
+            return
         self._postNext()
 
     def _postNext(self):

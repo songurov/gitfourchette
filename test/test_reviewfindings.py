@@ -135,6 +135,7 @@ class FakeSession:
         self.posts = []
         self.gets = []
         self.failOn = ""
+        self.failGet = ""
         self.abandoned = False
 
     def abandon(self):
@@ -145,10 +146,21 @@ class FakeSession:
         "target_branch": "first-merge", "web_url": "https://gitlab.example.com/mr/7",
         "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}
 
+    HOST_DIFF: ClassVar[list] = [{
+        "new_path": "src/a.cs", "old_path": "src/a.cs",
+        "diff": "@@ -1,2 +1,3 @@\n context\n+added line\n+another added line\n"}]
+
     def get(self, url, callback):
         self.gets.append(url)
-        # The list endpoint answers with an array, one merge request with an object
-        callback([self.MERGE_REQUEST] if "?" in url else self.MERGE_REQUEST, "")
+        if self.failGet and self.failGet in url:
+            callback(None, "HTTP 404: not found")
+            return
+        if "/diffs" in url:
+            callback(self.HOST_DIFF, "")
+        elif "?" in url:
+            callback([self.MERGE_REQUEST], "")  # the list endpoint answers with an array
+        else:
+            callback(self.MERGE_REQUEST, "")  # one merge request, as an object
 
     def post(self, url, payload, callback):
         self.posts.append((url, payload))
@@ -168,13 +180,14 @@ DIFF = """diff --git a/src/a.cs b/src/a.cs
 """
 
 
-def makePoster(monkeypatch, findings, **kwargs):
+def makePoster(monkeypatch, findings, diffText=None, **kwargs):
     monkeypatch.setattr(posterModule, "ForgeSession", FakeSession)
     from gitfourchette.forge.gitlab import ForgeProject
     project = ForgeProject("gitlab.example.com", "group/project")
     changeRequest = ChangeRequest(iid=7, sourceBranch="topic", targetBranch="develop",
                                   refs=DiffRefs("b", "s", "h"))
-    return ReviewPoster(project, "token", changeRequest, DIFF, findings, provider="codex", **kwargs)
+    return ReviewPoster(project, "token", changeRequest, DIFF if diffText is None else diffText,
+                        findings, provider="codex", **kwargs)
 
 
 def testPosterPlacesWhatItCanAndSaysSoForTheRest(monkeypatch):
@@ -375,3 +388,61 @@ def testTransportFindsTheSystemCertificatesWhenItsOwnStoreIsEmpty(tmp_path, monk
         assert context.cert_store_stats()["x509_ca"] > 0
     finally:
         sessionModule.sslContext.cache_clear()
+
+
+def testPosterAnchorsOnTheHostsDiffNotTheLocalOne(monkeypatch):
+    # The local branch can sit a commit ahead of, or behind, what the merge
+    # request holds. GitLab generates a line code from ITS diff and rejects
+    # anything else outright ("line_code can't be blank"), so the position has
+    # to be computed against the diff it returns.
+    finding = Finding(file="src/a.cs", line=3, problem="on a line only the host's diff has")
+    localDiff = """diff --git a/src/a.cs b/src/a.cs
+--- a/src/a.cs
++++ b/src/a.cs
+@@ -40,2 +40,2 @@
+ context
++a line somewhere else entirely
+"""
+    poster = makePoster(monkeypatch, [finding], diffText=localDiff)
+    results = []
+    poster.finished.connect(results.extend)
+    poster.start()
+
+    assert [r.state for r in results] == [PostState.Posted]
+    assert poster.onHostDiff
+    assert any("/diffs" in url for url in poster.session.gets)
+    assert poster.session.posts[0][1]["position"]["new_line"] == 3
+
+
+def testPosterFallsBackToTheLocalDiffWhenTheHostWontSayS(monkeypatch):
+    finding = Finding(file="src/a.cs", line=2, problem="on an added line")
+    poster = makePoster(monkeypatch, [finding])
+    poster.session.failGet = "/diffs"
+    results = []
+    poster.finished.connect(results.extend)
+    poster.start()
+
+    # Refusing to post anything would be worse than trying the local diff and
+    # reporting each refusal the host gives
+    assert not poster.onHostDiff
+    assert [r.state for r in results] == [PostState.Posted]
+
+
+def testItSaysWhenTheBranchHereIsNotWhatTheMergeRequestHolds(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    monkeypatch.setattr(reviewfindingsdialog, "ForgeSession", FakeSession)
+    monkeypatch.setattr(dialog, "ensureToken", lambda: "token")
+
+    dialog.findMergeRequest()
+
+    # The fake merge request is on a commit this clone has never seen
+    assert "Fetch" in dialog.statusLabel.text()
+
+    # When they agree, the reviewer is told nothing they don't need
+    localTip = str(dialog.repo.references["refs/heads/master"].peel().id)
+    agreeing = dict(FakeSession.MERGE_REQUEST,
+                    diff_refs={"base_sha": "b", "start_sha": "s", "head_sha": localTip})
+    monkeypatch.setattr(FakeSession, "MERGE_REQUEST", agreeing)
+    dialog.setStatus("")
+    dialog.findMergeRequest()
+    assert "Fetch" not in dialog.statusLabel.text()

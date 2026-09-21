@@ -526,9 +526,42 @@ class ReviewFindingsDialog(QDialog):
                 return
             chosen = found[captions.index(caption)]
         self.setMergeRequest(chosen)
+        # The list endpoint doesn't carry diff_refs; fetch the merge request
+        # itself, both to have them and to see which commit it is actually on.
+        self.session.get(self.project.mergeRequestRoot(chosen.iid), self.gotFullMergeRequest)
+
+    def gotFullMergeRequest(self, payload, error):
+        if error:
+            self.setStatus(error)
+            return
+        full = gitlab.readMergeRequest(payload) if isinstance(payload, dict) else None
+        if full is not None:
+            self.setMergeRequest(full)
+            self.warnIfBranchMovedOn(full)
         if getattr(self, "pendingPost", False):
             self.pendingPost = False
             self.postSelected()
+
+    def warnIfBranchMovedOn(self, changeRequest):
+        """
+        Say so when the branch here isn't the commit the merge request is on.
+
+        The review describes the code in front of you; the comments land on the
+        code the merge request holds. When those differ, a finding can point at
+        a line that doesn't exist over there - it then travels in the summary
+        note instead of onto the diff, and this is the reason why.
+        """
+        head = changeRequest.refs.headSha
+        if not head:
+            return
+        try:
+            localTip = str(self.repo.references[self.branch].peel().id)
+        except (KeyError, ValueError):
+            return
+        if localTip != head:
+            self.setStatus(_("Note: the merge request is on commit {0}, this branch on {1}. "
+                             "Fetch, or some findings may not line up with the diff reviewers see.",
+                             head[:8], localTip[:8]))
 
     def setMergeRequest(self, changeRequest):
         self.changeRequest = changeRequest

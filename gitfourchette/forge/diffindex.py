@@ -84,6 +84,43 @@ def diffLineIndex(diffText: str) -> dict[str, FileDiff]:
     return index
 
 
+def indexFileHunks(index: dict[str, FileDiff], newPath: str, oldPath: str, hunks: str):
+    """
+    Add one file's hunks to an index, when the paths come from outside the text.
+
+    A hosting service returns its diff as a path pair plus the hunks alone, with
+    no 'diff --git' or '+++' headers. Anchoring to THAT diff rather than to one
+    computed locally is what makes a comment's position valid: the host
+    generates a line code from its own version of the change, and a local
+    branch that is one commit ahead or behind produces line numbers it will
+    refuse.
+    """
+    if not newPath:
+        return
+    entry = index.setdefault(newPath, FileDiff(oldPath=oldPath or newPath))
+    newNo = oldNo = 0
+    inHunk = False
+    for line in hunks.splitlines():
+        match = HUNK.match(line)
+        if match:
+            oldNo, newNo = int(match.group(1)), int(match.group(2))
+            inHunk = True
+            continue
+        if not inHunk or line.startswith("\\"):
+            continue
+        if line.startswith("+"):
+            entry.added[newNo] = True
+            newNo += 1
+        elif line.startswith("-"):
+            oldNo += 1
+        elif line.startswith(" ") or not line:
+            # An empty element is a context line whose text is empty: the host
+            # strips the leading space on a blank line.
+            entry.context[newNo] = oldNo
+            newNo += 1
+            oldNo += 1
+
+
 def resolvePosition(index: dict[str, FileDiff], file: str, line: int, snapWindow=SNAP_WINDOW) -> DiffPosition | None:
     """The position to comment at, or None when the finding can't be placed on the diff."""
     entry = index.get(file)

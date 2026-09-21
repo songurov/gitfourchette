@@ -11,7 +11,7 @@ import dataclasses
 import urllib.parse
 
 from gitfourchette.exttools.aireview import Finding
-from gitfourchette.forge.diffindex import DiffPosition
+from gitfourchette.forge.diffindex import DiffPosition, FileDiff, indexFileHunks
 from gitfourchette.toolbox import splitRemoteUrl
 from gitfourchette.webhost import identifyHost
 
@@ -172,3 +172,27 @@ def discussionsUrl(project: ForgeProject, iid: int) -> str:
 
 def notesUrl(project: ForgeProject, iid: int) -> str:
     return f"{project.mergeRequestRoot(iid)}/notes"
+
+
+DIFF_PAGE_SIZE = 100
+
+
+def mergeRequestDiffsUrl(project: ForgeProject, iid: int, page=1) -> str:
+    query = urllib.parse.urlencode({"per_page": DIFF_PAGE_SIZE, "page": page})
+    return f"{project.mergeRequestRoot(iid)}/diffs?{query}"
+
+
+def readDiffIndex(payload, index: dict[str, FileDiff] | None = None) -> dict[str, FileDiff]:
+    """The host's own diff, as the lines a comment may be anchored to."""
+    index = {} if index is None else index
+    for entry in payload if isinstance(payload, list) else []:
+        if not isinstance(entry, dict) or entry.get("deleted_file"):
+            continue
+        indexFileHunks(index, str(entry.get("new_path") or ""),
+                       str(entry.get("old_path") or ""), str(entry.get("diff") or ""))
+    return index
+
+
+def isFullDiffPage(payload) -> bool:
+    """Whether another page of files may follow this one."""
+    return isinstance(payload, list) and len(payload) >= DIFF_PAGE_SIZE
