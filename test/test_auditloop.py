@@ -2,6 +2,7 @@
 
 import json
 import sys
+from typing import ClassVar
 
 import pytest
 
@@ -30,7 +31,7 @@ HOST_DIFF = [{"new_path": "src/a.cs", "old_path": "src/a.cs",
 class FakeSession:
     """Answers like GitLab would, and records what was sent."""
 
-    POSTS: list = []
+    POSTS: ClassVar[list] = []
     "Class-level: the run and the poster each make their own session."
 
     def __init__(self, token, parent=None):
@@ -190,3 +191,40 @@ def testTheWatcherSkipsWhatItCannotReview(tempDir, mainWindow, monkeypatch):
     assert done[0] == (0, 0)
     settings.prefs.auditEnabled = False
     settings.prefs.auditRepos = []
+
+
+def testRunningItByHandWorksWhileTheTimerIsOff(tempDir, mainWindow, monkeypatch):
+    from gitfourchette.forge.watcher import AuditWatcher
+
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    settings.prefs.auditEnabled = False
+    settings.prefs.auditRepos = []
+
+    watcher = AuditWatcher(mainWindow)
+    said = []
+    watcher.progress.connect(said.append)
+
+    # Nothing chosen yet: say so rather than appearing to do something
+    watcher.sweep(force=True)
+    assert any("Settings" in message for message in said)
+
+    # The switch is off, but a sweep asked for by hand still runs
+    settings.prefs.auditRepos = [rw.repo.workdir]
+    done = []
+    watcher.sweepFinished.connect(lambda *args: done.append(args))
+    watcher.sweep(force=True)
+    waitUntilTrue(lambda: bool(done))
+
+    # And the timer still does nothing while the switch is off
+    said.clear()
+    done.clear()
+    watcher.sweep()
+    assert not done and not said
+
+    settings.prefs.auditRepos = []
+
+
+def testTheMenuOffersToRunItNow(mainWindow):
+    menu = mainWindow.globalMenuBar
+    action = findMenuAction(menu, "Data/Audit Open Merge Requests Now")
+    assert action.isEnabled()

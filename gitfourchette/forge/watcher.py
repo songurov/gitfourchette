@@ -71,8 +71,21 @@ class AuditWatcher(QObject):
 
     # --- One sweep ------------------------------------------------------------
 
-    def sweep(self):
-        if self.sweeping or not self.enabled():
+    def sweep(self, force=False):
+        """
+        Walk the configured projects now.
+
+        `force` is the menu item behind it: running one sweep by hand must work
+        whether or not the timer is switched on, and must say why when it
+        can't, rather than doing nothing in silence.
+        """
+        if self.sweeping:
+            self.progress.emit(_("The audit is already running."))
+            return
+        if not force and not self.enabled():
+            return
+        if not settings.prefs.auditRepos:
+            self.progress.emit(_("Choose the projects to audit in Settings first."))
             return
         providers = availableProviders()
         provider = settings.history.aiProvider

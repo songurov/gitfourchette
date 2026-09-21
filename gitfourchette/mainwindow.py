@@ -1039,14 +1039,7 @@ class MainWindow(QMainWindow):
     def auditMergeRequestsNow(self):
         """Sweep the configured projects right now, whatever the timer says."""
         from gitfourchette.application import GFApplication
-        watcher = GFApplication.instance().auditWatcher
-        if not settings.prefs.auditRepos:
-            self.statusBar2.showMessage(_("Choose the projects to audit in Settings first."))
-            return
-        if watcher.sweeping:
-            self.statusBar2.showMessage(_("The audit is already running."))
-            return
-        watcher.sweep()
+        GFApplication.instance().auditWatcher.sweep(force=True)
 
     def openAnalysis(self, tabIndex: int = 0) -> None:
         """Open the local repository analysis dashboard for the active tab."""
