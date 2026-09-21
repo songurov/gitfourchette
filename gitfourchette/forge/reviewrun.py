@@ -12,9 +12,11 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import time
 
 from gitfourchette.exttools.aichat import ResponseStream, cliArguments
-from gitfourchette.exttools.aireview import makeReviewPrompt, parseReview, summaryNote
+from gitfourchette import settings
+from gitfourchette.exttools.aireview import formatFinding, makeReviewPrompt, parseReview, summaryNote
 from gitfourchette.exttools.aireviewcontext import projectGuidance
 from gitfourchette.forge import audit, gitlab
 from gitfourchette.forge.poster import PostState, ReviewPoster
@@ -28,9 +30,26 @@ MAX_NOTE_PAGES = 5
 
 
 @dataclasses.dataclass
+class PostedComment:
+    where: str = ""
+    "file:line, or empty for the summary note."
+    state: str = ""
+    body: str = ""
+
+
+@dataclasses.dataclass
 class RunOutcome:
     iid: int = 0
     caption: str = ""
+    elapsed: float = 0.0
+    "Seconds from the first request to the last comment posted."
+    inputTokens: int = 0
+    cachedInputTokens: int = 0
+    outputTokens: int = 0
+    costUsd: float = 0.0
+    "What the assistant said it cost, or what its prices say it cost; 0 when neither is known."
+    comments: list = dataclasses.field(default_factory=list)
+    "Every comment this run posted, as it was posted (see PostedComment)."
     decision: audit.Decision = dataclasses.field(default_factory=lambda: audit.Decision(audit.Verdict.Due))
     findings: int = 0
     posted: int = 0
@@ -81,10 +100,13 @@ class ReviewRun(QObject):
         self.process = None
         self.stream = None
         self.stopped = False
+        self.startedAt = 0.0
+        self.summaryBody = ""
 
     # --- Reading the merge request -------------------------------------------
 
     def start(self):
+        self.startedAt = time.monotonic()
         if not self.changeRequest.refs.isComplete():
             self.session.get(self.project.mergeRequestRoot(self.changeRequest.iid), self._gotMergeRequest)
         else:
@@ -136,7 +158,7 @@ class ReviewRun(QObject):
                                 skipCiReviewed=self.skipCiReviewed)
         self.outcome.decision = decision
         if not decision.due:
-            self.finished.emit(self.outcome)
+            self._finish()
             return
         self.progress.emit(_("{0}: reading the diff…", self.outcome.caption))
         self._fetchDiff()
@@ -190,7 +212,7 @@ class ReviewRun(QObject):
     def _review(self):
         if not self.diffText.strip():
             self.outcome.error = _("the merge request’s diff came back empty")
-            self.finished.emit(self.outcome)
+            self._finish()
             return
         scope = _("merge request !{0}, {1} into {2}", self.changeRequest.iid,
                   self.changeRequest.sourceBranch, self.changeRequest.targetBranch)
@@ -239,7 +261,7 @@ class ReviewRun(QObject):
         self.outcome.repeated = len(review.findings) - len(unsaid)
         review.findings = unsaid
         if not unsaid and not review.summary:
-            self.finished.emit(self.outcome)
+            self._finish()
             return
 
         marker = audit.runMarker(self.provider, self.changeRequest.refs.headSha)
@@ -249,8 +271,9 @@ class ReviewRun(QObject):
                                   "{n} findings were already on this merge request", self.outcome.repeated))
 
         def buildSummary(inlineCount: int) -> str:
-            return summaryNote(review, _("Code Review"), headerLines=headerLines,
-                               inlineCount=inlineCount, language=self.language, marker=marker)
+            self.summaryBody = summaryNote(review, _("Code Review"), headerLines=headerLines,
+                                           inlineCount=inlineCount, language=self.language, marker=marker)
+            return self.summaryBody
 
         self.progress.emit(_n("{0}: posting {n} comment…", "{0}: posting {n} comments…",
                               len(unsaid), self.outcome.caption))
@@ -263,12 +286,32 @@ class ReviewRun(QObject):
 
     def _posted(self, results):
         self.outcome.posted = sum(1 for r in results if r.state in (PostState.Posted, PostState.Snapped))
-        self.finished.emit(self.outcome)
+        for result in results:
+            self.outcome.comments.append(PostedComment(
+                where=f"{result.finding.file}:{result.finding.line}",
+                state=str(result.state),
+                body=formatFinding(result.finding, language=self.language)))
+        if self.summaryBody:
+            self.outcome.comments.append(PostedComment(where="", state="summary", body=self.summaryBody))
+        self._finish()
 
     def _fail(self, message: str):
         if self.stopped:
             return
         self.outcome.error = message
+        self._finish()
+
+    def _finish(self):
+        """Close the books: how long it took, and what it cost."""
+        if self.startedAt:
+            self.outcome.elapsed = time.monotonic() - self.startedAt
+        if self.stream is not None:
+            usage = self.stream.usage
+            self.outcome.inputTokens = usage.inputTokens
+            self.outcome.cachedInputTokens = usage.cachedInputTokens
+            self.outcome.outputTokens = usage.outputTokens
+            self.outcome.costUsd = usage.estimate(settings.prefs.reviewPriceInput,
+                                                  settings.prefs.reviewPriceOutput)
         self.finished.emit(self.outcome)
 
     def stop(self):

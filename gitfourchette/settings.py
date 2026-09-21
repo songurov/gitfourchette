@@ -355,6 +355,12 @@ class Prefs(PrefsFile):
     """Local repositories whose GitLab projects the audit watches. A repository
     is here because you have it: the review reads its rules, and its clone is
     where the assistant runs."""
+    reviewPriceInput            : float                 = 0.0
+    reviewPriceOutput           : float                 = 0.0
+    """What your assistant charges per million tokens, so a review can be
+    priced. Claude's CLI reports what a turn cost and these are ignored; Codex
+    reports only tokens, so without prices the cost column says nothing rather
+    than guessing."""
     auditSkipDrafts             : bool                  = True
     auditSkipCiReviewed         : bool                  = True
     """Leave a merge request alone when a pipeline reviewer has already covered

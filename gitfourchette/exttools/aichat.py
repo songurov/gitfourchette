@@ -3,6 +3,7 @@
 import json
 import os
 import tomllib
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -110,6 +111,47 @@ def modelChoices(provider):
         return []
 
 
+class Usage:
+    """
+    What a turn cost, as the CLI itself reported it.
+
+    Only one of the two assistants prices the turn for you (Claude reports
+    total_cost_usd); the other reports tokens and leaves the arithmetic to
+    whoever knows what they are paying. So both are kept, and the money is
+    computed only where there is something to compute it from.
+    """
+
+    def __init__(self):
+        self.inputTokens = 0
+        self.cachedInputTokens = 0
+        self.outputTokens = 0
+        self.costUsd = 0.0
+        "Only when the CLI said so; zero means 'it didn't', not 'free'."
+
+    @property
+    def totalTokens(self) -> int:
+        return self.inputTokens + self.outputTokens
+
+    def absorb(self, usage):
+        if not isinstance(usage, dict):
+            return
+        # Both CLIs spell these differently enough to be worth naming each one.
+        self.inputTokens = int(usage.get("input_tokens") or usage.get("prompt_tokens") or self.inputTokens or 0)
+        self.outputTokens = int(usage.get("output_tokens") or usage.get("completion_tokens") or self.outputTokens or 0)
+        cached = (usage.get("cached_input_tokens") or usage.get("cache_read_input_tokens")
+                  or self.cachedInputTokens or 0)
+        self.cachedInputTokens = int(cached)
+
+    def estimate(self, inputPricePerMillion: float, outputPricePerMillion: float) -> float:
+        """What this turn cost, from prices someone had to supply."""
+        if self.costUsd:
+            return self.costUsd
+        if not (inputPricePerMillion or outputPricePerMillion):
+            return 0.0
+        billedInput = max(0, self.inputTokens - self.cachedInputTokens)
+        return (billedInput * inputPricePerMillion + self.outputTokens * outputPricePerMillion) / 1_000_000
+
+
 class ResponseStream:
     """Reduce JSONL events to user-visible text, without showing tool output."""
 
@@ -120,6 +162,7 @@ class ResponseStream:
         self.error = ""
         self.items = {}
         self.partial = ""
+        self.usage = Usage()
 
     def consume(self, event):
         kind = event.get("type", "")
@@ -129,6 +172,8 @@ class ResponseStream:
                 if item.get("type") == "agent_message":
                     self.items[item.get("id", "message")] = item.get("text", "")
                     self.text = "\n\n".join(self.items.values())
+            elif kind == "turn.completed":
+                self.usage.absorb(event.get("usage"))
             elif kind in ("error", "turn.failed"):
                 error = event.get("error", {})
                 self.error = error.get("message", "") if isinstance(error, dict) else str(error)
@@ -152,6 +197,9 @@ class ResponseStream:
                 self.partial = ""
                 self.text = "\n\n".join(self.items.values())
             elif kind == "result":
+                self.usage.absorb(event.get("usage"))
+                with suppress(TypeError, ValueError):
+                    self.usage.costUsd = float(event.get("total_cost_usd") or 0.0)
                 if event.get("is_error"):
                     self.error = event.get("result") or "\n".join(event.get("errors", [])) or "Request failed"
                 elif not self.text:

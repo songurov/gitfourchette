@@ -48,6 +48,12 @@ class AuditItem:
     title: str = ""
     state: ItemState = ItemState.Queued
     detail: str = ""
+    elapsed: float = 0.0
+    tokens: int = 0
+    cost: float = 0.0
+    "What the review cost, when the assistant or its prices say; 0 when unknown."
+    comments: list = dataclasses.field(default_factory=list)
+    "The comments this review posted, kept so they can be read here."
 
     def caption(self) -> str:
         return f"!{self.iid} {self.title}" if self.iid else self.title
@@ -227,6 +233,10 @@ class AuditWatcher(QObject):
             self.run = None
         item = getattr(self, "item", None)
         if item is not None:
+            item.elapsed = outcome.elapsed
+            item.tokens = outcome.inputTokens + outcome.outputTokens
+            item.cost = outcome.costUsd
+            item.comments = outcome.comments
             if outcome.error:
                 item.state, item.detail = ItemState.Failed, outcome.error
             elif not outcome.decision.due:

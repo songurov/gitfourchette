@@ -68,11 +68,16 @@ FakeSession.MERGE_REQUEST = {
 FakeSession.NOTES = []
 
 
-def fakeCli(monkeypatch, payload=REVIEW):
+def fakeCli(monkeypatch, payload=REVIEW, usage=None):
+    """A CLI that answers with this review, and reports what the turn cost."""
+    usage = usage if usage is not None else {"input_tokens": 120000, "cached_input_tokens": 100000,
+                                             "output_tokens": 3000}
     code = ("import sys, json\n"
             "sys.stdin.read()\n"
-            f"print(json.dumps({{'type': 'item.completed', 'item': {{'id': '1', 'type': 'agent_message', "
-            f"'text': json.dumps({json.dumps(json.dumps(payload))} and json.loads({json.dumps(json.dumps(payload))}))}}}}))\n")
+            f"review = json.loads({json.dumps(json.dumps(payload))})\n"
+            "print(json.dumps({'type': 'item.completed', 'item': {'id': '1', 'type': 'agent_message', "
+            "'text': json.dumps(review)}}))\n"
+            f"print(json.dumps({{'type': 'turn.completed', 'usage': {json.dumps(usage)}}}))\n")
     monkeypatch.setattr(reviewrun, "cliArguments", lambda *args, **kwargs: ["-c", code])
 
 
@@ -308,4 +313,65 @@ def testStoppingLeavesTheRestUnreviewedAndSaysSo(mainWindow):
         ItemState.Posted, ItemState.Cancelled, ItemState.Cancelled]
     assert window.tree.topLevelItem(2).text(2) == "Stopped"
     assert window.runButton.isEnabled() and not window.stopButton.isEnabled()
+    window.close()
+
+
+def testARunRecordsWhatItSpentAndWhatItSaid(repo, monkeypatch):
+    monkeypatch.setattr(settings.prefs, "reviewPriceInput", 1.25)
+    monkeypatch.setattr(settings.prefs, "reviewPriceOutput", 10.0)
+    fakeCli(monkeypatch)
+
+    outcome = runToEnd(makeRun(monkeypatch, repo))
+
+    assert outcome.elapsed > 0
+    assert (outcome.inputTokens, outcome.cachedInputTokens, outcome.outputTokens) == (120000, 100000, 3000)
+    # 20k billed input at $1.25/M plus 3k output at $10/M: the cached tokens
+    # are not paid for twice
+    assert round(outcome.costUsd, 4) == round((20000 * 1.25 + 3000 * 10.0) / 1_000_000, 4)
+
+    # The comments are kept as they were posted, the summary note included
+    assert [c.where for c in outcome.comments] == ["src/a.cs:2", ""]
+    assert "Reads every row." in outcome.comments[0].body
+    assert outcome.comments[-1].state == "summary"
+
+
+def testWithoutPricesTheCostIsUnknownRatherThanZero(repo, monkeypatch):
+    monkeypatch.setattr(settings.prefs, "reviewPriceInput", 0.0)
+    monkeypatch.setattr(settings.prefs, "reviewPriceOutput", 0.0)
+    fakeCli(monkeypatch)
+
+    outcome = runToEnd(makeRun(monkeypatch, repo))
+
+    assert outcome.inputTokens == 120000
+    assert outcome.costUsd == 0.0
+
+    from gitfourchette.forms.auditwindow import formatCost, formatElapsed, formatTokens
+    assert formatCost(0.0) == ""          # nothing, not "$0.00"
+    assert formatCost(0.0551) == "$0.06"
+    assert formatCost(0.0004) == "$0.0004"
+    assert formatTokens(123000) == "123k"
+    assert formatElapsed(72.4) == "1m 12s"
+
+
+def testTheWindowLetsYouReadWhatWasPosted(mainWindow):
+    from gitfourchette.forge.reviewrun import PostedComment
+    from gitfourchette.forge.watcher import AuditItem, AuditWatcher, ItemState
+    from gitfourchette.forms.auditwindow import AuditWindow
+
+    watcher = AuditWatcher(mainWindow)
+    watcher.items = [AuditItem(
+        host="gitlab.example.com", project="group/one", iid=1, title="Localize the tab",
+        state=ItemState.Posted, detail="2 comments posted", elapsed=72.4, tokens=123000, cost=0.0551,
+        comments=[PostedComment(where="src/a.cs:2", state="posted", body="**Problem:** Reads every row."),
+                  PostedComment(where="", state="summary", body="## Code Review\n\nAll good.")])]
+
+    window = AuditWindow(watcher, mainWindow)
+    window.show()
+    row = window.tree.topLevelItem(0)
+    assert (row.text(3), row.text(4), row.text(5)) == ("1m 12s", "123k", "$0.06")
+
+    window.tree.setCurrentItem(row)
+    shown = window.commentView.toPlainText()
+    assert "src/a.cs:2" in shown and "Reads every row." in shown
+    assert "Summary note" in shown and "All good." in shown
     window.close()

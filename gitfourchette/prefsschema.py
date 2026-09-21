@@ -251,6 +251,11 @@ PANES: list[Pane] = [
             Row("auditSkipDrafts", parent="auditEnabled"),
             Row("auditSkipCiReviewed", parent="auditEnabled"),
         ),
+        _section(
+            "assistantPrices",
+            Row("reviewPriceInput"),
+            Row("reviewPriceOutput"),
+        ),
     ),
     _pane(
         "userCommands", "prefs-usercommands",
