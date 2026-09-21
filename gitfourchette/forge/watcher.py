@@ -11,6 +11,8 @@ picks up exactly the work that is still owed.
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 import logging
 
 from gitfourchette import settings
@@ -28,6 +30,32 @@ logger = logging.getLogger(__name__)
 MAX_MERGE_REQUESTS = 50
 
 
+class ItemState(enum.StrEnum):
+    Queued = "queued"
+    Running = "running"
+    Posted = "posted"
+    Skipped = "skipped"
+    Failed = "failed"
+    Cancelled = "cancelled"
+
+
+@dataclasses.dataclass
+class AuditItem:
+    """One merge request in the current sweep, and what became of it."""
+    host: str = ""
+    project: str = ""
+    iid: int = 0
+    title: str = ""
+    state: ItemState = ItemState.Queued
+    detail: str = ""
+
+    def caption(self) -> str:
+        return f"!{self.iid} {self.title}" if self.iid else self.title
+
+    def webUrl(self) -> str:
+        return f"https://{self.host}/{self.project}/-/merge_requests/{self.iid}" if self.host and self.iid else ""
+
+
 class AuditWatcher(QObject):
     """Sweeps the configured projects on a timer, one merge request at a time."""
 
@@ -36,6 +64,8 @@ class AuditWatcher(QObject):
     "A RunOutcome per merge request considered, whether or not it was reviewed."
     sweepFinished = Signal(int, int)
     "Reviewed, considered."
+    itemsChanged = Signal()
+    "The list (and the state of anything in it) moved; redraw whatever shows it."
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,6 +73,9 @@ class AuditWatcher(QObject):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.sweep)
         self.queue: list = []
+        self.items: list[AuditItem] = []
+        """Every merge request of the current sweep, in order, with its state.
+        Kept after the sweep so the window still shows what happened."""
         self.run: ReviewRun | None = None
         self.session: ForgeSession | None = None
         self.pending = 0
@@ -62,12 +95,23 @@ class AuditWatcher(QObject):
             self.timer.start(max(1, settings.prefs.auditIntervalMinutes) * 60_000)
 
     def stop(self):
+        """Stop the sweep. What was posted stays posted; the rest is dropped."""
         self.timer.stop()
+        wasSweeping = self.sweeping
         self.queue.clear()
         if self.run is not None:
             self.run.stop()
+            self.run.deleteLater()
             self.run = None
+        for item in self.items:
+            if item.state in (ItemState.Queued, ItemState.Running):
+                item.state = ItemState.Cancelled
+                item.detail = _("stopped")
         self.sweeping = False
+        self.itemsChanged.emit()
+        if wasSweeping:
+            self.sweepFinished.emit(self.reviewed, self.considered)
+        self.reschedule()
 
     # --- One sweep ------------------------------------------------------------
 
@@ -98,6 +142,8 @@ class AuditWatcher(QObject):
 
         self.sweeping = True
         self.queue = []
+        self.items = []
+        self.itemsChanged.emit()
         self.reviewed = self.considered = 0
         self.provider = provider
         self.providerPath = providers[provider]
@@ -111,9 +157,7 @@ class AuditWatcher(QObject):
             except Exception:
                 self.progress.emit(_("Can’t open {0}: skipping it.", path))
                 continue
-            remoteUrl = next((repo.remotes[name].url for name in ("origin", *repo.remotes.names())
-                              if name in repo.remotes), "")
-            project = gitlab.projectFromRemote(remoteUrl)
+            project = gitlab.projectFromRemote(gitlab.remoteUrlOf(repo))
             token = accounts.tokenFor(project.host) if project else ""
             if not project or not token:
                 self.progress.emit(_("No GitLab token for {0}: skipping it.", path))
@@ -136,8 +180,12 @@ class AuditWatcher(QObject):
             self.progress.emit(_("{0}: {1}", project.path, error))
         else:
             for changeRequest in gitlab.readMergeRequests(payload):
-                self.queue.append((repo, project, token, changeRequest))
+                item = AuditItem(host=project.host, project=project.path,
+                                 iid=changeRequest.iid, title=changeRequest.title)
+                self.items.append(item)
+                self.queue.append((repo, project, token, changeRequest, item))
         self.pending -= 1
+        self.itemsChanged.emit()
         if self.pending == 0:
             self.progress.emit(_n("Audit: {n} open merge request to look at…",
                                   "Audit: {n} open merge requests to look at…", len(self.queue)))
@@ -147,8 +195,12 @@ class AuditWatcher(QObject):
         if not self.queue:
             self._finishSweep()
             return
-        repo, project, token, changeRequest = self.queue.pop(0)
+        repo, project, token, changeRequest, item = self.queue.pop(0)
         self.considered += 1
+        self.item = item
+        item.state = ItemState.Running
+        item.detail = _("reading the merge request…")
+        self.itemsChanged.emit()
         self.run = ReviewRun(
             repo, project, token, changeRequest, self.providerPath, self.provider,
             model=(settings.history.aiModels or {}).get(self.provider, ""),
@@ -158,13 +210,34 @@ class AuditWatcher(QObject):
             skipCiReviewed=settings.prefs.auditSkipCiReviewed,
             parent=self)
         self.run.progress.connect(self.progress)
+        self.run.progress.connect(self._runSaid)
         self.run.finished.connect(self._ran)
         self.run.start()
+
+    def _runSaid(self, message: str):
+        """The run's own words, kept beside the merge request they belong to."""
+        item = getattr(self, "item", None)
+        if item is not None and item.state == ItemState.Running:
+            item.detail = message.split(": ", 1)[-1]
+            self.itemsChanged.emit()
 
     def _ran(self, outcome: RunOutcome):
         if self.run is not None:
             self.run.deleteLater()
             self.run = None
+        item = getattr(self, "item", None)
+        if item is not None:
+            if outcome.error:
+                item.state, item.detail = ItemState.Failed, outcome.error
+            elif not outcome.decision.due:
+                item.state, item.detail = ItemState.Skipped, outcome.decision.reason
+            else:
+                item.state = ItemState.Posted
+                item.detail = (_n("{n} comment posted", "{n} comments posted", outcome.posted)
+                               if outcome.posted else _("nothing worth a comment"))
+                if outcome.repeated:
+                    item.detail += ", " + _n("{n} already said", "{n} already said", outcome.repeated)
+            self.itemsChanged.emit()
         if outcome.decision.due and not outcome.error:
             self.reviewed += 1
         self.ran.emit(outcome)

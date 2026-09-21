@@ -371,7 +371,7 @@ class MainWindow(QMainWindow):
             ActionDef(_("Developer &KPI"), lambda: self.openAnalysis(AnalysisDialog.DEVELOPER_TAB)),
             ActionDef(_("Developer &Commits"), lambda: self.openAnalysis(AnalysisDialog.COMMITS_TAB)),
             ActionDef.SEPARATOR,
-            ActionDef(_("&Audit Open Merge Requests Now"), self.auditMergeRequestsNow),
+            ActionDef(_("Merge Request &Audit…"), self.openMergeRequestAudit),
         )
 
         # -------------------------------------------------------------
@@ -1036,10 +1036,18 @@ class MainWindow(QMainWindow):
             raise NoRepoWidgetError()
         return rw
 
-    def auditMergeRequestsNow(self):
-        """Sweep the configured projects right now, whatever the timer says."""
+    def openMergeRequestAudit(self):
+        """Show what the audit is doing, with the buttons that start and stop it."""
         from gitfourchette.application import GFApplication
-        GFApplication.instance().auditWatcher.sweep(force=True)
+        from gitfourchette.forms.auditwindow import AuditWindow
+
+        watcher = GFApplication.instance().auditWatcher
+        window = self.findChild(AuditWindow)
+        if window is None:
+            window = AuditWindow(watcher, self)
+            window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        window.show()
+        window.raise_()
 
     def openAnalysis(self, tabIndex: int = 0) -> None:
         """Open the local repository analysis dashboard for the active tab."""

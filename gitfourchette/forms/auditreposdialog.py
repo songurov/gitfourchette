@@ -24,9 +24,7 @@ def describeRepo(path: str) -> tuple[str, str]:
         repo = Repo(path)
     except Exception:
         return "", _("not a repository any more")
-    remoteUrl = next((repo.remotes[name].url for name in ("origin", *repo.remotes.names())
-                      if name in repo.remotes), "")
-    project = gitlab.projectFromRemote(remoteUrl)
+    project = gitlab.projectFromRemote(gitlab.remoteUrlOf(repo))
     if project is None:
         return "", _("no GitLab remote")
     if not loadAccounts().tokenFor(project.host):

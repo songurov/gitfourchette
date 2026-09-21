@@ -46,7 +46,9 @@ class FakeSession:
 
     def get(self, url, callback):
         self.gets.append(url)
-        if "/notes" in url:
+        if "state=opened" in url:
+            callback([dict(FakeSession.MERGE_REQUEST)], "")
+        elif "/notes" in url:
             callback(list(FakeSession.NOTES), "")
         elif "/diffs" in url or "/changes" in url:
             callback(list(HOST_DIFF), "")
@@ -224,7 +226,86 @@ def testRunningItByHandWorksWhileTheTimerIsOff(tempDir, mainWindow, monkeypatch)
     settings.prefs.auditRepos = []
 
 
-def testTheMenuOffersToRunItNow(mainWindow):
-    menu = mainWindow.globalMenuBar
-    action = findMenuAction(menu, "Data/Audit Open Merge Requests Now")
+def testTheMenuOpensTheAuditWindow(mainWindow):
+    from gitfourchette.forms.auditwindow import AuditWindow
+
+    action = findMenuAction(mainWindow.globalMenuBar, "Data/Merge Request Audit")
     assert action.isEnabled()
+    action.trigger()
+
+    window = mainWindow.findChild(AuditWindow)
+    assert window is not None and window.isVisible()
+    # Nothing has run: the list says so instead of showing an empty table
+    assert "hasn" in window.headline.text()
+    assert window.runButton.isEnabled()
+    assert not window.stopButton.isEnabled()
+    window.close()
+
+
+def testASweepWalksTheMergeRequestsAndSaysWhereItIs(tempDir, mainWindow, monkeypatch):
+    from gitfourchette.forge import watcher as watcherModule
+    from gitfourchette.forge.accounts import loadAccounts, resetAccountsForTesting
+    from gitfourchette.forge.watcher import AuditWatcher, ItemState
+
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    rw.repo.remotes.set_url("origin", "https://gitlab.example.com/group/project.git")
+    resetAccountsForTesting()
+    loadAccounts().setToken("gitlab.example.com", "token")
+
+    fakeCli(monkeypatch)
+    # The sweep asks which assistants are installed; in a test, exactly one is,
+    # and it is this interpreter running the fake CLI above
+    monkeypatch.setattr(watcherModule, "availableProviders", lambda: {"codex": sys.executable})
+    settings.history.aiProvider = "codex"
+    for module in (watcherModule, reviewrun, posterModule):
+        monkeypatch.setattr(module, "ForgeSession", FakeSession)
+    FakeSession.NOTES = []
+    FakeSession.POSTS = []
+    settings.prefs.auditRepos = [rw.repo.workdir]
+
+    watcher = AuditWatcher(mainWindow)
+    done = []
+    watcher.sweepFinished.connect(lambda *args: done.append(args))
+    watcher.sweep(force=True)
+    waitUntilTrue(lambda: bool(done))
+
+    assert done[0] == (1, 1)
+    item = watcher.items[0]
+    assert item.state == ItemState.Posted
+    assert item.iid == 7 and item.project == "group/project"
+    assert "comment posted" in item.detail
+    assert item.webUrl() == "https://gitlab.example.com/group/project/-/merge_requests/7"
+
+    settings.prefs.auditRepos = []
+    resetAccountsForTesting()
+
+
+def testStoppingLeavesTheRestUnreviewedAndSaysSo(mainWindow):
+    from gitfourchette.forge.watcher import AuditItem, AuditWatcher, ItemState
+    from gitfourchette.forms.auditwindow import AuditWindow
+
+    watcher = AuditWatcher(mainWindow)
+    watcher.items = [
+        AuditItem(host="gitlab.example.com", project="group/one", iid=1, title="Done",
+                  state=ItemState.Posted, detail="2 comments posted"),
+        AuditItem(host="gitlab.example.com", project="group/two", iid=2, title="Under way",
+                  state=ItemState.Running, detail="reviewing…"),
+        AuditItem(host="gitlab.example.com", project="group/two", iid=3, title="Waiting"),
+    ]
+    watcher.sweeping = True
+
+    window = AuditWindow(watcher, mainWindow)
+    window.show()
+    assert window.tree.topLevelItemCount() == 3
+    assert window.tree.topLevelItem(0).text(0) == "!1 Done"
+    assert window.tree.topLevelItem(1).text(2) == "Reviewing"
+    assert window.stopButton.isEnabled() and not window.runButton.isEnabled()
+
+    window.stopButton.click()
+
+    # What was posted stays posted; what hadn't run is dropped, and says so
+    assert [item.state for item in watcher.items] == [
+        ItemState.Posted, ItemState.Cancelled, ItemState.Cancelled]
+    assert window.tree.topLevelItem(2).text(2) == "Stopped"
+    assert window.runButton.isEnabled() and not window.stopButton.isEnabled()
+    window.close()

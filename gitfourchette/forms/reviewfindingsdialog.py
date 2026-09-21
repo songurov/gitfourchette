@@ -48,7 +48,7 @@ def remoteUrlForBranch(repo, ref: str) -> tuple[str, str]:
         if upstream is not None:
             remoteName, sourceBranch = split_remote_branch_shorthand(upstream.shorthand)
         if not remoteName:
-            remoteName = "origin" if "origin" in repo.remotes else next(iter(repo.remotes.names()), "")
+            remoteName = gitlab.preferredRemoteName(repo)
     else:
         return "", ""
     if not remoteName:

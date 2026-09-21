@@ -69,6 +69,23 @@ class ChangeRequest:
         return f"!{self.iid} {draft}{self.title}"
 
 
+def preferredRemoteName(repo) -> str:
+    """
+    The remote a branch of this repository would be pushed to.
+
+    Asked by name, never with `"origin" in repo.remotes`: pygit2's collection
+    iterates Remote objects, so that test is always False and silently picks
+    the wrong remote - or none at all.
+    """
+    names = list(repo.remotes.names())
+    return "origin" if "origin" in names else next(iter(names), "")
+
+
+def remoteUrlOf(repo) -> str:
+    name = preferredRemoteName(repo)
+    return repo.remotes[name].url if name else ""
+
+
 def projectFromRemote(remoteUrl: str) -> ForgeProject | None:
     """The GitLab project a remote URL points at, or None if it isn't one."""
     host, path = splitRemoteUrl(remoteUrl)

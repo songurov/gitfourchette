@@ -673,7 +673,10 @@ class Sidebar(QTreeView):
                 if branch.upstream:
                     remoteName, sourceBranch = porcelain.split_remote_branch_shorthand(branch.upstream.shorthand)
             if not remoteName:
-                remoteName = "origin" if "origin" in repo.remotes else next(iter(repo.remotes.names()), "")
+                # Asked by name: "origin" in repo.remotes is always False,
+                # because pygit2's collection iterates Remote objects.
+                remoteNames = list(repo.remotes.names())
+                remoteName = "origin" if "origin" in remoteNames else next(iter(remoteNames), "")
         else:
             return None
         if not remoteName:
