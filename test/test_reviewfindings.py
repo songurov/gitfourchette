@@ -2,6 +2,8 @@
 
 import json
 import sys
+from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -132,10 +134,15 @@ class FakeSession:
         self.gets = []
         self.failOn = ""
 
+    MERGE_REQUEST: ClassVar[dict] = {
+        "iid": 7, "title": "Localize the tab", "source_branch": "topic",
+        "target_branch": "first-merge", "web_url": "https://gitlab.example.com/mr/7",
+        "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}
+
     def get(self, url, callback):
         self.gets.append(url)
-        callback({"iid": 7, "title": "t", "source_branch": "topic", "target_branch": "develop",
-                  "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}, "")
+        # The list endpoint answers with an array, one merge request with an object
+        callback([self.MERGE_REQUEST] if "?" in url else self.MERGE_REQUEST, "")
 
     def post(self, url, payload, callback):
         self.posts.append((url, payload))
@@ -210,3 +217,57 @@ def testPosterKeepsTheReviewersOwnWording(monkeypatch):
     assert "the model's wording" not in body
     # The marker still rides along: the next run reads it back to know what it said
     assert "gf-review" in body
+
+
+def testFindingTheMergeRequestAlignsTheComparison(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    monkeypatch.setattr(reviewfindingsdialog, "ForgeSession", FakeSession)
+    monkeypatch.setattr(dialog, "ensureToken", lambda: "token")
+
+    dialog.findMergeRequest()
+
+    assert dialog.changeRequest.iid == 7
+    assert "!7" in dialog.mrLabel.text() and "first-merge" in dialog.mrLabel.text()
+    # The merge request decides what the change is measured against, so the
+    # diff we review becomes the diff it shows
+    assert dialog.baseCombo.currentText() == "origin/first-merge"
+    assert "source_branch=topic" not in dialog.session.gets[0]  # the branch as the remote spells it
+    assert "source_branch=master" in dialog.session.gets[0]
+
+
+def testPostingSaysWhenThereIsNoToken(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    runReview(dialog, monkeypatch)
+    dialog.tree.topLevelItem(0).setCheckState(0, Qt.CheckState.Checked)
+    # The reviewer opened the accounts window and closed it without a token
+    monkeypatch.setattr(reviewfindingsdialog.ReviewFindingsDialog, "ensureToken", lambda self: "")
+
+    dialog.postSelected()
+
+    assert dialog.changeRequest is None
+    assert "token" in dialog.statusLabel.text().lower()
+
+
+def testAccountsAreKeptOutOfTheSettingsFile(mainWindow, monkeypatch):
+    from gitfourchette import settings
+    from gitfourchette.forge import accounts as accountsModule
+    from gitfourchette.forms.forgeaccountsdialog import ForgeAccountsDialog
+
+    accountsModule.resetAccountsForTesting()
+    dialog = ForgeAccountsDialog(mainWindow)
+    dialog.table.item(0, 0).setText("gitlab.example.com")
+    dialog.table.cellWidget(0, 1).setText("s3cret")
+    dialog.save()
+
+    vault = accountsModule.loadAccounts()
+    assert vault.tokenFor("gitlab.example.com") == "s3cret"
+
+    settings.prefs.setDirty()
+    prefsPath = settings.prefs.write(force=True)
+    assert "s3cret" not in Path(prefsPath).read_text(encoding="utf-8")
+
+    # Emptying the row takes the token away with it
+    dialog = ForgeAccountsDialog(mainWindow)
+    dialog.table.cellWidget(0, 1).setText("")
+    dialog.save()
+    assert accountsModule.loadAccounts().hosts() == []
