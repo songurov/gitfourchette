@@ -75,7 +75,7 @@ class MergeEditor(QDialog):
     directory, markers and all, and hands back what the person settled on.
     """
 
-    def __init__(self, path: str, text: str, parent=None, committed: str = "", labels=()):
+    def __init__(self, path: str, text: str, parent=None, committed: str = "", labels=(), workdir: str = ""):
         """
         `text` is the file as git left it, markers and all. Pass `committed`
         to look at a merge that is already in history: the result pane then
@@ -84,6 +84,11 @@ class MergeEditor(QDialog):
         super().__init__(parent)
         self.setObjectName("MergeEditor")
         self.path = path
+        self.workdir = workdir
+        self.aiProcess = None
+        self.aiIndices: list[int] = []
+        self.aiBuffer = b""
+        self.aiStream = None
         self.regions = parseConflicts(text)
         self.currentConflict = 0
         self.manualEdit = False
@@ -192,6 +197,14 @@ class MergeEditor(QDialog):
         self.allTheirsButton.clicked.connect(lambda: self.chooseEverywhere((Side.Theirs,)))
         choices.addWidget(self.allOursButton)
         choices.addWidget(self.allTheirsButton)
+
+        self.aiButton = QPushButton(_("Ask AI"), self)
+        self.aiButton.setObjectName("MergeEditorAiButton")
+        self.aiButton.setToolTip(_("Propose a settlement for the conflicts still open, one at a time. "
+                                   "Nothing is written to the file until you mark it resolved, and "
+                                   "anything it proposes can be overruled like any other decision."))
+        self.aiButton.clicked.connect(self.askAi)
+        choices.addWidget(self.aiButton)
 
         # -- What's left to do, and the way out
         self.manualButton = QPushButton(_("Edit the result by hand"), self)
@@ -452,8 +465,11 @@ class MergeEditor(QDialog):
 
         self.counterLabel.setText(
             _("Conflict {0} of {1}", self.currentConflict + 1, total) if total else _("No conflicts"))
+        current = conflicts[self.currentConflict] if 0 <= self.currentConflict < total else None
+        reason = current.reason if current is not None else ""
         self.summaryLabel.setText(
-            _("All {0} conflicts settled", total) if not left
+            reason if reason
+            else _("All {0} conflicts settled", total) if not left
             else _n("{n} conflict left", "{n} conflicts left", left))
 
         current = conflicts[self.currentConflict] if total else None
@@ -547,6 +563,115 @@ class MergeEditor(QDialog):
         nextOpen = next((i for i, region in enumerate(conflicts) if not region.settled), -1)
         if nextOpen >= 0:
             self.goToConflict(nextOpen)
+
+    # -------------------------------------------------------------------------
+    # Asking an assistant
+
+    def askAi(self):
+        """
+        Have the assistant propose a settlement for the conflicts still open.
+
+        It decides regions, exactly as the buttons beside it do: nothing
+        reaches the file until the editor is closed with "Mark as resolved",
+        and every proposal can be overruled like any other decision.
+        """
+        from gitfourchette import settings
+        from gitfourchette.exttools.aichat import availableProviders, cliArguments
+        from gitfourchette.exttools.aiconflict import makeConflictPrompt, resolvableRegions
+
+        if self.aiProcess is not None:
+            return
+        providers = availableProviders()
+        wanted = settings.prefs.auditProvider or settings.history.aiProvider
+        provider = wanted if wanted in providers else next(iter(providers), "")
+        if not provider:
+            self.summaryLabel.setText(_("No assistant installed."))
+            return
+
+        indices = resolvableRegions(self.conflicts)
+        if not indices:
+            self.summaryLabel.setText(_("Nothing left for it to settle."))
+            return
+
+        regions = self.conflicts
+        prompt = makeConflictPrompt(self.path, regions, indices,
+                                    oursLabel=regions[indices[0]].oursLabel,
+                                    theirsLabel=regions[indices[0]].theirsLabel,
+                                    language=settings.history.aiLanguage)
+        self.aiIndices = indices
+        self.aiBuffer = b""
+        self.aiStream = None
+        self.aiButton.setEnabled(False)
+        self.summaryLabel.setText(_n("Asking {0} about {n} conflict…", "Asking {0} about {n} conflicts…",
+                                     len(indices), provider.capitalize()))
+
+        from gitfourchette.exttools.aichat import ResponseStream
+        self.aiStream = ResponseStream(provider)
+        process = QProcess(self)
+        self.aiProcess = process
+        if hasattr(QProcess, "UnixProcessParameters"):
+            parameters = QProcess.UnixProcessParameters()
+            parameters.flags = QProcess.UnixProcessFlag.CreateNewSession
+            process.setUnixProcessParameters(parameters)
+        if self.workdir:
+            process.setWorkingDirectory(self.workdir)
+        process.readyReadStandardOutput.connect(self.readAiOutput)
+        process.finished.connect(self.aiFinished)
+        process.errorOccurred.connect(lambda _error: self.aiFailed(process.errorString()))
+        process.started.connect(lambda: (process.write(prompt.encode("utf-8")), process.closeWriteChannel()))
+        model = settings.prefs.auditModel or (settings.history.aiModels or {}).get(provider, "")
+        process.start(providers[provider], cliArguments(provider, model))
+
+    def readAiOutput(self):
+        import json as _json
+
+        if self.aiProcess is None:
+            return
+        self.aiBuffer += bytes(self.aiProcess.readAllStandardOutput())
+        while b"\n" in self.aiBuffer:
+            line, self.aiBuffer = self.aiBuffer.split(b"\n", 1)
+            try:
+                event = _json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(event, dict):
+                self.aiStream.consume(event)
+
+    def aiFinished(self, _code=0, _status=None):
+        from gitfourchette.exttools.aiconflict import parseResolutions
+
+        self.readAiOutput()
+        if self.aiProcess is not None:
+            self.aiProcess.deleteLater()
+        self.aiProcess = None
+        self.aiButton.setEnabled(True)
+
+        text = self.aiStream.text if self.aiStream else ""
+        settled = parseResolutions(text, set(self.aiIndices))
+        for index, (lines, why) in settled.items():
+            region = self.conflicts[index]
+            region.decideCustom(lines, why)
+        self.refresh()
+        if not settled:
+            self.summaryLabel.setText(_("The assistant settled none of them; they are yours to decide."))
+            return
+        remaining = len(self.aiIndices) - len(settled)
+        # The ones it skipped are the honest part of the answer: say how many.
+        self.summaryLabel.setText(
+            _n("Settled {n} conflict; {0} left for you.", "Settled {n} conflicts; {0} left for you.",
+               len(settled), remaining) if remaining
+            else _n("Settled {n} conflict. Read it before you mark the file resolved.",
+                    "Settled {n} conflicts. Read them before you mark the file resolved.", len(settled)))
+        nextOpen = next((i for i, region in enumerate(self.conflicts) if not region.settled), -1)
+        if nextOpen >= 0:
+            self.goToConflict(nextOpen)
+
+    def aiFailed(self, message: str):
+        if self.aiProcess is not None:
+            self.aiProcess.deleteLater()
+        self.aiProcess = None
+        self.aiButton.setEnabled(True)
+        self.summaryLabel.setText(message)
 
     def chooseEverywhere(self, choice: tuple[Side, ...]):
         for region in self.conflicts:

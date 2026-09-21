@@ -47,6 +47,13 @@ class MergeRegion:
     decided: bool = False
     "Whether someone has settled this conflict."
 
+    custom: list[str] | None = None
+    """Lines that are neither side's: a combination someone wrote, or one the
+    assistant proposed. Set, it is what the region contributes."""
+
+    reason: str = ""
+    "Why a proposal settled it this way, in one sentence, when one was given."
+
     @property
     def settled(self) -> bool:
         return not self.conflicted or self.decided
@@ -54,7 +61,16 @@ class MergeRegion:
     def decide(self, *sides: Side):
         """Keep these sides, in this order; none of them is a decision too."""
         self.choice = sides
+        self.custom = None
         self.decided = True
+        self.reason = ""
+
+    def decideCustom(self, lines: list[str], reason: str = ""):
+        """Settle it with text of its own, rather than by picking sides."""
+        self.custom = list(lines)
+        self.choice = ()
+        self.decided = True
+        self.reason = reason
 
     def sideLines(self, side: Side) -> list[str]:
         return {Side.Ours: self.ours, Side.Theirs: self.theirs, Side.Base: self.base}[side]
@@ -63,6 +79,8 @@ class MergeRegion:
         """The lines this region contributes to the merged file."""
         if not self.conflicted:
             return self.ours
+        if self.custom is not None:
+            return self.custom
         lines = []
         for side in self.choice:
             lines += self.sideLines(side)

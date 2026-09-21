@@ -439,7 +439,7 @@ class ResolveConflictHere(RepoTask):
             raise AbortTask(_("There are no conflict markers in this file. "
                               "Pick a version, or open it in your merge tool."))
 
-        dialog = MergeEditor(path, text, parent=self.parentWidget())
+        dialog = MergeEditor(path, text, parent=self.parentWidget(), workdir=self.repo.workdir)
         dialog.resize(900, 700)
         dialog.setWindowModality(Qt.WindowModality.WindowModal)
         yield from self.flowDialog(dialog)
