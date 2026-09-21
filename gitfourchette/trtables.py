@@ -405,6 +405,7 @@ def _prefKeyTable() -> dict[str, str]:
         "gitExecutable": _p("Prefs", "Git Executable"),
         "ssh": _p("Prefs", "SSH"),
         "externalTools": _p("Prefs", "External Tools"),
+        "codeHosting": _p("Prefs", "Code Hosting"),
         "trash": _p("Prefs", "Trash"),
         "interface": _p("Prefs", "Interface"),
         "troubleshooting": _p("Prefs", "Troubleshooting"),
@@ -642,6 +643,9 @@ def _prefKeyTable() -> dict[str, str]:
             "condense the font before truncating the text."),
         "animations": _("Animate the sidebar"),
         "smoothScroll": _("Smooth scrolling"),
+        "manageForgeAccounts": _("Code Hosting Accounts…"),
+        "manageForgeAccounts_note": _("An access token lets {app} post review comments on your merge requests. "
+                                      "Tokens are kept in a file only you can read."),
         "resetDontShowAgain": _("Show Skipped Messages Again"),
         "verbosity": _("Log level"),
         "forceQtApi": _("Qt binding"),

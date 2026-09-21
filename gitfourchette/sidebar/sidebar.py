@@ -620,6 +620,9 @@ class Sidebar(QTreeView):
             aiActions = [ActionDef(_("Ask AI about branch…"), lambda: self.askAiBranch(data), enabled=enabled)]
             aiActions.extend(ActionDef(_(caption) + "…", lambda key=command: self.askAiBranch(data, key), enabled=enabled)
                              for command, (caption, _prompt) in PRESETS.items())
+            # The review that ends on the merge request, rather than in a chat
+            # window: it comes back as findings to keep or drop one at a time.
+            aiActions.append(ActionDef(_("Review for Merge Request…"), lambda: self.reviewBranch(data), enabled=enabled))
             changeRequest = self.changeRequestInfo(data)
             changeRequestActions = []
             if changeRequest:
@@ -643,6 +646,12 @@ class Sidebar(QTreeView):
         if preset:
             dialog.usePreset(preset)
         dialog.open()
+
+    def reviewBranch(self, ref):
+        from gitfourchette.forms.reviewfindingsdialog import ReviewFindingsDialog
+        dialog = ReviewFindingsDialog(self.sidebarModel.repo, ref, self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.show()
 
     def changeRequestInfo(self, ref):
         prefix, shorthand = RefPrefix.split(ref)

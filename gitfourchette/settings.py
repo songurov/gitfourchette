@@ -347,6 +347,10 @@ class Prefs(PrefsFile):
     pygmentsPlugins             : bool                  = False
     verbosity                   : LoggingLevel          = LoggingLevel.Debug if APP_TESTMODE else LoggingLevel.Warning
     forceQtApi                  : QtApiNames            = QtApiNames.Automatic
+    manageForgeAccounts         : bool                  = False
+    """Not a setting: the Settings row for it is a button that opens the code
+    hosting accounts. The tokens themselves live in forge.json, which only the
+    owner can read - never in this file."""
     resetDontShowAgain          : bool                  = False
     """Shown as a button that brings back every message the user asked not to see again."""
 
@@ -510,6 +514,10 @@ class History(PrefsFile):
     aiSetupExpanded: bool = False
     aiAllowEdits: bool = False
     "Whether the AI chat shows the strip that picks the assistant, model, language and rules."
+    reviewDimensions: list[str] = dataclasses.field(default_factory=list)
+    """Which dimensions the merge-request review looked at last time (see
+    aireview.DIMENSIONS). Empty until the first review, which starts from
+    the defaults."""
     _filename = "history.json"
 
     class JsonRepo(TypedDict, total=False):

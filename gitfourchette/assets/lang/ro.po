@@ -9381,3 +9381,16 @@ msgstr "Mergi la istoricul commit-urilor"
 msgctxt "SidebarModel"
 msgid "Branches"
 msgstr "Ramuri"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Hosting"
+msgstr "Găzduire cod"
+
+#: trtables.py
+msgid "Code Hosting Accounts…"
+msgstr "Conturi de găzduire cod…"
+
+#: trtables.py
+msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
+msgstr "Un token de acces îi permite lui {app} să publice comentarii de review pe merge request-urile tale. Tokenurile sunt păstrate într-un fișier pe care doar tu îl poți citi."

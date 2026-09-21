@@ -9283,3 +9283,16 @@ msgstr "İşleme geçmişine git"
 msgctxt "SidebarModel"
 msgid "Branches"
 msgstr "Dallar"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Hosting"
+msgstr "Kod Barındırma"
+
+#: trtables.py
+msgid "Code Hosting Accounts…"
+msgstr "Kod Barındırma Hesapları…"
+
+#: trtables.py
+msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
+msgstr "Erişim belirteci, {app} uygulamasının birleştirme isteklerinize inceleme yorumları göndermesini sağlar. Belirteçler yalnızca sizin okuyabileceğiniz bir dosyada saklanır."

@@ -135,6 +135,12 @@ def localeCodeToLanguageName(code: str) -> str:
     return name
 
 
+BUTTON_ROWS = {"resetDontShowAgain", "manageForgeAccounts"}
+"""Rows whose 'control' is a push button that does something, rather than an
+editor for the pref's value: they carry their own caption, and the value behind
+them is never shown."""
+
+
 class PrefsDialog(QDialog):
     lastPane: ClassVar[str] = ""
     "Pane shown last; the next window opens on it (kept in session.json across launches)."
@@ -653,6 +659,8 @@ class PrefsDialog(QDialog):
             self.prependCheckBox(rowWidgets, row.toggle, caption)
         elif key == "resetDontShowAgain":
             rowWidgets.append(self.dontShowAgainCountLabel(control))
+        elif key == "manageForgeAccounts":
+            rowWidgets.append(self.forgeAccountsCountLabel(control))
 
         # Any help text? Then make a help button for it & set tooltip text on the main control.
         # A row with a note says the gist under the control already: the tooltip is enough there.
@@ -797,14 +805,14 @@ class PrefsDialog(QDialog):
     def rowLabelText(self, row: prefsschema.Row) -> str:
         """What the label column says for this row: empty if the control carries its own caption."""
         caption, _suffix = self.rowCaption(row)
-        if not caption or row.toggle or row.key == "resetDontShowAgain" or self.isCheckBoxRow(row):
+        if not caption or row.toggle or row.key in BUTTON_ROWS or self.isCheckBoxRow(row):
             return ""  # The control carries the caption: a checkbox or a push button
         return caption + _(":")
 
     def isCheckBoxRow(self, row: prefsschema.Row) -> bool:
         return (type(prefs.__dict__[row.key]) is bool
                 and row.control == "auto"
-                and row.key != "resetDontShowAgain"  # A push button
+                and row.key not in BUTTON_ROWS
                 and not self.boolChoiceNames(row.key))
 
     @staticmethod
@@ -1068,8 +1076,8 @@ class PrefsDialog(QDialog):
                 validate=lambda cmd: ToolCommands.checkCommand(cmd, "$COMMAND"))
         elif key == "commands":
             return self.userCommandTextEditControl(key, value)
-        elif key == "resetDontShowAgain":
-            return QPushButton(caption, self)  # dontShowAgainCountLabel wires it up
+        elif key in BUTTON_ROWS:
+            return QPushButton(caption, self)  # the row's count label wires it up
         elif key in ["largeFileThresholdKB", "imageFileThresholdKB", "maxTrashFileKB"]:
             control = self.boundedIntControl(key, value, 0, 999_999)
             control.setSpecialValueText(_p("a limit of zero means no limit", "No limit"))
@@ -1195,6 +1203,28 @@ class PrefsDialog(QDialog):
         control.setPlainText(prefValue)
         control.textChanged.connect(lambda: self.assign(prefKey, control.toPlainText()))
         return control
+
+    def forgeAccountsCountLabel(self, button: QPushButton) -> QLabel:
+        """Say how many hosts have a token, next to the button that edits them."""
+        from gitfourchette.forge.accounts import loadAccounts
+
+        countLabel = QLabel(self)
+        countLabel.setProperty("class", "secondary")
+
+        def refresh():
+            hosts = loadAccounts().hosts()
+            countLabel.setText(_n("Token for {0}.", "Tokens for {0}.", len(hosts), ", ".join(hosts))
+                               if hosts else _("No tokens yet."))
+
+        def edit():
+            from gitfourchette.forms.forgeaccountsdialog import ForgeAccountsDialog
+            dialog = ForgeAccountsDialog(self)
+            dialog.accepted.connect(refresh)
+            dialog.exec()
+
+        button.clicked.connect(edit)
+        refresh()
+        return countLabel
 
     def dontShowAgainCountLabel(self, button: QPushButton) -> QLabel:
         """

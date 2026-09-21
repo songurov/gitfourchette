@@ -9421,3 +9421,16 @@ msgstr "Перейти к истории коммитов"
 msgctxt "SidebarModel"
 msgid "Branches"
 msgstr "Ветки"
+
+#: trtables.py
+msgctxt "Prefs"
+msgid "Code Hosting"
+msgstr "Хостинг кода"
+
+#: trtables.py
+msgid "Code Hosting Accounts…"
+msgstr "Учётные записи хостинга кода…"
+
+#: trtables.py
+msgid "An access token lets {app} post review comments on your merge requests. Tokens are kept in a file only you can read."
+msgstr "Токен доступа позволяет {app} публиковать комментарии ревью в ваших merge request’ах. Токены хранятся в файле, который можете прочитать только вы."

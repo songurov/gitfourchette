@@ -518,9 +518,11 @@ def testBranchPresetMenu(tempDir, mainWindow, monkeypatch, ref):
     # cannot quietly reorder the other
     assert [a.text() for a in menu.actions()[1:6]] == [
         "What changed…", "Code review…", "Bugs and regressions…", "Performance risks…", "Security risks…"]
-    # The test repo's origin is on GitHub: the pull request action follows the presets
-    assert menu.actions()[6].text() == "Create or Open Pull Request…"
-    assert menu.actions()[7].isSeparator()
+    # The review that ends on the merge request closes the AI group, and the
+    # test repo's origin is on GitHub: the pull request action follows it
+    assert menu.actions()[6].text() == "Review for Merge Request…"
+    assert menu.actions()[7].text() == "Create or Open Pull Request…"
+    assert menu.actions()[8].isSeparator()
     menu.actions()[1].trigger()
     dlg = rw.sidebar.findChild(AiChatDialog)
     waitUntilTrue(lambda: dlg.process is None)
@@ -538,7 +540,7 @@ def testChangeRequestAction(tempDir, mainWindow, monkeypatch, ref, installed):
     menu = rw.sidebar.makeNodeMenu(rw.sidebar.findNodeByRef(ref))
     assert menu.actions()[0].text() == "Ask AI about branch…"
     assert menu.actions()[0].isEnabled() == installed
-    action = menu.actions()[6]
+    action = menu.actions()[7]
     assert action.text() == "Create or Open Pull Request…"
     assert action.isEnabled()
 

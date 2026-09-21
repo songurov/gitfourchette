@@ -1,0 +1,212 @@
+"""Reviewing a branch, keeping what's worth posting, and posting it."""
+
+import json
+import sys
+
+import pytest
+
+from gitfourchette.exttools.aireview import Finding
+from gitfourchette.forge import poster as posterModule
+from gitfourchette.forge.gitlab import ChangeRequest, DiffRefs
+from gitfourchette.forge.poster import PostState, ReviewPoster
+from gitfourchette.forms import reviewfindingsdialog
+from gitfourchette.forms.reviewfindingsdialog import ReviewFindingsDialog
+from gitfourchette.qt import *
+from .util import *
+
+REVIEW = {
+    "verdict": "request_changes",
+    "summary": "Touches the file list.",
+    "good": ["Small, focused change."],
+    "findings": [
+        {"file": "c/c1.txt", "line": 1, "severity": "high", "confidence": "high", "kind": "issue",
+         "category": "Performance", "problem": "Reads the whole file.", "impact": "Slow.", "fix": "Stream it."},
+        {"file": "nowhere.txt", "line": 900, "severity": "low", "confidence": "high",
+         "category": "Structure", "problem": "Lives in the wrong layer."},
+    ],
+}
+
+
+def fakeCli(monkeypatch, code):
+    code = code.encode("ascii", "backslashreplace").decode("ascii")
+    monkeypatch.setattr(reviewfindingsdialog, "cliArguments", lambda *args, **kwargs: ["-c", code])
+
+
+def answerWith(payload: dict) -> str:
+    """A fake CLI that reads the prompt and answers with this review."""
+    return ("import sys, json\n"
+            "prompt = sys.stdin.read()\n"
+            f"review = json.loads({json.dumps(json.dumps(payload))})\n"
+            "review['summary'] = review['summary'] + (' [security]' if 'Security:' in prompt else '')\n"
+            "print(json.dumps({'type': 'item.completed', 'item': "
+            "{'id': '1', 'type': 'agent_message', 'text': json.dumps(review)}}))\n")
+
+
+@pytest.fixture
+def reviewDialog(tempDir, mainWindow, monkeypatch):
+    monkeypatch.setattr(reviewfindingsdialog, "availableProviders",
+                        lambda: {"codex": sys.executable, "claude": sys.executable})
+    monkeypatch.setattr(reviewfindingsdialog, "configuredModel", lambda provider: "configured-model")
+    monkeypatch.setattr(reviewfindingsdialog, "modelChoices", lambda provider: ["other-model"])
+    rw = mainWindow.openRepo(unpackRepo(tempDir))
+    rw.repo.remotes.set_url("origin", "https://gitlab.example.com/group/project.git")
+    dialog = ReviewFindingsDialog(rw.repo, "refs/heads/master", rw)
+    dialog.show()
+    yield dialog
+    dialog.reject()
+
+
+def runReview(dialog, monkeypatch, payload=REVIEW):
+    fakeCli(monkeypatch, answerWith(payload))
+    dialog.baseCombo.setCurrentIndex(dialog.baseCombo.findData("refs/remotes/origin/first-merge"))
+    dialog.runReview()
+    waitUntilTrue(lambda: dialog.process is None and dialog.review is not None)
+
+
+def testFindingsArriveUntickedAndNothingCanBePostedYet(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    assert not dialog.postButton.isEnabled()
+    runReview(dialog, monkeypatch)
+
+    assert dialog.tree.topLevelItemCount() == 2
+    # Nothing is ticked by default: a finding is posted because someone read it,
+    # not because a model produced it.
+    assert dialog.selectedItems() == []
+    assert not dialog.postButton.isEnabled()
+
+    dialog.tree.topLevelItem(0).setCheckState(0, Qt.CheckState.Checked)
+    assert dialog.postButton.isEnabled()
+    assert "1" in dialog.postButton.text()
+
+
+def testTheReviewOnlySeesTheDimensionsTicked(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    for key, check in dialog.dimensionChecks.items():
+        check.setChecked(key == "performance")
+    runReview(dialog, monkeypatch)
+    # The fake CLI reports back whether the prompt named a dimension nobody asked for
+    assert "[security]" not in dialog.review.summary
+
+    dialog.dimensionChecks["security"].setChecked(True)
+    runReview(dialog, monkeypatch)
+    assert "[security]" in dialog.review.summary
+
+
+def testTheCommentIsShownAsTextAndCanBeRewritten(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    runReview(dialog, monkeypatch)
+    dialog.tree.setCurrentItem(dialog.tree.topLevelItem(0))
+
+    shown = dialog.bodyEdit.toPlainText()
+    assert "Reads the whole file." in shown
+    assert "[HIGH]" in shown
+    # The marker is data for the next run, not something to read or edit
+    assert "gf-review" not in shown
+
+    dialog.bodyEdit.setPlainText("My own wording.")
+    item = dialog.tree.topLevelItem(0)
+    assert item.body == "My own wording."
+    assert item.postedBody("English", "codex", marker=False) == "My own wording."
+    assert item.postedBody("English", "codex").startswith("My own wording.\n\n<!-- gf-review")
+
+
+def testSummaryNoteCarriesOnlyWhatWasKept(reviewDialog, monkeypatch):
+    dialog = reviewDialog
+    runReview(dialog, monkeypatch)
+    dialog.tree.topLevelItem(0).setCheckState(0, Qt.CheckState.Checked)
+
+    note = dialog.summaryText(1)
+    assert "Reads the whole file." in note
+    # A finding the reviewer dropped must not reappear in the summary: that
+    # would post it by the back door.
+    assert "wrong layer" not in note
+    assert "1 finding of 2 posted" in note
+
+
+class FakeSession:
+    """Answers like a host would, without a host."""
+
+    def __init__(self, token, parent=None):
+        self.token = token
+        self.posts = []
+        self.gets = []
+        self.failOn = ""
+
+    def get(self, url, callback):
+        self.gets.append(url)
+        callback({"iid": 7, "title": "t", "source_branch": "topic", "target_branch": "develop",
+                  "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}, "")
+
+    def post(self, url, payload, callback):
+        self.posts.append((url, payload))
+        if self.failOn and self.failOn in json.dumps(payload):
+            callback(None, "HTTP 400: line_code cannot be generated")
+            return
+        callback({"id": "1"}, "")
+
+
+DIFF = """diff --git a/src/a.cs b/src/a.cs
+--- a/src/a.cs
++++ b/src/a.cs
+@@ -1,2 +1,3 @@
+ context
++added line
++another added line
+"""
+
+
+def makePoster(monkeypatch, findings, **kwargs):
+    monkeypatch.setattr(posterModule, "ForgeSession", FakeSession)
+    from gitfourchette.forge.gitlab import ForgeProject
+    project = ForgeProject("gitlab.example.com", "group/project")
+    changeRequest = ChangeRequest(iid=7, sourceBranch="topic", targetBranch="develop",
+                                  refs=DiffRefs("b", "s", "h"))
+    return ReviewPoster(project, "token", changeRequest, DIFF, findings, provider="codex", **kwargs)
+
+
+def testPosterPlacesWhatItCanAndSaysSoForTheRest(monkeypatch):
+    placed = Finding(file="src/a.cs", line=2, problem="on an added line")
+    snapped = Finding(file="src/a.cs", line=5, problem="a line or two off")
+    unplaced = Finding(file="src/a.cs", line=400, problem="nowhere near the diff")
+    poster = makePoster(monkeypatch, [placed, snapped, unplaced],
+                        summaryBuilder=lambda inline: f"summary with {inline} inline")
+
+    results = []
+    poster.finished.connect(results.extend)
+    poster.start()
+
+    assert [r.state for r in results] == [PostState.Posted, PostState.Snapped, PostState.Unplaced]
+    # Only the two that could be anchored were sent, plus the summary note
+    discussions = [p for p in poster.session.posts if p[0].endswith("/discussions")]
+    assert len(discussions) == 2
+    assert discussions[0][1]["position"]["new_line"] == 2
+    # The snapped one moved to the nearest line the change actually touches
+    assert discussions[1][1]["position"]["new_line"] == 3
+    notes = [p for p in poster.session.posts if p[0].endswith("/notes")]
+    assert notes[-1][1]["body"] == "summary with 2 inline"
+
+
+def testPosterReportsWhatTheHostRefused(monkeypatch):
+    finding = Finding(file="src/a.cs", line=2, problem="on an added line")
+    poster = makePoster(monkeypatch, [finding])
+    # The host accepts the position but refuses the note (a protected branch, a
+    # rate limit, a discussion API that moved): the reviewer has to hear why.
+    poster.session.failOn = "on an added line"
+
+    results = []
+    poster.finished.connect(results.extend)
+    poster.start()
+
+    assert [r.state for r in results] == [PostState.Failed]
+    assert "line_code cannot be generated" in results[0].message
+
+
+def testPosterKeepsTheReviewersOwnWording(monkeypatch):
+    finding = Finding(file="src/a.cs", line=2, problem="the model's wording")
+    poster = makePoster(monkeypatch, [finding], bodies={finding.fingerprint(): "the reviewer's wording"})
+    poster.start()
+    body = poster.session.posts[0][1]["body"]
+    assert body.startswith("the reviewer's wording")
+    assert "the model's wording" not in body
+    # The marker still rides along: the next run reads it back to know what it said
+    assert "gf-review" in body

@@ -236,6 +236,10 @@ PANES: list[Pane] = [
             Row("externalDiff"),
             Row("externalMerge"),
         ),
+        _section(
+            "codeHosting",
+            Row("manageForgeAccounts", note="manageForgeAccounts_note"),
+        ),
     ),
     _pane(
         "userCommands", "prefs-usercommands",

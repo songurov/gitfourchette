@@ -52,7 +52,7 @@ class ReviewPoster(QObject):
 
     def __init__(self, project: ForgeProject, token: str, changeRequest: ChangeRequest,
                  diffText: str, findings: list[Finding], provider: str, language="",
-                 summaryBuilder=None, parent=None):
+                 summaryBuilder=None, bodies=None, parent=None):
         super().__init__(parent)
         self.project = project
         self.changeRequest = changeRequest
@@ -60,6 +60,8 @@ class ReviewPoster(QObject):
         self.provider = provider
         self.language = language
         self.summaryBuilder = summaryBuilder
+        self.bodies = dict(bodies or {})
+        """Fingerprint -> the reviewer's own wording, when they rewrote a finding."""
         self.index = diffLineIndex(diffText)
         self.results: list[PostResult] = []
         self.cursor = 0
@@ -101,9 +103,15 @@ class ReviewPoster(QObject):
         if position is None:
             self._record(PostState.Unplaced, _("Not on a line this merge request changes."))
             return
-        applicable = canApplySuggestion(finding, position)
-        body = formatFinding(finding, language=self.language, provider=self.provider,
-                             applicableSuggestion=applicable)
+        edited = self.bodies.get(finding.fingerprint(), "").strip()
+        if edited:
+            # Hand-written wording goes out as written; only the marker is added,
+            # because the next run reads it back to know what it already said.
+            body = edited + "\n\n" + finding.marker(self.provider)
+        else:
+            applicable = canApplySuggestion(finding, position)
+            body = formatFinding(finding, language=self.language, provider=self.provider,
+                                 applicableSuggestion=applicable)
         payload = discussionPayload(body, position, self.changeRequest.refs)
         state = PostState.Snapped if position.snapped else PostState.Posted
         message = _("Moved to line {0}, the nearest changed line.", position.newLine) if position.snapped else ""
