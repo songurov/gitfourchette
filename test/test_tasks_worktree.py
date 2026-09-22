@@ -697,7 +697,7 @@ def testSeparateGitDirInsideTheWorktreeStillFindsMain(tempDir, mainWindow):
     rw = mainWindow.openRepo(os.path.join(base, "wt"))
     main = next((w for w in rw.repoModel.worktrees if w.is_main), None)
     assert main is not None, "the main worktree is locatable here, so it must be listed"
-    assert os.path.realpath(work) == main.path
+    assert os.path.normpath(work) == main.path
     assert "work: wt" == rw.getTitle()
 
 
